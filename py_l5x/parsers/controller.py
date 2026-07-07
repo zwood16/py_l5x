@@ -161,6 +161,20 @@ class ControllerInfo(BaseElement):
             k: v for k, v in self._element.attrib.items() if k not in _KNOWN_XML_KEYS
         }
 
+    @property
+    def attributes(self) -> dict[str, str]:
+        """All XML attributes on the ``<Controller>`` element.
+
+        Unlike :attr:`extra_attributes`, this returns *every* attribute
+        including the ones exposed as explicit properties (``Name``,
+        ``ProcessorType``, etc.), so it can be used for serialization
+        or full cross-referencing against the Rockwell L5X export manual.
+
+        Returns:
+            Dictionary mapping every XML attribute name to its string value.
+        """
+        return dict(self._element.attrib)
+
     # ------------------------------------------------------------------
     # Display
     # ------------------------------------------------------------------

@@ -127,6 +127,41 @@ class TestControllerExtraAttributes:
 
 
 # ---------------------------------------------------------------------------
+# All attributes
+# ---------------------------------------------------------------------------
+
+
+class TestControllerAttributes:
+    """Tests for the attributes property."""
+
+    def test_attributes_contains_all_keys(self, controller: ControllerInfo) -> None:
+        """Attributes includes both known and unknown keys."""
+        attrs = controller.attributes
+        assert "Name" in attrs
+        assert "Use" in attrs
+        assert "ProcessorType" in attrs
+        assert "SFCExecutionControl" in attrs
+
+    def test_attributes_values(self, controller: ControllerInfo) -> None:
+        """Attribute values match the XML."""
+        attrs = controller.attributes
+        assert attrs["Name"] == "Example_PLC"
+        assert attrs["Use"] == "Target"
+        assert attrs["ProcessorType"] == "5069-L306ERM"
+
+    def test_attributes_is_dict(self, controller: ControllerInfo) -> None:
+        """Attributes returns a dictionary."""
+        assert isinstance(controller.attributes, dict)
+
+    def test_attributes_superset_of_extra(self, controller: ControllerInfo) -> None:
+        """Attributes contains everything in extra_attributes plus known keys."""
+        attrs = controller.attributes
+        extras = controller.extra_attributes
+        for k, v in extras.items():
+            assert attrs[k] == v
+
+
+# ---------------------------------------------------------------------------
 # __repr__
 # ---------------------------------------------------------------------------
 
