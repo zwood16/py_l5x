@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "py-l5x"
+version = "0.1.0"
+description = "Parse Rockwell Automation L5X project files into a hierarchical Python object model."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.setuptools]
+packages = ["py_l5x"]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+# The rule categories to enable.
+select = [
+    "E",   # pycodestyle (catches formatting-adjacent errors)
+    "F",   # Pyflakes (catches logical errors, like unused variables)
+    "I",   # isort (automatically sorts your imports)
+    "UP",  # pyupgrade (suggests modern syntax upgrades)
+    "B",   # flake8-bugbear (catches common bugs and gotchas)
+    "SIM", # flake8-simplify (suggests cleaner, more elegant code)
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
