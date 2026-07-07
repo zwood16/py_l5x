@@ -1,12 +1,72 @@
 ﻿<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<RSLogix5000Content SchemaRevision="1.0" SoftwareRevision="37.00" TargetName="Example_PLC" TargetType="Controller" ContainsContext="false" ExportDate="Tue Jun 30 11:15:59 2026" ExportOptions="NoRawData L5KData DecoratedData ForceProtectedEncoding AllProjDocTrans">
-<Controller Use="Target" Name="Example_PLC" ProcessorType="5069-L306ERM" MajorRev="37" MinorRev="11" ProjectCreationDate="Tue Jun 30 10:14:37 2026" LastModifiedDate="Tue Jun 30 11:15:40 2026" SFCExecutionControl="CurrentActive" SFCRestartPosition="MostRecent" SFCLastScan="DontScan" ProjectSN="16#0000_0000"
+<RSLogix5000Content SchemaRevision="1.0" SoftwareRevision="37.00" TargetName="Example_PLC" TargetType="Controller" ContainsContext="false" ExportDate="Tue Jul 07 16:49:02 2026" ExportOptions="NoRawData L5KData DecoratedData ForceProtectedEncoding AllProjDocTrans">
+<Controller Use="Target" Name="Example_PLC" ProcessorType="5069-L306ERM" MajorRev="37" MinorRev="11" ProjectCreationDate="Tue Jun 30 10:14:37 2026" LastModifiedDate="Tue Jul 07 16:48:52 2026" SFCExecutionControl="CurrentActive" SFCRestartPosition="MostRecent" SFCLastScan="DontScan" ProjectSN="16#0000_0000"
  MatchProjectToController="false" CanUseRPIFromProducer="false" InhibitAutomaticFirmwareUpdate="0" PassThroughConfiguration="EnabledWithAppend" DownloadProjectDocumentationAndExtendedProperties="true" DownloadProjectCustomProperties="true" ReportMinorOverflow="false" EtherNetIPMode="A1/A2: Dual-IP" AutoDiagsEnabled="true" WebServerEnabled="false" DataExchangeId="{09B2637D-051F-4EFE-989A-EAD35A27AB93}"
 >
 <RedundancyInfo Enabled="false" KeepTestEditsOnSwitchOver="false"/>
 <Security Code="0" ChangesToDetect="16#ffff_ffff_ffff_ffff"/>
 <SafetyInfo/>
 <DataTypes>
+<DataType Name="A_UDT" Family="NoFamily" Class="User">
+<Members>
+<Member Name="ZZZZZZZZZZA_UDT0" DataType="SINT" Dimension="0" Radix="Decimal" Hidden="true" ExternalAccess="Read/Write"/>
+<Member Name="a_Bool" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="ZZZZZZZZZZA_UDT0" BitNumber="0" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[This is a bool]]>
+</Description>
+</Member>
+<Member Name="on_off_bool" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="ZZZZZZZZZZA_UDT0" BitNumber="1" ExternalLogging="true" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[This is a bool with extended properties]]>
+</Description>
+<EngineeringUnit>
+<![CDATA[Boolean]]>
+</EngineeringUnit>
+<State0>
+<![CDATA[Off]]>
+</State0>
+<State1>
+<![CDATA[On]]>
+</State1>
+</Member>
+<Member Name="a_sint" DataType="SINT" Dimension="0" Radix="Decimal" Hidden="false" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[This is a sint or byte]]>
+</Description>
+</Member>
+<Member Name="a_sint_with_props" DataType="SINT" Dimension="0" Radix="Decimal" Hidden="false" Max="25" Min="0" ExternalLogging="false" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[This is a SINT with extended properties]]>
+</Description>
+<EngineeringUnit>
+<![CDATA[mm]]>
+</EngineeringUnit>
+</Member>
+<Member Name="a_real" DataType="REAL" Dimension="0" Radix="Float" Hidden="false" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[a floating point value]]>
+</Description>
+</Member>
+<Member Name="ZZZZZZZZZZA_UDT6" DataType="SINT" Dimension="0" Radix="Decimal" Hidden="true" ExternalAccess="Read/Write"/>
+<Member Name="another_bool" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="ZZZZZZZZZZA_UDT6" BitNumber="0" ExternalAccess="Read/Write"/>
+<Member Name="a_dint" DataType="DINT" Dimension="0" Radix="Decimal" Hidden="false" ExternalAccess="Read/Write"/>
+<Member Name="a_nested_UDT" DataType="simple_udt" Dimension="0" Radix="NullType" Hidden="false" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[a nest UDT type]]>
+</Description>
+</Member>
+<Member Name="an_aoi" DataType="GenericInput" Dimension="0" Radix="NullType" Hidden="false" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[a nested Add On Instruction type]]>
+</Description>
+</Member>
+<Member Name="an_array" DataType="REAL" Dimension="4" Radix="Float" Hidden="false" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[an array of two floating point values. Only 1D is allowed in UDTs.]]>
+</Description>
+</Member>
+</Members>
+</DataType>
 <DataType Name="GenericRobotInputs" Family="NoFamily" Class="User">
 <Members>
 <Member Name="UO" DataType="robotUO" Dimension="0" Radix="NullType" Hidden="false" ExternalAccess="Read/Write"/>
@@ -694,6 +754,18 @@
 <Member Name="ack7" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="ZZZZZZZZZZrobotUIs18" BitNumber="0" ExternalAccess="Read/Write"/>
 <Member Name="ack8" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="ZZZZZZZZZZrobotUIs18" BitNumber="1" ExternalAccess="Read/Write"/>
 <Member Name="snack" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="ZZZZZZZZZZrobotUIs18" BitNumber="2" ExternalAccess="Read/Write"/>
+</Members>
+</DataType>
+<DataType Name="simple_udt" Family="NoFamily" Class="User">
+<Members>
+<Member Name="ZZZZZZZZZZsimple_udt0" DataType="SINT" Dimension="0" Radix="Decimal" Hidden="true" ExternalAccess="Read/Write"/>
+<Member Name="bool1" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="ZZZZZZZZZZsimple_udt0" BitNumber="0" ExternalAccess="Read/Write"/>
+<Member Name="bool2" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="ZZZZZZZZZZsimple_udt0" BitNumber="1" ExternalAccess="Read/Write"/>
+<Member Name="bool3" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="ZZZZZZZZZZsimple_udt0" BitNumber="2" ExternalAccess="Read/Write"/>
+<Member Name="bool4" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="ZZZZZZZZZZsimple_udt0" BitNumber="3" ExternalAccess="Read/Write"/>
+<Member Name="Dint" DataType="DINT" Dimension="0" Radix="Decimal" Hidden="false" ExternalAccess="Read/Write"/>
+<Member Name="real" DataType="DINT" Dimension="0" Radix="Decimal" Hidden="false" ExternalAccess="Read/Write"/>
+<Member Name="lint" DataType="LINT" Dimension="0" Radix="Decimal" Hidden="false" ExternalAccess="Read/Write"/>
 </Members>
 </DataType>
 </DataTypes>
@@ -4291,6 +4363,76 @@ Step 7000: Robot program stopped. Waiting for start command]]>
 <DataValue DataType="REAL" Radix="Float" Value="0.0"/>
 </Data>
 </Tag>
+<Tag Name="a_simple_udt_instance" TagType="Base" DataType="simple_udt" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[[0,0,0,0]]]>
+</Data>
+<Data Format="Decorated">
+<Structure DataType="simple_udt">
+<DataValueMember Name="bool1" DataType="BOOL" Value="0"/>
+<DataValueMember Name="bool2" DataType="BOOL" Value="0"/>
+<DataValueMember Name="bool3" DataType="BOOL" Value="0"/>
+<DataValueMember Name="bool4" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Dint" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="real" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="lint" DataType="LINT" Radix="Decimal" Value="0"/>
+</Structure>
+</Data>
+</Tag>
+<Tag Name="a_simple_udt_with_overrides" TagType="Base" DataType="simple_udt" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Description>
+<![CDATA[a udt intance with additional comments and properties]]>
+</Description>
+<Comments>
+<Comment Operand=".BOOL1">
+<![CDATA[the first boolean]]>
+</Comment>
+<Comment Operand=".BOOL2">
+<![CDATA[just a comment]]>
+</Comment>
+<Comment Operand=".DINT">
+<![CDATA[this dint has extended properties]]>
+</Comment>
+</Comments>
+<EngineeringUnits>
+<EngineeringUnit Operand=".DINT">
+<![CDATA[ms]]>
+</EngineeringUnit>
+</EngineeringUnits>
+<Maxes>
+<Max Operand=".DINT">2147483647</Max>
+</Maxes>
+<Mins>
+<Min Operand=".DINT">0</Min>
+</Mins>
+<State0s>
+<State0 Operand=".BOOL1">
+<![CDATA[false]]>
+</State0>
+</State0s>
+<State1s>
+<State1 Operand=".BOOL1">
+<![CDATA[true]]>
+</State1>
+</State1s>
+<ExternalLoggings>
+<ExternalLogging Operand=".DINT">true</ExternalLogging>
+</ExternalLoggings>
+<Data Format="L5K">
+<![CDATA[[0,0,0,0]]]>
+</Data>
+<Data Format="Decorated">
+<Structure DataType="simple_udt">
+<DataValueMember Name="bool1" DataType="BOOL" Value="0"/>
+<DataValueMember Name="bool2" DataType="BOOL" Value="0"/>
+<DataValueMember Name="bool3" DataType="BOOL" Value="0"/>
+<DataValueMember Name="bool4" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Dint" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="real" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="lint" DataType="LINT" Radix="Decimal" Value="0"/>
+</Structure>
+</Data>
+</Tag>
 <Tag Name="a_sint" TagType="Base" DataType="SINT" Radix="Decimal" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
 <Data Format="L5K">
 <![CDATA[0]]>
@@ -4319,6 +4461,57 @@ Step 7000: Robot program stopped. Waiting for start command]]>
 <DataValueMember Name="EN" DataType="BOOL" Value="0"/>
 <DataValueMember Name="TT" DataType="BOOL" Value="0"/>
 <DataValueMember Name="DN" DataType="BOOL" Value="0"/>
+</Structure>
+</Data>
+</Tag>
+<Tag Name="a_udt_instance" TagType="Base" DataType="A_UDT" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Maxes>
+<Max Operand=".A_SINT_WITH_PROPS">25</Max>
+</Maxes>
+<Mins>
+<Min Operand=".A_SINT_WITH_PROPS">0</Min>
+</Mins>
+<Data Format="L5K">
+<![CDATA[[0,0,0,0.00000000e+000,0,0,[0,0,0,0],[1,25,25,500,[1,0,0,[0,0,0],[0,0,0]],[0,0,0]],[0.00000000e+000,0.00000000e+000,0.00000000e+000
+		,0.00000000e+000]]]]>
+</Data>
+<Data Format="Decorated">
+<Structure DataType="A_UDT">
+<DataValueMember Name="a_Bool" DataType="BOOL" Value="0"/>
+<DataValueMember Name="on_off_bool" DataType="BOOL" Value="0"/>
+<DataValueMember Name="a_sint" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="a_sint_with_props" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="a_real" DataType="REAL" Radix="Float" Value="0.0"/>
+<DataValueMember Name="another_bool" DataType="BOOL" Value="0"/>
+<DataValueMember Name="a_dint" DataType="DINT" Radix="Decimal" Value="0"/>
+<StructureMember Name="a_nested_UDT" DataType="simple_udt">
+<DataValueMember Name="bool1" DataType="BOOL" Value="0"/>
+<DataValueMember Name="bool2" DataType="BOOL" Value="0"/>
+<DataValueMember Name="bool3" DataType="BOOL" Value="0"/>
+<DataValueMember Name="bool4" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Dint" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="real" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="lint" DataType="LINT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="an_aoi" DataType="GenericInput">
+<DataValueMember Name="EnableIn" DataType="BOOL" Value="1"/>
+<DataValueMember Name="EnableOut" DataType="BOOL" Value="0"/>
+<DataValueMember Name="physicalInput" DataType="BOOL" Value="0"/>
+<DataValueMember Name="onDelay" DataType="DINT" Radix="Decimal" Value="25"/>
+<DataValueMember Name="offDelay" DataType="DINT" Radix="Decimal" Value="25"/>
+<DataValueMember Name="state" DataType="BOOL" Value="0"/>
+<DataValueMember Name="risingEdge" DataType="BOOL" Value="0"/>
+<DataValueMember Name="fallingEdge" DataType="BOOL" Value="0"/>
+<DataValueMember Name="invert" DataType="BOOL" Value="0"/>
+<DataValueMember Name="held" DataType="BOOL" Value="0"/>
+<DataValueMember Name="holdTime" DataType="DINT" Radix="Decimal" Value="500"/>
+</StructureMember>
+<ArrayMember Name="an_array" DataType="REAL" Dimensions="4" Radix="Float">
+<Element Index="[0]" Value="0.0"/>
+<Element Index="[1]" Value="0.0"/>
+<Element Index="[2]" Value="0.0"/>
+<Element Index="[3]" Value="0.0"/>
+</ArrayMember>
 </Structure>
 </Data>
 </Tag>
