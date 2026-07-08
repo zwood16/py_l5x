@@ -2,9 +2,8 @@
 
 This module provides ``Program``, a wrapper around the ``<Program>`` element,
 plus ``ProgramsCollection`` for accessing every ``<Program>`` by name.
-Routine/logic parsing is out of scope -- this only exposes program identity
-and its ``<Tags>`` section (via :class:`py_l5x.parsers.tag.TagsCollection`,
-the same class used for the controller-level ``<Tags>``).
+Program identity, local tags, and routines/logic are exposed directly via
+typed parser wrappers.
 """
 
 from __future__ import annotations
@@ -12,6 +11,7 @@ from __future__ import annotations
 from xml.etree import ElementTree as ET
 
 from py_l5x.parsers.base import BaseCollection, BaseElement
+from py_l5x.parsers.routine import RoutinesCollection
 from py_l5x.parsers.tag import TagsCollection, TypeRegistry
 
 _PROGRAM_KNOWN_XML_KEYS: frozenset[str] = frozenset(
@@ -72,6 +72,53 @@ class Program(BaseElement):
     def tags(self) -> TagsCollection:
         """This program's local tags, keyed by name."""
         return TagsCollection(self._element, self._type_registry)
+
+    @property
+    def routines(self) -> RoutinesCollection:
+        """This program's routines, keyed by routine name."""
+        return RoutinesCollection(self._element)
+
+    def logic_text(self) -> str:
+        """Render this program's routine logic as a quick-reference text block.
+
+        Formatting:
+        - Ladder rungs are rendered as two lines per rung::
+
+              line_number : comment
+                                 text
+
+        - Structured Text routines are rendered line-by-line.
+
+        Returns:
+            A human-readable multi-line string containing all routines in the
+            program, in XML order.
+        """
+        lines: list[str] = [f"Program: {self.name}"]
+        rung_text_indent = " " * 23
+
+        for routine in self.routines.values():
+            lines.append("")
+            lines.append(f"Routine: {routine.name} ({routine.type_})")
+
+            if routine.type_ == "RLL":
+                for rung in routine.rungs:
+                    if rung.comment:
+                        lines.append(f"{rung.number} : {rung.comment}")
+                    else:
+                        lines.append(f"{rung.number} :")
+                    lines.append(f"{rung_text_indent}{rung.text}")
+            elif routine.type_ == "ST":
+                lines.extend(line.text for line in routine.st_lines)
+            else:
+                lines.append(f"[Unsupported routine type: {routine.type_}]")
+
+        return "\n".join(lines)
+
+    def print_logic_text(self) -> str:
+        """Print and return :meth:`logic_text` for quick interactive inspection."""
+        text = self.logic_text()
+        print(text)
+        return text
 
     @property
     def extra_attributes(self) -> dict[str, str]:
