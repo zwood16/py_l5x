@@ -8,26 +8,14 @@ from xml.etree import ElementTree as ET
 from py_l5x.parse import CDATA_TAG
 
 
-class BaseElement:
-    """Wraps a single XML element and provides helpers for subclasses.
+class XmlAttrMixin:
+    """Mixin providing a helper for XML attribute access.
 
-    Subclasses define known XML attributes as explicit ``@property`` descriptors.
-    Unrecognised attributes are accessible via ``extra_attributes``.
-
-    Attributes:
-        _element: The underlying XML element to wrap.
+    Subclasses must define a ``_element`` attribute that is an
+    ``xml.etree.ElementTree.Element`` instance.
     """
 
-    def __init__(self, element: ET.Element) -> None:
-        """Initialize the base element wrapper.
-
-        Args:
-            element: The underlying XML element to wrap. Stored as
-                ``_element`` for attribute access by subclasses.
-        """
-        # Use object.__setattr__ so subclass @property setters work without
-        # hitting any custom __setattr__ we might add later.
-        object.__setattr__(self, "_element", element)
+    _element: ET.Element
 
     def _get(self, xml_key: str, default: str = "") -> str:
         """Retrieve an XML attribute value by key.
@@ -85,6 +73,28 @@ class BaseElement:
             "Description", ""
         )
 
+
+class BaseElement(XmlAttrMixin):
+    """Wraps a single XML element and provides helpers for subclasses.
+
+    Subclasses define known XML attributes as explicit ``@property`` descriptors.
+    Unrecognised attributes are accessible via ``extra_attributes``.
+
+    Attributes:
+        _element: The underlying XML element to wrap.
+    """
+
+    def __init__(self, element: ET.Element) -> None:
+        """Initialize the base element wrapper.
+
+        Args:
+            element: The underlying XML element to wrap. Stored as
+                ``_element`` for attribute access by subclasses.
+        """
+        # Use object.__setattr__ so subclass @property setters work without
+        # hitting any custom __setattr__ we might add later.
+        object.__setattr__(self, "_element", element)
+
     def __repr__(self) -> str:
         """Return a concise representation including the element name.
 
@@ -127,6 +137,7 @@ class BaseCollection(Mapping):
         parent_el: ET.Element,
         child_xpath: str,
         item_class: type,
+        item_args: tuple = (),
     ) -> None:
         """Initialize the collection.
 
@@ -135,10 +146,12 @@ class BaseCollection(Mapping):
             child_xpath: XPath string passed to ``parent_el.findall()`` to locate
                 children (e.g. ``"Tags/Tag"`` or ``"Members/Member"``).
             item_class: Class instantiated for each matching child element.
+            item_args: Additional arguments passed to the item_class constructor.
         """
         self._parent = parent_el
         self._child_xpath = child_xpath
         self._item_class = item_class
+        self._item_args = item_args
 
     def _children(self) -> list[ET.Element]:
         """Return all child elements matching the configured XPath.
@@ -166,7 +179,7 @@ class BaseCollection(Mapping):
         """
         for el in self._children():
             if el.get("Name") == name:
-                return self._item_class(el)
+                return self._item_class(el, *self._item_args)
         raise KeyError(name)
 
     def __iter__(self):

@@ -36,8 +36,25 @@ _MEMBER_KNOWN_XML_KEYS: frozenset[str] = frozenset(
     }
 )
 
+_PARAMETER_KNOWN_XML_KEYS: frozenset[str] = frozenset(
+    {
+        "Name",
+        "TagType",
+        "DataType",
+        "Usage",
+        "Radix",
+        "Required",
+        "Visible",
+        "ExternalAccess",
+    }
+)
+
 # XML attribute names on <DataType> exposed as explicit properties.
 _DATATYPE_KNOWN_XML_KEYS: frozenset[str] = frozenset({"Name", "Family", "Class"})
+
+# ------------------------------------------------------------------
+# DataTypes (UDTs)
+# ------------------------------------------------------------------
 
 
 class DataTypeMember(BaseElement):
@@ -526,3 +543,150 @@ class DataTypesCollection(BaseCollection):
                 ``DataTypes/DataType`` children form this collection.
         """
         super().__init__(controller_element, "DataTypes/DataType", DataType)
+
+
+# ------------------------------------------------------------------
+# Add On Instruction DataTypes
+# ------------------------------------------------------------------
+
+# Similar to data types, but derrived from non-InOut parameters
+# Note: actual AOI definitions include all params, not just those that
+# appear in the tag browser
+
+
+class AddOnParameter(BaseElement):
+    """A single ``<Parameter>`` element within an ``<AddOnInstructionDefinition>``.
+
+    Args:
+        element: The ``<Parameter>`` element from a parsed L5X tree.
+    """
+
+    def __init__(self, element: ET.Element) -> None:
+        super().__init__(element)
+
+    @property
+    def name(self) -> str:
+        """Parameter name."""
+        return self._get("Name")
+
+    @property
+    def data_type(self) -> str:
+        """Data type of this parameter."""
+        return self._get("DataType")
+
+    @property
+    def usage(self) -> str:
+        """Usage of the parameter (e.g., ``"Input"``, ``"Output"``, ``"InOut"``)."""
+        return self._get("Usage")
+
+    @property
+    def radix(self) -> str:
+        """Display radix."""
+        return self._get("Radix")
+
+    @property
+    def required(self) -> bool:
+        """Whether the parameter is required.
+
+        Returns:
+            ``True`` if the ``Required`` XML attribute is ``"true"``.
+        """
+        return self._get("Required") == "true"
+
+    @property
+    def visible(self) -> bool:
+        """Whether the parameter is visible in Logix Designer.
+
+        Returns:
+            ``True`` if the ``Visible`` XML attribute is ``"true"``.
+        """
+        return self._get("Visible") == "true"
+
+    @property
+    def external_access(self) -> str:
+        """External access level (e.g. ``"Read/Write"``, ``"Read Only"``)."""
+        return self._get("ExternalAccess")
+
+    @property
+    def description(self) -> str:
+        """Parameter description text."""
+        return self._get_description()
+
+    @property
+    def is_inout(self) -> bool:
+        """Whether this parameter uses InOut usage."""
+        return self.usage == "InOut"
+
+    @property
+    def extra_attributes(self) -> dict[str, str]:
+        """XML attributes not covered by explicit properties."""
+        return {
+            k: v
+            for k, v in self._element.attrib.items()
+            if k not in _PARAMETER_KNOWN_XML_KEYS
+        }
+
+    def __repr__(self) -> str:
+        lines = [
+            f"Parameter Name:   {self.name}",
+            f"Data Type:        {self.data_type}",
+            f"Usage:            {self.usage}",
+            f"Desc:             {self.description}",
+        ]
+        if self.required:
+            lines.append(f"Required:         {self.required}")
+        if not self.visible:
+            lines.append(f"Visible:          {self.visible}")
+
+        extras = self.extra_attributes
+        if extras:
+            lines.append("Extra Attributes:")
+            for k, v in sorted(extras.items()):
+                lines.append(f"  {k}: {v}")
+        return "\n".join(lines)
+
+
+class AddOnParameters(BaseCollection):
+    """A collection of parameters for a specific AOI definition.
+
+    Args:
+        aoi_element: The ``<AddOnInstructionDefinition>`` element.
+    """
+
+    def __init__(self, aoi_element: ET.Element) -> None:
+        super().__init__(aoi_element, "Parameters/Parameter", AddOnParameter)
+
+    @property
+    def datatype_members(self) -> dict[str, AddOnParameter]:
+        """Input and Output parameters of the AOI, excluding InOut usage.
+
+        These are the tags that appear as the tags members of the AOI instance
+        in the Logix Tag Browser - excludes InOut parameters.
+
+        Returns:
+            Dictionary mapping parameter names to ``AddOnParameter``.
+        """
+        return {name: p for name, p in self.items() if not p.is_inout}
+
+
+class AddOnDataTypeCollection(BaseCollection):
+    """A ``Mapping`` over every ``<AddOnInstructionDefinition>``'s parameters.
+
+    Args:
+        root_element: The root element of the parsed L5X tree, or an element
+            containing the ``<AddOnInstructionDefinitions>`` section.
+    """
+
+    def __init__(self, root_element: ET.Element) -> None:
+        """Initialise from a root XML element.
+
+        Args:
+            root_element: The element whose
+                ``AddOnInstructionDefinitions/AddOnInstructionDefinition`` children
+                form this collection.
+        """
+        super().__init__(
+            root_element,
+            "AddOnInstructionDefinitions/AddOnInstructionDefinition",
+            AddOnParameters,
+        )

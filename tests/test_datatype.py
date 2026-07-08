@@ -7,7 +7,7 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
-from py_l5x.parsers.datatype import DataType, DataTypesCollection
+from py_l5x.parsers.datatype import AddOnParameters, DataType, DataTypesCollection
 from py_l5x.parsers.utils import convert_numeric
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -32,6 +32,42 @@ def controller_element(example_tree: ET.ElementTree) -> ET.Element:
 def data_types(controller_element: ET.Element) -> DataTypesCollection:
     """Create a DataTypesCollection instance from the example L5X."""
     return DataTypesCollection(controller_element)
+
+
+@pytest.fixture
+def aoi_definitions(example_tree: ET.ElementTree) -> list[ET.Element]:
+    """Extract all <AddOn InstructionDefinition> elements from the example L5X."""
+    root = example_tree.getroot()
+    defs = root.findall(".//AddOnInstructionDefinition")
+    assert len(defs) > 0, "No AddOnInstructionDefinition elements found in example.L5X"
+    return defs
+
+
+@pytest.fixture
+def debounce_aoi(aoi_definitions: list[ET.Element]) -> ET.Element:
+    """The Debounce AOI definition."""
+    for el in aoi_definitions:
+        if el.get("Name") == "Debounce":
+            return el
+    pytest.fail("Debounce AOI not found in example.L5X")
+
+
+@pytest.fixture
+def generic_input_aoi(aoi_definitions: list[ET.Element]) -> ET.Element:
+    """The GenericInput AOI definition."""
+    for el in aoi_definitions:
+        if el.get("Name") == "GenericInput":
+            return el
+    pytest.fail("GenericInput AOI not found in example.L5X")
+
+
+@pytest.fixture
+def fanuc_robot_aoi(aoi_definitions: list[ET.Element]) -> ET.Element:
+    """The FanucRobot AOI definition."""
+    for el in aoi_definitions:
+        if el.get("Name") == "FanucRobot":
+            return el
+    pytest.fail("FanucRobot AOI not found in example.L5X")
 
 
 @pytest.fixture
@@ -320,3 +356,52 @@ class TestConvertNumeric:
     def test_unparseable_int_falls_back_to_str(self) -> None:
         """Values that don't parse cleanly are returned unchanged."""
         assert convert_numeric("not_a_number", "SINT") == "not_a_number"
+
+
+# ---------------------------------------------------------------------------
+# Add-On Instruction Parameters
+# ---------------------------------------------------------------------------
+
+
+class TestAddOnInstructionParameters:
+    """Tests for AddOnInstructionParameter and AddOnInstructionParameters."""
+
+    def test_parameter_identity(self, debounce_aoi: ET.Element) -> None:
+        """Basic parameter properties are correctly extracted."""
+        params = AddOnParameters(debounce_aoi)
+        param = params["onDelay"]
+        assert param.name == "onDelay"
+        assert param.data_type == "DINT"
+        assert param.usage == "Input"
+        assert param.radix == "Decimal"
+        assert param.required is False
+        assert param.visible is True
+
+    def test_parameter_description(self, debounce_aoi: ET.Element) -> None:
+        """Parameter description is extracted from CDATA."""
+        params = AddOnParameters(debounce_aoi)
+        assert (
+            "milliseconds before output bit turns ON" in params["onDelay"].description
+        )
+
+    def test_parameter_inout_detection(self, fanuc_robot_aoi: ET.Element) -> None:
+        """InOut usage is correctly identified."""
+        params = AddOnParameters(fanuc_robot_aoi)
+        # allowableAlarms is InOut in FanucRobot
+        assert params["allowableAlarms"].is_inout is True
+        # robotUI is InOut in FanucRobot
+        assert params["robotUI"].is_inout is True
+
+    def test_filtered_parameters(self, fanuc_robot_aoi: ET.Element) -> None:
+        """datatype_members excludes InOut parameters."""
+        params = AddOnParameters(fanuc_robot_aoi)
+        filtered = params.datatype_members
+        assert "allowableAlarms" not in filtered
+        assert "robotUI" not in filtered
+        assert "robotUO" not in filtered
+
+    def test_fanuc_robot_extra_attributes(self, fanuc_robot_aoi: ET.Element) -> None:
+        """Verify extra attributes like 'Constant' are captured."""
+        params = AddOnParameters(fanuc_robot_aoi)
+        param = params["allowableAlarms"]
+        assert param.extra_attributes.get("Constant") == "false"
