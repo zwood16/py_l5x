@@ -17,12 +17,20 @@ Tag/member instances can also override that metadata per "operand" path (e.g.
 DINT tag) via ``<Comments>``, ``<Maxes>``, ``<Mins>``, ``<EngineeringUnits>``,
 ``<State0s>``, ``<State1s>``, and ``<ExternalLoggings>`` containers on the
 ``<Tag>`` element. :class:`_TagOverrides` collects these once per tag and
-``TagValue`` resolves them with priority over the type-definition metadata.
+:class:`TagNode` resolves them with priority over the type-definition
+metadata.
+
+Every node in a tag's value tree -- scalar, structure, or array -- is a
+:class:`TagNode`. Its ``kind`` attribute says which of ``.value``
+(scalars), ``.members`` (structures), or ``.elements`` (arrays) is
+meaningful, so autocomplete never degrades while drilling down through
+nested UDTs/AOIs/arrays.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from typing import Literal
 from xml.etree import ElementTree as ET
 
 from py_l5x.parse import CDATA_TAG
@@ -169,18 +177,162 @@ def _parse_string_literal(text: str) -> str:
     return text
 
 
-class TagValue(XmlAttrMixin):
-    """Common metadata resolution for a node in a tag's value tree.
+class _StructureMembers(Mapping):
+    """Lazily-resolved ``name -> TagNode`` mapping for a structure node.
 
     Args:
-        element: The XML element this node wraps (``None`` for synthetic
-            nodes like :class:`TagValueBit`).
+        node: The owning structure :class:`TagNode`.
+    """
+
+    def __init__(self, node: TagNode) -> None:
+        """Bind this view to its owning structure node.
+
+        Args:
+            node: The owning structure :class:`TagNode`.
+        """
+        self._node = node
+
+    def __getitem__(self, name: str) -> TagNode:
+        """Retrieve a member by name.
+
+        Args:
+            name: The member's ``Name`` attribute.
+
+        Returns:
+            The member's :class:`TagNode`.
+
+        Raises:
+            KeyError: If no member with the given name is found.
+        """
+        node = self._node
+        member_defs = (
+            node._type_registry.resolve_members(node.data_type)
+            if node._type_registry
+            else None
+        ) or {}
+        for child in node._element:
+            if child.get("Name") == name:
+                path = f"{node._operand_path}.{name.upper()}"
+                return _build_node(
+                    child,
+                    member_defs.get(name),
+                    node._overrides,
+                    path,
+                    node._type_registry,
+                )
+        raise KeyError(name)
+
+    def __iter__(self):
+        """Iterate over member names in document order."""
+        for child in self._node._element:
+            name = child.get("Name")
+            if name:
+                yield name
+
+    def __len__(self) -> int:
+        """Return the number of members."""
+        return sum(1 for child in self._node._element if child.get("Name"))
+
+    def __repr__(self) -> str:
+        """Return a string representation listing member names."""
+        return f"members({list(self)!r})"
+
+
+class _ArrayElements(Sequence):
+    """Lazily-resolved ``index -> TagNode`` sequence for an array node.
+
+    Args:
+        node: The owning array :class:`TagNode`.
+    """
+
+    def __init__(self, node: TagNode) -> None:
+        """Bind this view to its owning array node.
+
+        Args:
+            node: The owning array :class:`TagNode`.
+        """
+        self._node = node
+
+    @staticmethod
+    def _index_of(element: ET.Element) -> int:
+        """Parse an ``<Element Index="[n]">``'s bracketed index as an int."""
+        return int(element.get("Index", "").strip("[]"))
+
+    def _els(self) -> list[ET.Element]:
+        """Return all ``<Element>`` children in document order."""
+        return self._node._element.findall("Element")
+
+    def __getitem__(self, index: int) -> TagNode:
+        """Retrieve an element by its zero-based index.
+
+        Args:
+            index: The array index.
+
+        Returns:
+            A structure-kind :class:`TagNode` for struct-typed elements, or
+            a scalar-kind :class:`TagNode` for atomic elements.
+
+        Raises:
+            IndexError: If no element with the given index is found.
+        """
+        node = self._node
+        for element in self._els():
+            if self._index_of(element) == index:
+                path = f"{node._operand_path}[{index}]"
+                struct_child = element.find("Structure")
+                if struct_child is not None:
+                    return TagNode(
+                        struct_child,
+                        node._member_def,
+                        node._overrides,
+                        path,
+                        node._type_registry,
+                    )
+                return TagNode(element, node._member_def, node._overrides, path)
+        raise IndexError(index)
+
+    def __len__(self) -> int:
+        """Return the number of elements."""
+        return len(self._els())
+
+    def __repr__(self) -> str:
+        """Return a string representation showing the element count."""
+        return f"elements(len={len(self)})"
+
+
+class TagNode(XmlAttrMixin):
+    """A single node in a tag's value tree: scalar, structure, or array.
+
+    Every node -- whether the tag's root value or any nested member/element
+    reached by drilling down -- is a ``TagNode``. Its :attr:`kind` says which
+    of :attr:`value` (scalars), :attr:`members` (structures), or
+    :attr:`elements` (arrays) is meaningful; the other two are ``None``/empty.
+    Metadata (:attr:`description`, :attr:`min`, :attr:`max`, etc.) is
+    available on every node regardless of kind.
+
+    Args:
+        element: The XML element this node wraps (``None`` for a bit node,
+            which is synthetic).
         member_def: The resolved UDT member or AOI parameter definition for
             this node, if any.
         overrides: The owning tag's collected operand overrides.
         operand_path: This node's operand path (e.g. ``".A_NESTED_UDT.DINT"``),
             used to look up *overrides*.
+        type_registry: Used to resolve structure/array children's own member
+            definitions. ``None`` for scalar/bit nodes.
+        raw_text: Pre-extracted text to use instead of the element's
+            ``Value`` attribute (used for CDATA-based string members).
+        from_cdata: If ``True``, *raw_text* came from quoted CDATA text (e.g.
+            a STRING ``DATA`` member) and should be quote-stripped rather
+            than passed through :func:`convert_numeric`.
+        is_bit: If ``True``, this is a synthetic bit node (see :meth:`bit`).
+        bit_value: The precomputed boolean value for a bit node.
     """
+
+    kind: Literal["scalar", "structure", "array"]
+    value: int | float | str | bool | None
+    members: Mapping[str, TagNode]
+    elements: Sequence[TagNode]
 
     def __init__(
         self,
@@ -188,19 +340,86 @@ class TagValue(XmlAttrMixin):
         member_def: MemberDef | None,
         overrides: _TagOverrides,
         operand_path: str,
+        type_registry: TypeRegistry | None = None,
+        *,
+        raw_text: str | None = None,
+        from_cdata: bool = False,
+        is_bit: bool = False,
+        bit_value: bool | None = None,
     ) -> None:
-        """Initialise the common metadata-resolution state for a value node.
+        """Initialise a value-tree node and resolve its kind/value/children.
 
         Args:
-            element: The XML element this node wraps, or ``None``.
-            member_def: The resolved member/parameter definition, or ``None``.
+            element: The XML element this node wraps, or ``None`` for a bit
+                node.
+            member_def: The resolved member/parameter definition, or
+                ``None``.
             overrides: The owning tag's collected operand overrides.
             operand_path: This node's operand path.
+            type_registry: Used to resolve structure/array children.
+            raw_text: Pre-extracted text overriding the ``Value`` attribute.
+            from_cdata: Whether *raw_text* is quoted CDATA string content.
+            is_bit: Whether this is a synthetic bit node.
+            bit_value: The precomputed boolean value for a bit node.
         """
         self._element = element
         self._member_def = member_def
         self._overrides = overrides
         self._operand_path = operand_path
+        self._type_registry = type_registry
+        self._raw_text = raw_text
+        self._from_cdata = from_cdata
+        self._is_bit = is_bit
+
+        self.members = {}
+        self.elements = []
+
+        if is_bit:
+            self.kind = "scalar"
+            self.value = bit_value
+        elif element is not None and element.tag in ("Structure", "StructureMember"):
+            self.kind = "structure"
+            self.value = None
+            self.members = _StructureMembers(self)
+        elif element is not None and element.tag in ("Array", "ArrayMember"):
+            self.kind = "array"
+            self.value = None
+            self.elements = _ArrayElements(self)
+        else:
+            self.kind = "scalar"
+            self.value = self._compute_scalar_value()
+
+    def _compute_scalar_value(self) -> int | float | str | bool | None:
+        """Resolve this scalar node's value, converted per its data type."""
+        text = self._raw_text
+        if text is None and self._element is not None:
+            text = self._element.get("Value")
+        if text is None:
+            return None
+        if self._from_cdata:
+            return _parse_string_literal(text)
+        return convert_numeric(text, self.data_type)
+
+    def bit(self, bit_number: int) -> TagNode:
+        """Access a single bit of this scalar for override-only metadata.
+
+        This does not require the underlying UDT/AOI to define per-bit
+        members -- it exists so plain atomic tags with bit-addressed
+        ``Comments``/``EngineeringUnits``/``State0s``/``State1s`` overrides
+        (e.g. ``a_commented_dint``) can still expose that metadata, and
+        (when this scalar's value is an ``int``) the bit's boolean value.
+
+        Args:
+            bit_number: The zero-based bit position.
+
+        Returns:
+            A scalar-kind :class:`TagNode` bound to this bit.
+        """
+        path = f"{self._operand_path}.{bit_number}"
+        value = None
+        if isinstance(self.value, int):
+            value = bool((self.value >> bit_number) & 1)
+        return TagNode(None, None, self._overrides, path, is_bit=True, bit_value=value)
 
     def _override(self, key: str) -> str | None:
         """Return the override value for *key* at this node's operand path."""
@@ -208,7 +427,9 @@ class TagValue(XmlAttrMixin):
 
     @property
     def data_type(self) -> str:
-        """This node's data type name."""
+        """This node's data type name (always ``"BOOL"`` for a bit node)."""
+        if self._is_bit:
+            return "BOOL"
         if self._element is not None and self._element.get("DataType"):
             return self._element.get("DataType", "")
         return self._member_def.data_type if self._member_def else ""
@@ -288,155 +509,51 @@ class TagValue(XmlAttrMixin):
             return override == "true"
         return getattr(self._member_def, "external_logging", None)
 
-
-class TagValueScalar(TagValue):
-    """A single atomic value within a tag's value tree.
-
-    Args:
-        element: The ``<DataValue>``/``<DataValueMember>``/``<Element>``
-            element this scalar wraps.
-        member_def: The resolved member/parameter definition, if any.
-        overrides: The owning tag's collected operand overrides.
-        operand_path: This node's operand path.
-        raw_text: Pre-extracted text to use instead of the element's ``Value``
-            attribute (used for CDATA-based string members).
-        from_cdata: If ``True``, *raw_text* came from quoted CDATA text (e.g.
-            a STRING ``DATA`` member) and should be quote-stripped rather
-            than passed through :func:`convert_numeric`.
-    """
-
-    def __init__(
-        self,
-        element: ET.Element | None,
-        member_def: MemberDef | None,
-        overrides: _TagOverrides,
-        operand_path: str,
-        raw_text: str | None = None,
-        from_cdata: bool = False,
-    ) -> None:
-        """Initialise a scalar value node.
-
-        Args:
-            element: The element this scalar wraps, or ``None``.
-            member_def: The resolved member/parameter definition, if any.
-            overrides: The owning tag's collected operand overrides.
-            operand_path: This node's operand path.
-            raw_text: Pre-extracted text overriding the ``Value`` attribute.
-            from_cdata: Whether *raw_text* is quoted CDATA string content.
-        """
-        super().__init__(element, member_def, overrides, operand_path)
-        self._raw_text = raw_text
-        self._from_cdata = from_cdata
-
-    @property
-    def value(self) -> int | float | str | bool | None:
-        """The scalar's value, converted per its data type.
-
-        Returns:
-            An ``int``/``float`` for numeric atomic types, a quote-stripped
-            ``str`` for CDATA-based string content, or the raw string for
-            anything else (e.g. ``DT#...`` date/time literals). ``None`` if
-            no value could be found.
-        """
-        text = self._raw_text
-        if text is None and self._element is not None:
-            text = self._element.get("Value")
-        if text is None:
-            return None
-        if self._from_cdata:
-            return _parse_string_literal(text)
-        return convert_numeric(text, self.data_type)
-
-    def __getitem__(self, bit_number: int) -> TagValueBit:
-        """Access a single bit of this scalar for override-only metadata.
-
-        This does not require the underlying UDT/AOI to define per-bit
-        members -- it exists so plain atomic tags with bit-addressed
-        ``Comments``/``EngineeringUnits``/``State0s``/``State1s`` overrides
-        (e.g. ``a_commented_dint``) can still expose that metadata, and
-        (when the scalar value is an ``int``) the bit's boolean value.
-
-        Args:
-            bit_number: The zero-based bit position.
-
-        Returns:
-            A :class:`TagValueBit` bound to this scalar.
-        """
-        path = f"{self._operand_path}.{bit_number}"
-        return TagValueBit(self, bit_number, self._overrides, path)
-
     def __repr__(self) -> str:
-        """Return a concise representation showing the resolved value."""
-        return f"TagValueScalar({self.value!r})"
+        """Return a detailed representation of the node and its properties."""
+        lines = [f"TagNode({self.kind})"]
+
+        props = [
+            ("Value", self.value),
+            ("DataType", self.data_type),
+            ("Radix", self.radix),
+            ("ExternalAccess", self.external_access),
+            ("Description", self.description),
+            ("Min", self.min),
+            ("Max", self.max),
+            ("EngineeringUnit", self.engineering_unit),
+            ("State0", self.state0),
+            ("State1", self.state1),
+            ("ExternalLogging", self.external_logging),
+        ]
+
+        for label, val in props:
+            if val is not None and val != "":
+                lines.append(f"  {label}: {val!r}")
+
+        if self.kind == "structure":
+            lines.append(f"  Members: {list(self.members.keys())}")
+        elif self.kind == "array":
+            lines.append(f"  Elements: len={len(self.elements)}")
+
+        return "\n".join(lines)
 
 
-class TagValueBit(TagValue):
-    """A single bit within an integer :class:`TagValueScalar`.
-
-    Carries only override-derived metadata (there is no UDT/AOI member
-    definition for an ad-hoc bit on a plain atomic tag) plus a computed
-    boolean value derived from the parent scalar's integer value.
-
-    Args:
-        parent: The scalar this bit belongs to.
-        bit_number: The zero-based bit position.
-        overrides: The owning tag's collected operand overrides.
-        operand_path: This bit's operand path (e.g. ``".1"``).
-    """
-
-    def __init__(
-        self,
-        parent: TagValueScalar,
-        bit_number: int,
-        overrides: _TagOverrides,
-        operand_path: str,
-    ) -> None:
-        """Initialise a bit view over a parent scalar.
-
-        Args:
-            parent: The scalar this bit belongs to.
-            bit_number: The zero-based bit position.
-            overrides: The owning tag's collected operand overrides.
-            operand_path: This bit's operand path.
-        """
-        super().__init__(None, None, overrides, operand_path)
-        self._parent = parent
-        self._bit_number = bit_number
-
-    @property
-    def data_type(self) -> str:
-        """Always ``"BOOL"`` -- a single bit is boolean."""
-        return "BOOL"
-
-    @property
-    def value(self) -> bool | None:
-        """The bit's boolean value, computed from the parent's integer value.
-
-        Returns:
-            ``True``/``False`` if the parent scalar's value is an ``int``,
-            otherwise ``None``.
-        """
-        parent_value = self._parent.value
-        if isinstance(parent_value, int):
-            return bool((parent_value >> self._bit_number) & 1)
-        return None
-
-    def __repr__(self) -> str:
-        """Return a concise representation showing the bit number and value."""
-        return f"TagValueBit({self._bit_number}, value={self.value!r})"
-
-
-def _build_value_node(
+def _build_node(
     element: ET.Element,
     member_def: MemberDef | None,
     overrides: _TagOverrides,
     operand_path: str,
-    type_registry: TypeRegistry,
-) -> TagValue:
-    """Dispatch a ``StructureMember``/``ArrayMember``/``DataValueMember``.
+    type_registry: TypeRegistry | None,
+) -> TagNode:
+    """Dispatch any value-tree element (root or nested) to a :class:`TagNode`.
+
+    Handles both the root element names (``DataValue``/``Structure``/
+    ``Array``) and the nested member names (``DataValueMember``/
+    ``StructureMember``/``ArrayMember``) identically.
 
     Args:
-        element: The child element to build a node for.
+        element: The element to build a node for.
         member_def: The resolved member/parameter definition, if any.
         overrides: The owning tag's collected operand overrides.
         operand_path: This node's operand path.
@@ -444,212 +561,24 @@ def _build_value_node(
             children's member definitions.
 
     Returns:
-        A :class:`TagValueStructure`, :class:`TagValueArray`, or
-        :class:`TagValueScalar` as appropriate.
+        A structure-, array-, or scalar-kind :class:`TagNode` as appropriate.
     """
-    if element.tag == "ArrayMember":
-        return TagValueArray(
-            element, member_def, overrides, operand_path, type_registry
-        )
-    if element.tag == "StructureMember":
-        return TagValueStructure(
-            element, member_def, overrides, operand_path, type_registry
-        )
-    # DataValueMember: scalar, either a "Value" attribute or CDATA text (the
-    # latter for STRING-family DATA members).
+    if element.tag in ("Array", "ArrayMember"):
+        return TagNode(element, member_def, overrides, operand_path, type_registry)
+    if element.tag in ("Structure", "StructureMember"):
+        return TagNode(element, member_def, overrides, operand_path, type_registry)
+    # DataValue/DataValueMember: scalar, either a "Value" attribute or CDATA
+    # text (the latter for STRING-family DATA members).
     if element.get("Value") is not None:
-        return TagValueScalar(element, member_def, overrides, operand_path)
+        return TagNode(element, member_def, overrides, operand_path)
     cdata_el = element.find(CDATA_TAG)
     if cdata_el is not None and cdata_el.text:
         text = cdata_el.text
     else:
         text = element.text or ""
-    return TagValueScalar(
+    return TagNode(
         element, member_def, overrides, operand_path, raw_text=text, from_cdata=True
     )
-
-
-class TagValueStructure(TagValue, Mapping):
-    """A structure/UDT/AOI-instance node in a tag's value tree.
-
-    Maps member name to :class:`TagValue` (recursing into nested structures,
-    arrays, or scalars as appropriate).
-
-    Args:
-        element: The ``<Structure>``/``<StructureMember>`` element this node
-            wraps.
-        member_def: The resolved member/parameter definition, if any.
-        overrides: The owning tag's collected operand overrides.
-        operand_path: This node's operand path.
-        type_registry: Used to resolve this structure's own children's
-            member definitions.
-    """
-
-    def __init__(
-        self,
-        element: ET.Element,
-        member_def: MemberDef | None,
-        overrides: _TagOverrides,
-        operand_path: str,
-        type_registry: TypeRegistry,
-    ) -> None:
-        """Initialise a structure value node.
-
-        Args:
-            element: The element this structure wraps.
-            member_def: The resolved member/parameter definition, if any.
-            overrides: The owning tag's collected operand overrides.
-            operand_path: This node's operand path.
-            type_registry: Used to resolve child member definitions.
-        """
-        super().__init__(element, member_def, overrides, operand_path)
-        self._type_registry = type_registry
-
-    def __getitem__(self, name: str) -> TagValue:
-        """Retrieve a member by name.
-
-        Args:
-            name: The member's ``Name`` attribute.
-
-        Returns:
-            The member's :class:`TagValue` node.
-
-        Raises:
-            KeyError: If no member with the given name is found.
-        """
-        members = self._type_registry.resolve_members(self.data_type) or {}
-        for child in self._element:
-            if child.get("Name") == name:
-                path = f"{self._operand_path}.{name.upper()}"
-                return _build_value_node(
-                    child, members.get(name), self._overrides, path, self._type_registry
-                )
-        raise KeyError(name)
-
-    def __iter__(self):
-        """Iterate over member names in document order."""
-        for child in self._element:
-            name = child.get("Name")
-            if name:
-                yield name
-
-    def __len__(self) -> int:
-        """Return the number of members."""
-        return sum(1 for child in self._element if child.get("Name"))
-
-    def __repr__(self) -> str:
-        """Return a string representation listing member names."""
-        return f"TagValueStructure({list(self)!r})"
-
-
-class TagValueArray(TagValue, Mapping):
-    """An array node in a tag's value tree, keyed by integer index.
-
-    Args:
-        element: The ``<Array>``/``<ArrayMember>`` element this node wraps.
-        member_def: The resolved member/parameter definition, if any (shared
-            across all elements, since arrays are described by one member).
-        overrides: The owning tag's collected operand overrides.
-        operand_path: This node's operand path.
-        type_registry: Used to resolve struct-typed elements' own children.
-    """
-
-    def __init__(
-        self,
-        element: ET.Element,
-        member_def: MemberDef | None,
-        overrides: _TagOverrides,
-        operand_path: str,
-        type_registry: TypeRegistry,
-    ) -> None:
-        """Initialise an array value node.
-
-        Args:
-            element: The element this array wraps.
-            member_def: The resolved member/parameter definition, if any.
-            overrides: The owning tag's collected operand overrides.
-            operand_path: This node's operand path.
-            type_registry: Used to resolve struct-typed elements' children.
-        """
-        super().__init__(element, member_def, overrides, operand_path)
-        self._type_registry = type_registry
-
-    @staticmethod
-    def _index_of(element: ET.Element) -> int:
-        """Parse an ``<Element Index="[n]">``'s bracketed index as an int."""
-        return int(element.get("Index", "").strip("[]"))
-
-    def _elements(self) -> list[ET.Element]:
-        """Return all ``<Element>`` children in document order."""
-        return self._element.findall("Element")
-
-    def __getitem__(self, index: int) -> TagValue:
-        """Retrieve an element by its zero-based index.
-
-        Args:
-            index: The array index.
-
-        Returns:
-            A :class:`TagValueStructure` for struct-typed elements, or a
-            :class:`TagValueScalar` for atomic elements.
-
-        Raises:
-            KeyError: If no element with the given index is found.
-        """
-        for element in self._elements():
-            if self._index_of(element) == index:
-                path = f"{self._operand_path}[{index}]"
-                struct_child = element.find("Structure")
-                if struct_child is not None:
-                    return TagValueStructure(
-                        struct_child,
-                        self._member_def,
-                        self._overrides,
-                        path,
-                        self._type_registry,
-                    )
-                return TagValueScalar(element, self._member_def, self._overrides, path)
-        raise KeyError(index)
-
-    def __iter__(self):
-        """Iterate over element indices in document order."""
-        for element in self._elements():
-            yield self._index_of(element)
-
-    def __len__(self) -> int:
-        """Return the number of elements."""
-        return len(self._elements())
-
-    def __repr__(self) -> str:
-        """Return a string representation showing the element count."""
-        return f"TagValueArray(len={len(self)})"
-
-
-def _build_root_value_node(
-    element: ET.Element, overrides: _TagOverrides, type_registry: TypeRegistry
-) -> TagValue | None:
-    """Dispatch a tag's top-level ``Decorated`` value element.
-
-    Unlike nested values, the top-level element is named ``DataValue``,
-    ``Structure``, or ``Array`` (not ``DataValueMember``/``StructureMember``/
-    ``ArrayMember``).
-
-    Args:
-        element: The ``Data[@Format='Decorated']``'s single child element.
-        overrides: The tag's collected operand overrides.
-        type_registry: Used by structure/array nodes to resolve members.
-
-    Returns:
-        The root :class:`TagValue` node, or ``None`` if the element tag is
-        unrecognised.
-    """
-    if element.tag == "DataValue":
-        return TagValueScalar(element, None, overrides, "")
-    if element.tag == "Structure":
-        return TagValueStructure(element, None, overrides, "", type_registry)
-    if element.tag == "Array":
-        return TagValueArray(element, None, overrides, "", type_registry)
-    return None
 
 
 class Tag(BaseElement):
@@ -764,16 +693,16 @@ class Tag(BaseElement):
     # ------------------------------------------------------------------
 
     @property
-    def value(self) -> TagValue | None:
-        """The tag's value tree root.
+    def data(self) -> TagNode | None:
+        """The tag's value tree root node.
 
         Returns:
             ``None`` for ``Alias`` tags and ``MESSAGE``-type tags (no value
-            data is exported for either). Otherwise a :class:`TagValueScalar`
-            for atomic tags (including STRING-family tags, which use the
-            ``Format="String"`` fallback since they have no ``Decorated``
-            section), or a :class:`TagValueStructure`/:class:`TagValueArray`
-            for UDT/AOI-instance or array tags.
+            data is exported for either). Otherwise a scalar-kind
+            :class:`TagNode` for atomic tags (including STRING-family tags,
+            which use the ``Format="String"`` fallback since they have no
+            ``Decorated`` section), or a structure-/array-kind
+            :class:`TagNode` for UDT/AOI-instance or array tags.
         """
         if self.tag_type == "Alias":
             return None
@@ -784,7 +713,7 @@ class Tag(BaseElement):
             child = next(iter(decorated), None)
             if child is None:
                 return None
-            return _build_root_value_node(child, self._overrides, self._type_registry)
+            return _build_node(child, None, self._overrides, "", self._type_registry)
         string_data = self._element.find("Data[@Format='String']")
         if string_data is not None:
             cdata_el = string_data.find(CDATA_TAG)
@@ -793,10 +722,43 @@ class Tag(BaseElement):
                 if cdata_el is not None and cdata_el.text
                 else (string_data.text or "")
             )
-            return TagValueScalar(
+            return TagNode(
                 string_data, None, self._overrides, "", raw_text=text, from_cdata=True
             )
         return None
+
+    @property
+    def value(self) -> int | float | str | bool | None:
+        """Shortcut for ``self.data.value`` -- meaningful for scalar tags only.
+
+        Returns:
+            The root node's scalar value, or ``None`` if the tag has no
+            value data or its root node is a structure/array.
+        """
+        node = self.data
+        return node.value if node is not None else None
+
+    @property
+    def members(self) -> Mapping[str, TagNode]:
+        """Shortcut for ``self.data.members`` -- meaningful for structures only.
+
+        Returns:
+            The root node's member mapping, or an empty dict if the tag has
+            no value data or its root node is not a structure.
+        """
+        node = self.data
+        return node.members if node is not None else {}
+
+    @property
+    def elements(self) -> Sequence[TagNode]:
+        """Shortcut for ``self.data.elements`` -- meaningful for arrays only.
+
+        Returns:
+            The root node's element sequence, or an empty list if the tag
+            has no value data or its root node is not an array.
+        """
+        node = self.data
+        return node.elements if node is not None else []
 
     def __repr__(self) -> str:
         """Return a concise representation including the tag name and type."""
