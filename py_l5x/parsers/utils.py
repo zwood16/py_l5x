@@ -5,6 +5,7 @@ import re
 #: Atomic L5X data types that hold integer values.
 _INT_DATATYPES: frozenset[str] = frozenset(
     {
+        "BOOL",
         "SINT",
         "INT",
         "DINT",

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from xml.etree import ElementTree as ET
 
+from py_l5x.parse import CDATA_TAG
 from py_l5x.parsers.base import BaseCollection, BaseElement
 from py_l5x.parsers.utils import convert_numeric
 
@@ -46,6 +47,8 @@ _PARAMETER_KNOWN_XML_KEYS: frozenset[str] = frozenset(
         "Required",
         "Visible",
         "ExternalAccess",
+        "Max",
+        "Min",
     }
 )
 
@@ -520,7 +523,7 @@ class DataType(BaseElement):
         return "\n".join(lines)
 
 
-class DataTypesCollection(BaseCollection):
+class DataTypesCollection(BaseCollection[DataType]):
     """A ``Mapping`` over every ``<DataType>`` in the ``<DataTypes>`` section.
 
     Args:
@@ -617,6 +620,91 @@ class AddOnParameter(BaseElement):
         """Whether this parameter uses InOut usage."""
         return self.usage == "InOut"
 
+    # ------------------------------------------------------------------
+    # Shape / limits
+    # ------------------------------------------------------------------
+
+    @property
+    def min(self) -> int | float | str | None:
+        """User-specified minimum value, if any.
+
+        Returns:
+            The ``Min`` XML attribute converted to ``int``/``float`` based
+            on :attr:`data_type`, or ``None`` if the attribute is absent.
+        """
+        value = self._element.get("Min")
+        return None if value is None else convert_numeric(value, self.data_type)
+
+    @property
+    def max(self) -> int | float | str | None:
+        """User-specified maximum value, if any.
+
+        Returns:
+            The ``Max`` XML attribute converted to ``int``/``float`` based
+            on :attr:`data_type`, or ``None`` if the attribute is absent.
+        """
+        value = self._element.get("Max")
+        return None if value is None else convert_numeric(value, self.data_type)
+
+    # ------------------------------------------------------------------
+    # Documentation
+    # ------------------------------------------------------------------
+
+    def _get_nested_cdata(self, container_tag: str, child_tag: str) -> str:
+        """Return CDATA text from a doubly-nested container/child element pair.
+
+        Unlike ``<Member>`` (used by UDTs), ``<Parameter>`` wraps its
+        ``EngineeringUnit``/``State0``/``State1`` children inside a plural
+        container element with no ``Operand`` attribute, e.g.::
+
+            <EngineeringUnits><EngineeringUnit><![CDATA[ms]]></EngineeringUnit></EngineeringUnits>
+
+        Args:
+            container_tag: The plural wrapper element name (e.g. ``"State0s"``).
+            child_tag: The child element name to read CDATA text from (e.g.
+                ``"State0"``).
+
+        Returns:
+            The text content, stripped of surrounding whitespace, or an empty
+            string if the element or its text is absent.
+        """
+        child = self._element.find(f"{container_tag}/{child_tag}")
+        if child is not None:
+            cdata_el = child.find(CDATA_TAG)
+            if cdata_el is not None and cdata_el.text:
+                return cdata_el.text.strip()
+            if child.text:
+                return child.text.strip()
+        return ""
+
+    @property
+    def engineering_unit(self) -> str:
+        """User-specified engineering unit (e.g. ``"ms"``).
+
+        Returns:
+            The ``EngineeringUnits/EngineeringUnit`` CDATA text, or an empty
+            string if absent.
+        """
+        return self._get_nested_cdata("EngineeringUnits", "EngineeringUnit")
+
+    @property
+    def state0(self) -> str:
+        """Description of the boolean parameter's zero state.
+
+        Returns:
+            The ``State0s/State0`` CDATA text, or an empty string if absent.
+        """
+        return self._get_nested_cdata("State0s", "State0")
+
+    @property
+    def state1(self) -> str:
+        """Description of the boolean parameter's one state.
+
+        Returns:
+            The ``State1s/State1`` CDATA text, or an empty string if absent.
+        """
+        return self._get_nested_cdata("State1s", "State1")
+
     @property
     def extra_attributes(self) -> dict[str, str]:
         """XML attributes not covered by explicit properties."""
@@ -637,6 +725,12 @@ class AddOnParameter(BaseElement):
             lines.append(f"Required:         {self.required}")
         if not self.visible:
             lines.append(f"Visible:          {self.visible}")
+        if self.min is not None:
+            lines.append(f"Min:              {self.min}")
+        if self.max is not None:
+            lines.append(f"Max:              {self.max}")
+        if self.engineering_unit:
+            lines.append(f"Engineering Unit: {self.engineering_unit}")
 
         extras = self.extra_attributes
         if extras:
@@ -646,7 +740,7 @@ class AddOnParameter(BaseElement):
         return "\n".join(lines)
 
 
-class AddOnParameters(BaseCollection):
+class AddOnParameters(BaseCollection[AddOnParameter]):
     """A collection of parameters for a specific AOI definition.
 
     Args:
@@ -669,7 +763,7 @@ class AddOnParameters(BaseCollection):
         return {name: p for name, p in self.items() if not p.is_inout}
 
 
-class AddOnDataTypeCollection(BaseCollection):
+class AddOnDataTypeCollection(BaseCollection[AddOnParameters]):
     """A ``Mapping`` over every ``<AddOnInstructionDefinition>``'s parameters.
 
     Args:
@@ -677,16 +771,16 @@ class AddOnDataTypeCollection(BaseCollection):
             containing the ``<AddOnInstructionDefinitions>`` section.
     """
 
-    def __init__(self, root_element: ET.Element) -> None:
+    def __init__(self, controller_element: ET.Element) -> None:
         """Initialise from a root XML element.
 
         Args:
-            root_element: The element whose
-                ``AddOnInstructionDefinitions/AddOnInstructionDefinition`` children
-                form this collection.
+            controller_element: The ``<Controller>`` element whose
+                ``AddOnInstructionDefinitions/AddOnInstructionDefinition`` children form
+                this collection.
         """
         super().__init__(
-            root_element,
+            controller_element,
             "AddOnInstructionDefinitions/AddOnInstructionDefinition",
             AddOnParameters,
         )

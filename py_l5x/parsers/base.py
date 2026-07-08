@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Iterator, Mapping
+from typing import Any, Generic, TypeVar
 from xml.etree import ElementTree as ET
 
 from py_l5x.parse import CDATA_TAG
+
+T = TypeVar("T")
 
 
 class XmlAttrMixin:
@@ -110,7 +113,7 @@ class BaseElement(XmlAttrMixin):
         )
 
 
-class BaseCollection(Mapping):
+class BaseCollection(Mapping[str, T], Generic[T]):
     """A ``Mapping`` over a set of named XML child elements.
 
     Keys are the ``Name`` attribute of each child element. Values are instances
@@ -136,8 +139,8 @@ class BaseCollection(Mapping):
         self,
         parent_el: ET.Element,
         child_xpath: str,
-        item_class: type,
-        item_args: tuple = (),
+        item_class: Callable[..., T],
+        item_args: tuple[Any, ...] = (),
     ) -> None:
         """Initialize the collection.
 
@@ -165,7 +168,7 @@ class BaseCollection(Mapping):
     # Mapping protocol (three required methods)
     # ------------------------------------------------------------------
 
-    def __getitem__(self, name: str):
+    def __getitem__(self, name: str) -> T:
         """Retrieve an item by its ``Name`` attribute.
 
         Args:
@@ -182,7 +185,7 @@ class BaseCollection(Mapping):
                 return self._item_class(el, *self._item_args)
         raise KeyError(name)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[str]:
         """Iterate over the ``Name`` attributes of all child elements.
 
         Yields:

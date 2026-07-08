@@ -6,6 +6,14 @@
 scratch/
 reference/
 
+# Studio 5000 tempfiles
+*.Sem
+*.Wrk
+*BAK*.acd
+*.ACD_*
+*.acd_*
+*.Recovery
+
 
 # ---------------------------------------------------------------------
 # Github Python Template

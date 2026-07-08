@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<RSLogix5000Content SchemaRevision="1.0" SoftwareRevision="37.00" TargetName="Example_PLC" TargetType="Controller" ContainsContext="false" ExportDate="Tue Jul 07 16:49:02 2026" ExportOptions="NoRawData L5KData DecoratedData ForceProtectedEncoding AllProjDocTrans">
-<Controller Use="Target" Name="Example_PLC" ProcessorType="5069-L306ERM" MajorRev="37" MinorRev="11" ProjectCreationDate="Tue Jun 30 10:14:37 2026" LastModifiedDate="Tue Jul 07 16:48:52 2026" SFCExecutionControl="CurrentActive" SFCRestartPosition="MostRecent" SFCLastScan="DontScan" ProjectSN="16#0000_0000"
+<RSLogix5000Content SchemaRevision="1.0" SoftwareRevision="37.00" TargetName="Example_PLC" TargetType="Controller" ContainsContext="false" ExportDate="Wed Jul 08 13:40:52 2026" ExportOptions="NoRawData L5KData DecoratedData ForceProtectedEncoding AllProjDocTrans">
+<Controller Use="Target" Name="Example_PLC" ProcessorType="5069-L306ERM" MajorRev="37" MinorRev="11" ProjectCreationDate="Tue Jun 30 10:14:37 2026" LastModifiedDate="Wed Jul 08 13:40:40 2026" SFCExecutionControl="CurrentActive" SFCRestartPosition="MostRecent" SFCLastScan="DontScan" ProjectSN="16#0000_0000"
  MatchProjectToController="false" CanUseRPIFromProducer="false" InhibitAutomaticFirmwareUpdate="0" PassThroughConfiguration="EnabledWithAppend" DownloadProjectDocumentationAndExtendedProperties="true" DownloadProjectCustomProperties="true" ReportMinorOverflow="false" EtherNetIPMode="A1/A2: Dual-IP" AutoDiagsEnabled="true" WebServerEnabled="false" DataExchangeId="{09B2637D-051F-4EFE-989A-EAD35A27AB93}"
 >
 <RedundancyInfo Enabled="false" KeepTestEditsOnSwitchOver="false"/>
@@ -1743,7 +1743,7 @@
 </Module>
 </Modules>
 <AddOnInstructionDefinitions>
-<AddOnInstructionDefinition Name="Debounce" Revision="1.2" ExecutePrescan="false" ExecutePostscan="false" ExecuteEnableInFalse="true" CreatedDate="2018-04-24T14:53:35.092Z" CreatedBy="A-I-CORP\zwood" EditedDate="2023-06-27T19:46:00.703Z" EditedBy="A-I-CORP\ZWood" SoftwareRevision="v33.01">
+<AddOnInstructionDefinition Name="Debounce" Revision="1.2" ExecutePrescan="false" ExecutePostscan="false" ExecuteEnableInFalse="true" CreatedDate="2018-04-24T14:53:35.092Z" CreatedBy="A-I-CORP\zwood" EditedDate="2026-07-08T19:40:38.750Z" EditedBy="ROCKWELL-VM\Zac" SoftwareRevision="v37.00">
 <RevisionNote>
 <![CDATA[v1.2: Changed outputBit to state. Added more documentation
 v1.1: Made outputBit not required]]>
@@ -1763,6 +1763,16 @@ v1.1: Made outputBit not required]]>
 <Description>
 <![CDATA[debounced output]]>
 </Description>
+<State0s>
+<State0>
+<![CDATA[off]]>
+</State0>
+</State0s>
+<State1s>
+<State1>
+<![CDATA[on]]>
+</State1>
+</State1s>
 <DefaultData Format="L5K">
 <![CDATA[0]]>
 </DefaultData>
@@ -1770,10 +1780,15 @@ v1.1: Made outputBit not required]]>
 <DataValue DataType="BOOL" Radix="Decimal" Value="0"/>
 </DefaultData>
 </Parameter>
-<Parameter Name="onDelay" TagType="Base" DataType="DINT" Usage="Input" Radix="Decimal" Required="false" Visible="true" ExternalAccess="Read/Write">
+<Parameter Name="onDelay" TagType="Base" DataType="DINT" Usage="Input" Radix="Decimal" Required="false" Visible="true" ExternalAccess="Read/Write" Max="2147483647" Min="0">
 <Description>
 <![CDATA[milliseconds before output bit turns ON]]>
 </Description>
+<EngineeringUnits>
+<EngineeringUnit>
+<![CDATA[ms]]>
+</EngineeringUnit>
+</EngineeringUnits>
 <DefaultData Format="L5K">
 <![CDATA[0]]>
 </DefaultData>
@@ -1781,10 +1796,15 @@ v1.1: Made outputBit not required]]>
 <DataValue DataType="DINT" Radix="Decimal" Value="0"/>
 </DefaultData>
 </Parameter>
-<Parameter Name="offDelay" TagType="Base" DataType="DINT" Usage="Input" Radix="Decimal" Required="false" Visible="true" ExternalAccess="Read/Write">
+<Parameter Name="offDelay" TagType="Base" DataType="DINT" Usage="Input" Radix="Decimal" Required="false" Visible="true" ExternalAccess="Read/Write" Max="2147483647" Min="0">
 <Description>
 <![CDATA[milliseconds before output bit turns OFF]]>
 </Description>
+<EngineeringUnits>
+<EngineeringUnit>
+<![CDATA[ms]]>
+</EngineeringUnit>
+</EngineeringUnits>
 <DefaultData Format="L5K">
 <![CDATA[0]]>
 </DefaultData>

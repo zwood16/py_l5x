@@ -1,4 +1,4 @@
-"""Tests for py_l5x.parsers.datatype."""
+"""Tests for py_l5x.parsers.datatype (UDT DataTypes and AOI parameters)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,13 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
-from py_l5x.parsers.datatype import AddOnParameters, DataType, DataTypesCollection
+from py_l5x.parsers.datatype import (
+    AddOnDataTypeCollection,
+    AddOnParameter,
+    AddOnParameters,
+    DataType,
+    DataTypesCollection,
+)
 from py_l5x.parsers.utils import convert_numeric
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -74,6 +80,24 @@ def fanuc_robot_aoi(aoi_definitions: list[ET.Element]) -> ET.Element:
 def a_udt(data_types: DataTypesCollection) -> DataType:
     """The A_UDT data type."""
     return data_types["A_UDT"]
+
+
+@pytest.fixture
+def aoi_types(controller_element: ET.Element) -> AddOnDataTypeCollection:
+    """Create an AddOnDataTypeCollection instance from the example L5X."""
+    return AddOnDataTypeCollection(controller_element)
+
+
+@pytest.fixture
+def debounce(aoi_types: AddOnDataTypeCollection) -> AddOnParameters:
+    """The Debounce AOI's parameters."""
+    return aoi_types["Debounce"]
+
+
+@pytest.fixture
+def generic_input(aoi_types: AddOnDataTypeCollection) -> AddOnParameters:
+    """The GenericInput AOI's parameters."""
+    return aoi_types["GenericInput"]
 
 
 # ---------------------------------------------------------------------------
@@ -405,3 +429,133 @@ class TestAddOnInstructionParameters:
         params = AddOnParameters(fanuc_robot_aoi)
         param = params["allowableAlarms"]
         assert param.extra_attributes.get("Constant") == "false"
+
+
+# ---------------------------------------------------------------------------
+# AddOnDataTypeCollection mapping protocol
+# ---------------------------------------------------------------------------
+
+
+class TestAddOnDataTypeCollection:
+    """Tests for the AddOnDataTypeCollection mapping protocol."""
+
+    def test_contains_debounce(self, aoi_types: AddOnDataTypeCollection) -> None:
+        """Debounce is present in the collection."""
+        assert "Debounce" in aoi_types
+
+    def test_contains_fanuc_robot(self, aoi_types: AddOnDataTypeCollection) -> None:
+        """FanucRobot is present in the collection."""
+        assert "FanucRobot" in aoi_types
+
+    def test_getitem_returns_parameters(
+        self, aoi_types: AddOnDataTypeCollection
+    ) -> None:
+        """Indexing returns an AddOnParameters instance."""
+        assert isinstance(aoi_types["Debounce"], AddOnParameters)
+
+    def test_missing_key_raises(self, aoi_types: AddOnDataTypeCollection) -> None:
+        """Missing AOI name raises KeyError."""
+        with pytest.raises(KeyError):
+            aoi_types["NoSuchAOI"]
+
+
+# ---------------------------------------------------------------------------
+# AddOnParameters mapping protocol / datatype_members filtering
+# ---------------------------------------------------------------------------
+
+
+class TestAddOnParameters:
+    """Tests for the AddOnParameters mapping and InOut filtering."""
+
+    def test_contains_state_param(self, debounce: AddOnParameters) -> None:
+        """The state parameter is present."""
+        assert "state" in debounce
+
+    def test_getitem_returns_parameter(self, debounce: AddOnParameters) -> None:
+        """Indexing returns an AddOnParameter instance."""
+        assert isinstance(debounce["state"], AddOnParameter)
+
+    def test_datatype_members_excludes_inout(
+        self, aoi_types: AddOnDataTypeCollection
+    ) -> None:
+        """datatype_members excludes InOut parameters (e.g. FanucAlarmLookup's allowableAlarms)."""
+        alarm_lookup = aoi_types["FanucAlarmLookup"]
+        assert "allowableAlarms" in alarm_lookup
+        assert "allowableAlarms" not in alarm_lookup.datatype_members
+
+    def test_datatype_members_includes_input_output(
+        self, generic_input: AddOnParameters
+    ) -> None:
+        """datatype_members includes Input/Output parameters."""
+        assert "state" in generic_input.datatype_members
+        assert "onDelay" in generic_input.datatype_members
+
+
+# ---------------------------------------------------------------------------
+# AddOnParameter identity / metadata
+# ---------------------------------------------------------------------------
+
+
+class TestAddOnParameterIdentity:
+    """Tests for AddOnParameter identity properties."""
+
+    def test_name(self, debounce: AddOnParameters) -> None:
+        """Name matches the Name attribute."""
+        assert debounce["state"].name == "state"
+
+    def test_data_type(self, debounce: AddOnParameters) -> None:
+        """Data type matches the DataType attribute."""
+        assert debounce["onDelay"].data_type == "DINT"
+
+    def test_usage_input(self, debounce: AddOnParameters) -> None:
+        """onDelay is an Input parameter."""
+        assert debounce["onDelay"].usage == "Input"
+
+    def test_usage_output(self, debounce: AddOnParameters) -> None:
+        """state is an Output parameter."""
+        assert debounce["state"].usage == "Output"
+
+    def test_is_inout(self, aoi_types: AddOnDataTypeCollection) -> None:
+        """allowableAlarms uses InOut usage."""
+        assert aoi_types["FanucAlarmLookup"]["allowableAlarms"].is_inout is True
+
+    def test_description(self, debounce: AddOnParameters) -> None:
+        """Description text matches the Description CDATA."""
+        assert (
+            debounce["onDelay"].description == "milliseconds before output bit turns ON"
+        )
+
+
+class TestAddOnParameterMetadata:
+    """Tests for AddOnParameter min/max/engineering_unit/state0/state1."""
+
+    def test_min(self, debounce: AddOnParameters) -> None:
+        """Min matches the Min attribute, converted to int."""
+        assert debounce["onDelay"].min == 0
+
+    def test_max(self, debounce: AddOnParameters) -> None:
+        """Max matches the Max attribute, converted to int."""
+        assert debounce["onDelay"].max == 2147483647
+
+    def test_engineering_unit(self, debounce: AddOnParameters) -> None:
+        """Engineering unit matches the nested EngineeringUnits/EngineeringUnit CDATA."""
+        assert debounce["onDelay"].engineering_unit == "ms"
+
+    def test_state0(self, debounce: AddOnParameters) -> None:
+        """State0 matches the nested State0s/State0 CDATA."""
+        assert debounce["state"].state0 == "off"
+
+    def test_state1(self, debounce: AddOnParameters) -> None:
+        """State1 matches the nested State1s/State1 CDATA."""
+        assert debounce["state"].state1 == "on"
+
+    def test_min_max_absent_returns_none(self, generic_input: AddOnParameters) -> None:
+        """Min/max are None when not specified."""
+        assert generic_input["state"].min is None
+        assert generic_input["state"].max is None
+
+    def test_engineering_unit_absent_returns_empty(
+        self, generic_input: AddOnParameters
+    ) -> None:
+        """Engineering unit is empty string when not specified."""
+        assert generic_input["state"].engineering_unit == ""
