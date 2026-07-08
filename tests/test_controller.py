@@ -85,7 +85,7 @@ class TestControllerDates:
 
     def test_last_modified_date(self, controller: ControllerInfo) -> None:
         """Last modified date matches LastModifiedDate attribute."""
-        assert controller.last_modified_date == "Tue Jun 30 11:15:40 2026"
+        assert controller.last_modified_date == "Tue Jul 07 16:48:52 2026"
 
     def test_project_sn(self, controller: ControllerInfo) -> None:
         """Project serial number matches ProjectSN attribute."""
