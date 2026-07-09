@@ -26,7 +26,14 @@ _REAL_DATATYPES: frozenset[str] = frozenset({"REAL", "LREAL"})
 
 
 def to_snake(name: str) -> str:
-    """Convert PascalCase/camelCase XML keys to snake_case names."""
+    """Convert PascalCase/camelCase XML keys to snake_case names.
+
+    Args:
+        name: The PascalCase or camelCase string to convert.
+
+    Returns:
+        The snake_case version of the input string.
+    """
     return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
 
 

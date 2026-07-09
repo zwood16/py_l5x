@@ -18,36 +18,69 @@ from py_l5x.parse import CDATA_TAG
 from py_l5x.parsers.base import BaseCollection, BaseElement
 
 _ROUTINE_KNOWN_XML_KEYS: frozenset[str] = frozenset({"Name", "Type"})
+"""Known XML attribute names on ``<Routine>`` elements."""
 _RUNG_KNOWN_XML_KEYS: frozenset[str] = frozenset({"Number", "Type"})
+"""Known XML attribute names on ``<Rung>`` elements."""
 _ST_LINE_KNOWN_XML_KEYS: frozenset[str] = frozenset({"Number"})
+"""Known XML attribute names on ``<Line>`` (ST) elements."""
 
 
 class Rung(BaseElement):
-    """A single ladder rung in ``<RLLContent>``."""
+    """A single ladder rung in ``<RLLContent>``.
+
+    Attributes:
+        number: Rung number.
+        type_: Rung type (typically ``"N"``).
+        comment: Rung comment text, if present.
+        text: Rung neutral text logic.
+
+    Args:
+        element: The ``<Rung>`` XML element to wrap.
+    """
 
     @property
     def number(self) -> int:
-        """Rung number."""
+        """Rung number.
+
+        Returns:
+            The rung number as an integer, defaulting to 0.
+        """
         return int(self._get("Number", "0"))
 
     @property
     def type_(self) -> str:
-        """Rung type (typically ``\"N\"``)."""
+        """Rung type (typically ``"N"``).
+
+        Returns:
+            The rung type string.
+        """
         return self._get("Type")
 
     @property
     def comment(self) -> str:
-        """Rung comment text, if present."""
+        """Rung comment text, if present.
+
+        Returns:
+            The comment text string, or empty string if none.
+        """
         return self._get_cdata_child("Comment")
 
     @property
     def text(self) -> str:
-        """Rung neutral text logic."""
+        """Rung neutral text logic.
+
+        Returns:
+            The rung's neutral text content.
+        """
         return self._get_cdata_child("Text")
 
     @property
     def extra_attributes(self) -> dict[str, str]:
-        """XML attributes not covered by explicit properties."""
+        """XML attributes not covered by explicit properties.
+
+        Returns:
+            Dictionary mapping attribute names to their string values.
+        """
         return {
             k: v
             for k, v in self._element.attrib.items()
@@ -55,16 +88,32 @@ class Rung(BaseElement):
         }
 
     def __repr__(self) -> str:
-        """Return a concise rung representation."""
+        """Return a concise rung representation.
+
+        Returns:
+            A string in the format ``Rung(number=N, type='T')``.
+        """
         return f"Rung(number={self.number}, type={self.type_!r})"
 
 
 class StLine(BaseElement):
-    """A single structured-text ``<Line>`` entry."""
+    """A single structured-text ``<Line>`` entry.
+
+    Attributes:
+        number: Line number.
+        text: Raw line text from CDATA or direct content.
+
+    Args:
+        element: The ``<Line>`` XML element to wrap.
+    """
 
     @property
     def number(self) -> int:
-        """Line number."""
+        """Line number.
+
+        Returns:
+            The line number as an integer, defaulting to 0.
+        """
         return int(self._get("Number", "0"))
 
     @property
@@ -74,6 +123,9 @@ class StLine(BaseElement):
         Unlike most CDATA helpers in this project, this preserves leading
         whitespace so ST indentation remains intact, while trimming only
         XML-formatting newlines that can wrap the payload.
+
+        Returns:
+            The raw ST line text string.
         """
         cdata_el = self._element.find(CDATA_TAG)
         if cdata_el is not None and cdata_el.text is not None:
@@ -84,7 +136,11 @@ class StLine(BaseElement):
 
     @property
     def extra_attributes(self) -> dict[str, str]:
-        """XML attributes not covered by explicit properties."""
+        """XML attributes not covered by explicit properties.
+
+        Returns:
+            Dictionary mapping attribute names to their string values.
+        """
         return {
             k: v
             for k, v in self._element.attrib.items()
@@ -92,26 +148,54 @@ class StLine(BaseElement):
         }
 
     def __repr__(self) -> str:
-        """Return a concise ST line representation."""
+        """Return a concise ST line representation.
+
+        Returns:
+            A string in the format ``StLine(number=N)``.
+        """
         return f"StLine(number={self.number})"
 
 
 class Routine(BaseElement):
-    """A single ``<Routine>`` with parsed ladder/ST logic text."""
+    """A single ``<Routine>`` with parsed ladder/ST logic text.
+
+    Attributes:
+        name: Routine name.
+        type_: Routine language/type (e.g. ``"RLL"`` or ``"ST"``).
+        description: Routine description text.
+        rungs: All ladder rungs in this routine (empty for non-RLL).
+        st_lines: All ST lines in this routine (empty for non-ST).
+        st_code: Structured Text routine body as a newline-joined string.
+
+    Args:
+        element: The ``<Routine>`` XML element to wrap.
+    """
 
     @property
     def name(self) -> str:
-        """Routine name."""
+        """Routine name.
+
+        Returns:
+            The routine name string.
+        """
         return self._get("Name")
 
     @property
     def type_(self) -> str:
-        """Routine language/type (e.g. ``\"RLL\"`` or ``\"ST\"``)."""
+        """Routine language/type (e.g. ``"RLL"`` or ``"ST"``).
+
+        Returns:
+            The routine type string.
+        """
         return self._get("Type")
 
     @property
     def description(self) -> str:
-        """Routine description text."""
+        """Routine description text.
+
+        Returns:
+            The description text string.
+        """
         return self._get_description()
 
     @property
@@ -119,6 +203,9 @@ class Routine(BaseElement):
         """All ladder rungs in this routine.
 
         Returns an empty list for non-RLL routines.
+
+        Returns:
+            A list of ``Rung`` objects.
         """
         return [Rung(el) for el in self._element.findall("RLLContent/Rung")]
 
@@ -127,6 +214,9 @@ class Routine(BaseElement):
         """All ST lines in this routine.
 
         Returns an empty list for non-ST routines.
+
+        Returns:
+            A list of ``StLine`` objects.
         """
         return [StLine(el) for el in self._element.findall("STContent/Line")]
 
@@ -135,6 +225,9 @@ class Routine(BaseElement):
         """Structured Text routine body as a newline-joined string.
 
         Returns an empty string for non-ST routines.
+
+        Returns:
+            The ST code string, or empty string if not an ST routine.
         """
         return "\n".join(line.text for line in self.st_lines)
 
@@ -173,7 +266,11 @@ class Routine(BaseElement):
 
     @property
     def extra_attributes(self) -> dict[str, str]:
-        """XML attributes not covered by explicit properties."""
+        """XML attributes not covered by explicit properties.
+
+        Returns:
+            Dictionary mapping attribute names to their string values.
+        """
         return {
             k: v
             for k, v in self._element.attrib.items()
@@ -181,7 +278,11 @@ class Routine(BaseElement):
         }
 
     def __repr__(self) -> str:
-        """Return a concise representation including name and type."""
+        """Return a concise representation including name and type.
+
+        Returns:
+            A string in the format ``Routine('name', type='T')``.
+        """
         return f"Routine({self.name!r}, type={self.type_!r})"
 
 
@@ -190,8 +291,20 @@ class RoutinesCollection(BaseCollection[Routine]):
 
     The parent can be either a ``<Program>`` element or an
     ``<AddOnInstructionDefinition>`` element.
+
+    Attributes:
+        routines: All routines in the collection, keyed by name.
+
+    Args:
+        parent_element: The parent element containing a ``<Routines>`` child.
     """
 
     def __init__(self, parent_element: ET.Element) -> None:
-        """Initialise from a parent element containing a ``<Routines>`` child."""
+        """Initialise from a parent element containing a ``<Routines>`` child.
+
+        Args:
+            parent_element: The parent element (e.g. ``<Program>`` or
+                ``<AddOnInstructionDefinition>``) whose ``Routines/Routine``
+                children form this collection.
+        """
         super().__init__(parent_element, "Routines/Routine", Routine)

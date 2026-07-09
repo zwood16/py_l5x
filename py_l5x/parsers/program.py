@@ -17,10 +17,21 @@ from py_l5x.parsers.tag import TagsCollection, TypeRegistry
 _PROGRAM_KNOWN_XML_KEYS: frozenset[str] = frozenset(
     {"Name", "TestEdits", "MainRoutineName", "Disabled", "UseAsFolder"}
 )
+"""Known XML attribute names on ``<Program>`` elements."""
 
 
 class Program(BaseElement):
     """A single ``<Program>`` element from the ``<Programs>`` section.
+
+    Attributes:
+        name: Program name.
+        description: Program description text.
+        test_edits: Whether the program has pending test edits.
+        main_routine_name: Name of the program's main routine.
+        disabled: Whether the program is disabled.
+        use_as_folder: Whether the program is used purely as an organizational folder.
+        tags: This program's local tags, keyed by name.
+        routines: This program's routines, keyed by routine name.
 
     Args:
         element: The ``<Program>`` element from a parsed L5X tree.
@@ -40,54 +51,86 @@ class Program(BaseElement):
 
     @property
     def name(self) -> str:
-        """Program name."""
+        """Program name.
+
+        Returns:
+            The program name string.
+        """
         return self._get("Name")
 
     @property
     def description(self) -> str:
-        """Program description text."""
+        """Program description text.
+
+        Returns:
+            The description text string.
+        """
         return self._get_description()
 
     @property
     def test_edits(self) -> bool:
-        """Whether the program has pending test edits."""
+        """Whether the program has pending test edits.
+
+        Returns:
+            True if the program has pending test edits, False otherwise.
+        """
         return self._get("TestEdits") == "true"
 
     @property
     def main_routine_name(self) -> str:
-        """Name of the program's main routine."""
+        """Name of the program's main routine.
+
+        Returns:
+            The main routine name string.
+        """
         return self._get("MainRoutineName")
 
     @property
     def disabled(self) -> bool:
-        """Whether the program is disabled."""
+        """Whether the program is disabled.
+
+        Returns:
+            True if the program is disabled, False otherwise.
+        """
         return self._get("Disabled") == "true"
 
     @property
     def use_as_folder(self) -> bool:
-        """Whether the program is used purely as an organizational folder."""
+        """Whether the program is used purely as an organizational folder.
+
+        Returns:
+            True if the program is a folder, False otherwise.
+        """
         return self._get("UseAsFolder") == "true"
 
     @property
     def tags(self) -> TagsCollection:
-        """This program's local tags, keyed by name."""
+        """This program's local tags, keyed by name.
+
+        Returns:
+            A TagsCollection of the program's local tags.
+        """
         return TagsCollection(self._element, self._type_registry)
 
     @property
     def routines(self) -> RoutinesCollection:
-        """This program's routines, keyed by routine name."""
+        """This program's routines, keyed by routine name.
+
+        Returns:
+            A RoutinesCollection of the program's routines.
+        """
         return RoutinesCollection(self._element)
 
     def logic_text(self) -> str:
         """Render this program's routine logic as a quick-reference text block.
 
         Formatting:
-        - Ladder rungs are rendered as two lines per rung::
+            - Ladder rungs are rendered as two lines per rung::
 
-              line_number : comment
-                                 text
+                  line_number : comment
+                                     text
 
-        - Structured Text routines are rendered line-by-line.
+            - Structured Text routines are rendered line-by-line.
 
         Returns:
             A human-readable multi-line string containing all routines in the
@@ -115,7 +158,11 @@ class Program(BaseElement):
         return "\n".join(lines)
 
     def print_logic_text(self) -> str:
-        """Print and return :meth:`logic_text` for quick interactive inspection."""
+        """Print and return :meth:`logic_text` for quick interactive inspection.
+
+        Returns:
+            The logic text string from :meth:`logic_text`.
+        """
         text = self.logic_text()
         print(text)
         return text
@@ -134,12 +181,19 @@ class Program(BaseElement):
         }
 
     def __repr__(self) -> str:
-        """Return a concise representation including the program name."""
+        """Return a concise representation including the program name.
+
+        Returns:
+            A string in the format ``Program('name')``.
+        """
         return f"Program({self.name!r})"
 
 
 class ProgramsCollection(BaseCollection[Program]):
     """A ``Mapping`` over every ``<Program>`` in the ``<Programs>`` section.
+
+    Attributes:
+        programs: All programs in the collection, keyed by name.
 
     Args:
         controller_element: The ``<Controller>`` element from a parsed L5X
