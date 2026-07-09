@@ -5,11 +5,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from xml.sax.saxutils import escape as _xml_escape
 
-#: XML tag name used as a stand-in for CDATA sections during parsing.
-#: ``<![CDATA[...]]>`` is replaced with ``<CDATA_TAG>...</CDATA_TAG>`` before
-#: the document is fed to ElementTree. Import this constant wherever the tag
-#: name is needed instead of hard-coding the string.
-CDATA_TAG = "CDataContent"
+from py_l5x.parsers.project import Project
+from py_l5x.parsers.utils import CDATA_TAG
 
 _CDATA_RE = re.compile(r"<!\[CDATA\[(.*?)\]\]>", re.DOTALL)
 
@@ -41,7 +38,6 @@ def _load_l5x(file_path: str) -> ET.Element:
     Raises:
         FileNotFoundError: If the specified file does not exist.
         ValueError: If the file cannot be parsed as XML.
-
     """
     path = Path(file_path)
     if not path.is_file():
@@ -62,3 +58,33 @@ def _load_l5x(file_path: str) -> ET.Element:
         return root
     except ET.ParseError as e:
         raise ValueError(f"Failed to parse the L5X file: {e}") from e
+
+
+def load(file_path: str) -> Project:
+    """Load an L5X file and return a hierarchical ``Project`` object.
+
+    This is the primary public API for the ``py_l5x`` package.  It parses
+    the L5X XML file, handles CDATA sections, and builds a complete
+    object hierarchy with controller metadata, data types, modules,
+    AOIs, tags, programs, and tasks.
+
+    Args:
+        file_path: Path to the L5X file.
+
+    Returns:
+        A ``Project`` instance providing typed access to all project data.
+
+    Raises:
+        FileNotFoundError: If the file does not exist or cannot be read.
+        ValueError: If the file is not a valid L5X XML document or lacks
+            a ``<Controller>`` element.
+
+    Example:
+        >>> from py_l5x import load
+        >>> project = load("my_project.L5X")
+        >>> print(project.controller.name)
+        MyController
+        >>> for task in project.tasks.values():
+        ...     print(task.name, list(task.programs))
+    """
+    return Project(_load_l5x(file_path))

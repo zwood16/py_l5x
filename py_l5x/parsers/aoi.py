@@ -16,11 +16,11 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from xml.etree import ElementTree as ET
 
-from py_l5x.parse import CDATA_TAG
 from py_l5x.parsers.base import BaseCollection, BaseElement
 from py_l5x.parsers.datatype import AddOnParameters
 from py_l5x.parsers.routine import RoutinesCollection
 from py_l5x.parsers.tag import TagNode, TypeRegistry, _build_node, _TagOverrides
+from py_l5x.parsers.utils import CDATA_TAG
 
 _AOI_KNOWN_XML_KEYS: frozenset[str] = frozenset(
     {

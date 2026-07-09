@@ -2,6 +2,12 @@
 
 import re
 
+#: XML tag name used as a stand-in for CDATA sections during parsing.
+#: ``<![CDATA[...]]>`` is replaced with ``<CDATA_TAG>...</CDATA_TAG>`` before
+#: the document is fed to ElementTree. Import this constant wherever the tag
+#: name is needed instead of hard-coding the string.
+CDATA_TAG = "CDataContent"
+
 #: Atomic L5X data types that hold integer values.
 _INT_DATATYPES: frozenset[str] = frozenset(
     {

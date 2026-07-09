@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterator, Mapping
 from typing import Any, Generic, TypeVar
 from xml.etree import ElementTree as ET
 
-from py_l5x.parse import CDATA_TAG
+from py_l5x.parsers.utils import CDATA_TAG
 
 T = TypeVar("T")
 

@@ -14,8 +14,8 @@ from __future__ import annotations
 
 from xml.etree import ElementTree as ET
 
-from py_l5x.parse import CDATA_TAG
 from py_l5x.parsers.base import BaseCollection, BaseElement
+from py_l5x.parsers.utils import CDATA_TAG
 
 _ROUTINE_KNOWN_XML_KEYS: frozenset[str] = frozenset({"Name", "Type"})
 """Known XML attribute names on ``<Routine>`` elements."""

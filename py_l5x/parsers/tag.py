@@ -33,7 +33,6 @@ from collections.abc import Mapping, Sequence
 from typing import Literal
 from xml.etree import ElementTree as ET
 
-from py_l5x.parse import CDATA_TAG
 from py_l5x.parsers.base import BaseCollection, BaseElement, XmlAttrMixin
 from py_l5x.parsers.datatype import (
     AddOnDataTypeCollection,
@@ -41,7 +40,7 @@ from py_l5x.parsers.datatype import (
     DataTypeMember,
     DataTypesCollection,
 )
-from py_l5x.parsers.utils import convert_numeric
+from py_l5x.parsers.utils import CDATA_TAG, convert_numeric
 
 #: A member/parameter definition used for metadata cross-reference. Both
 #: classes expose the same property surface (description/min/max/

@@ -16,9 +16,8 @@ from __future__ import annotations
 
 from xml.etree import ElementTree as ET
 
-from py_l5x.parse import CDATA_TAG
 from py_l5x.parsers.base import BaseCollection, BaseElement
-from py_l5x.parsers.utils import convert_numeric
+from py_l5x.parsers.utils import CDATA_TAG, convert_numeric
 
 # XML attribute names on <Member> exposed as explicit properties.
 _MEMBER_KNOWN_XML_KEYS: frozenset[str] = frozenset(
