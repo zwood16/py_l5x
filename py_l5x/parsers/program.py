@@ -15,7 +15,7 @@ from py_l5x.parsers.routine import RoutinesCollection
 from py_l5x.parsers.tag import TagsCollection, TypeRegistry
 
 _PROGRAM_KNOWN_XML_KEYS: frozenset[str] = frozenset(
-    {"Name", "TestEdits", "MainRoutineName", "Disabled", "UseAsFolder"}
+    {"Name", "TestEdits", "MainRoutineName", "Disabled", "UseAsFolder", "Use"}
 )
 """Known XML attribute names on ``<Program>`` elements."""
 
@@ -57,6 +57,18 @@ class Program(BaseElement):
             The program name string.
         """
         return self._get("Name")
+
+    @property
+    def use(self) -> str:
+        """Export target role for this program.
+
+        ``"Target"`` when this program is the exported target in a component
+        export; empty string otherwise.
+
+        Returns:
+            The value of the ``Use`` XML attribute, or ``""`` if absent.
+        """
+        return self._get("Use")
 
     @property
     def description(self) -> str:

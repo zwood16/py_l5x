@@ -81,66 +81,98 @@ class ControllerInfo(BaseElement):
         return self._get("Use")
 
     @property
-    def processor_type(self) -> str:
-        """Processor catalog number.
+    def is_context(self) -> bool:
+        """Whether this controller element is a context (not the target).
+
+        Component exports wrap all dependency data inside a
+        ``<Controller Use="Context">`` element.  When this is ``True``,
+        firmware, processor type, dates, and serial-number attributes are
+        absent from the XML and the corresponding properties return ``None``.
 
         Returns:
-            The catalog number string (e.g. ``"5069-L306ERM"``).
+            ``True`` if ``Use`` is ``"Context"``; ``False`` otherwise.
         """
-        return self._get("ProcessorType")
+        return self._get("Use") == "Context"
+
+    @property
+    def processor_type(self) -> str | None:
+        """Processor catalog number.
+
+        Returns ``None`` for context controllers (component exports) where
+        this attribute is not present.
+
+        Returns:
+            The catalog number string (e.g. ``"5069-L306ERM"``), or ``None``.
+        """
+        return self._element.get("ProcessorType")
 
     # ------------------------------------------------------------------
     # Revision
     # ------------------------------------------------------------------
 
     @property
-    def major_rev(self) -> str:
+    def major_rev(self) -> str | None:
         """Major firmware revision.
 
+        Returns ``None`` for context controllers (component exports) where
+        this attribute is not present.
+
         Returns:
-            The value of the ``MajorRev`` XML attribute.
+            The value of the ``MajorRev`` XML attribute, or ``None``.
         """
-        return self._get("MajorRev")
+        return self._element.get("MajorRev")
 
     @property
-    def minor_rev(self) -> str:
+    def minor_rev(self) -> str | None:
         """Minor firmware revision.
 
+        Returns ``None`` for context controllers (component exports) where
+        this attribute is not present.
+
         Returns:
-            The value of the ``MinorRev`` XML attribute.
+            The value of the ``MinorRev`` XML attribute, or ``None``.
         """
-        return self._get("MinorRev")
+        return self._element.get("MinorRev")
 
     # ------------------------------------------------------------------
     # Dates / identifiers
     # ------------------------------------------------------------------
 
     @property
-    def project_creation_date(self) -> str:
+    def project_creation_date(self) -> str | None:
         """Date string when the project was first created.
 
+        Returns ``None`` for context controllers (component exports) where
+        this attribute is not present.
+
         Returns:
-            The value of the ``ProjectCreationDate`` XML attribute.
+            The value of the ``ProjectCreationDate`` XML attribute, or ``None``.
         """
-        return self._get("ProjectCreationDate")
+        return self._element.get("ProjectCreationDate")
 
     @property
-    def last_modified_date(self) -> str:
+    def last_modified_date(self) -> str | None:
         """Date string when the project was last saved.
 
+        Returns ``None`` for context controllers (component exports) where
+        this attribute is not present.
+
         Returns:
-            The value of the ``LastModifiedDate`` XML attribute.
+            The value of the ``LastModifiedDate`` XML attribute, or ``None``.
         """
-        return self._get("LastModifiedDate")
+        return self._element.get("LastModifiedDate")
 
     @property
-    def project_sn(self) -> str:
+    def project_sn(self) -> str | None:
         """Project serial number.
 
+        Returns ``None`` for context controllers (component exports) where
+        this attribute is not present.
+
         Returns:
-            The value of the ``ProjectSN`` XML attribute.
+            The value of the ``ProjectSN`` XML attribute, or ``None``.
         """
-        return self._get("ProjectSN")
+        return self._element.get("ProjectSN")
 
     # ------------------------------------------------------------------
     # Unrecognised attributes
@@ -190,10 +222,10 @@ class ControllerInfo(BaseElement):
         """
         lines = [
             f"Controller Name:  {self.name}",
-            f"Processor Type:   {self.processor_type}",
-            f"Firmware:         {self.major_rev}.{self.minor_rev}",
-            f"Created:          {self.project_creation_date}",
-            f"Last Modified:    {self.last_modified_date}",
+            f"Processor Type:   {self.processor_type or '—'}",
+            f"Firmware:         {self.major_rev or '—'}.{self.minor_rev or '—'}",
+            f"Created:          {self.project_creation_date or '—'}",
+            f"Last Modified:    {self.last_modified_date or '—'}",
         ]
         extras = self.extra_attributes
         if extras:

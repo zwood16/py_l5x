@@ -17,9 +17,9 @@ from xml.etree import ElementTree as ET
 from py_l5x.parsers.base import BaseCollection, BaseElement
 from py_l5x.parsers.utils import CDATA_TAG
 
-_ROUTINE_KNOWN_XML_KEYS: frozenset[str] = frozenset({"Name", "Type"})
+_ROUTINE_KNOWN_XML_KEYS: frozenset[str] = frozenset({"Name", "Type", "Use"})
 """Known XML attribute names on ``<Routine>`` elements."""
-_RUNG_KNOWN_XML_KEYS: frozenset[str] = frozenset({"Number", "Type"})
+_RUNG_KNOWN_XML_KEYS: frozenset[str] = frozenset({"Number", "Type", "Use"})
 """Known XML attribute names on ``<Rung>`` elements."""
 _ST_LINE_KNOWN_XML_KEYS: frozenset[str] = frozenset({"Number"})
 """Known XML attribute names on ``<Line>`` (ST) elements."""
@@ -86,6 +86,18 @@ class Rung(BaseElement):
             for k, v in self._element.attrib.items()
             if k not in _RUNG_KNOWN_XML_KEYS
         }
+
+    @property
+    def use(self) -> str:
+        """Export target role for this rung.
+
+        ``"Target"`` when this rung is the exported target in a component
+        export; empty string otherwise.
+
+        Returns:
+            The value of the ``Use`` XML attribute, or ``""`` if absent.
+        """
+        return self._get("Use")
 
     def __repr__(self) -> str:
         """Return a concise rung representation.
@@ -181,6 +193,18 @@ class Routine(BaseElement):
         return self._get("Name")
 
     @property
+    def use(self) -> str:
+        """Export target role for this routine.
+
+        ``"Target"`` when this routine is the exported target in a component
+        export; empty string otherwise.
+
+        Returns:
+            The value of the ``Use`` XML attribute, or ``""`` if absent.
+        """
+        return self._get("Use")
+
+    @property
     def type_(self) -> str:
         """Routine language/type (e.g. ``"RLL"`` or ``"ST"``).
 
@@ -230,6 +254,23 @@ class Routine(BaseElement):
             The ST code string, or empty string if not an ST routine.
         """
         return "\n".join(line.text for line in self.st_lines)
+
+    @property
+    def target_rung(self) -> Rung | None:
+        """The rung marked ``Use="Target"`` in a rung-level component export.
+
+        When a single rung is exported from Studio 5000, that rung carries
+        ``Use="Target"`` while all others are unmarked.  This property
+        locates and returns it.  Returns ``None`` for non-rung-level exports
+        (i.e. when no rung carries the marker) and for non-RLL routines.
+
+        Returns:
+            The target ``Rung``, or ``None`` if no rung is marked as target.
+        """
+        for el in self._element.findall("RLLContent/Rung"):
+            if el.get("Use") == "Target":
+                return Rung(el)
+        return None
 
     def as_text(self) -> str:
         """Return the routine body as end-user friendly text.

@@ -1,0 +1,161 @@
+﻿<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<RSLogix5000Content SchemaRevision="1.0" SoftwareRevision="37.00" TargetName="Debounce" TargetType="AddOnInstructionDefinition" TargetRevision="1.2 " TargetLastEdited="2026-07-08T19:40:38.750Z" ContainsContext="true" ExportDate="Thu Jul 09 14:04:41 2026" ExportOptions="References NoRawData L5KData DecoratedData Context Dependencies ForceProtectedEncoding AllProjDocTrans">
+<Controller Use="Context" Name="Example_PLC">
+<DataTypes Use="Context">
+</DataTypes>
+<AddOnInstructionDefinitions Use="Context">
+<AddOnInstructionDefinition Use="Target" Name="Debounce" Revision="1.2" ExecutePrescan="false" ExecutePostscan="false" ExecuteEnableInFalse="true" CreatedDate="2018-04-24T14:53:35.092Z" CreatedBy="A-I-CORP\zwood" EditedDate="2026-07-08T19:40:38.750Z" EditedBy="ROCKWELL-VM\Zac" SoftwareRevision="v37.00"
+>
+<RevisionNote>
+<![CDATA[v1.2: Changed outputBit to state. Added more documentation
+v1.1: Made outputBit not required]]>
+</RevisionNote>
+<Parameters>
+<Parameter Name="EnableIn" TagType="Base" DataType="BOOL" Usage="Input" Radix="Decimal" Required="false" Visible="false" ExternalAccess="Read Only">
+<Description>
+<![CDATA[Enable Input - System Defined Parameter]]>
+</Description>
+</Parameter>
+<Parameter Name="EnableOut" TagType="Base" DataType="BOOL" Usage="Output" Radix="Decimal" Required="false" Visible="false" ExternalAccess="Read Only">
+<Description>
+<![CDATA[Enable Output - System Defined Parameter]]>
+</Description>
+</Parameter>
+<Parameter Name="state" TagType="Base" DataType="BOOL" Usage="Output" Radix="Decimal" Required="false" Visible="true" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[debounced output]]>
+</Description>
+<State0s>
+<State0>
+<![CDATA[off]]>
+</State0>
+</State0s>
+<State1s>
+<State1>
+<![CDATA[on]]>
+</State1>
+</State1s>
+<DefaultData Format="L5K">
+<![CDATA[0]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<DataValue DataType="BOOL" Radix="Decimal" Value="0"/>
+</DefaultData>
+</Parameter>
+<Parameter Name="onDelay" TagType="Base" DataType="DINT" Usage="Input" Radix="Decimal" Required="false" Visible="true" ExternalAccess="Read/Write" Max="2147483647" Min="0">
+<Description>
+<![CDATA[milliseconds before output bit turns ON]]>
+</Description>
+<EngineeringUnits>
+<EngineeringUnit>
+<![CDATA[ms]]>
+</EngineeringUnit>
+</EngineeringUnits>
+<DefaultData Format="L5K">
+<![CDATA[0]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<DataValue DataType="DINT" Radix="Decimal" Value="0"/>
+</DefaultData>
+</Parameter>
+<Parameter Name="offDelay" TagType="Base" DataType="DINT" Usage="Input" Radix="Decimal" Required="false" Visible="true" ExternalAccess="Read/Write" Max="2147483647" Min="0">
+<Description>
+<![CDATA[milliseconds before output bit turns OFF]]>
+</Description>
+<EngineeringUnits>
+<EngineeringUnit>
+<![CDATA[ms]]>
+</EngineeringUnit>
+</EngineeringUnits>
+<DefaultData Format="L5K">
+<![CDATA[0]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<DataValue DataType="DINT" Radix="Decimal" Value="0"/>
+</DefaultData>
+</Parameter>
+</Parameters>
+<LocalTags>
+<LocalTag Name="debounceOnTimer" DataType="TIMER" ExternalAccess="None">
+<DefaultData Format="L5K">
+<![CDATA[[0,0,0]]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<Structure DataType="TIMER">
+<DataValueMember Name="PRE" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="ACC" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="EN" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TT" DataType="BOOL" Value="0"/>
+<DataValueMember Name="DN" DataType="BOOL" Value="0"/>
+</Structure>
+</DefaultData>
+</LocalTag>
+<LocalTag Name="debounceOffTimer" DataType="TIMER" ExternalAccess="None">
+<DefaultData Format="L5K">
+<![CDATA[[0,0,0]]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<Structure DataType="TIMER">
+<DataValueMember Name="PRE" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="ACC" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="EN" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TT" DataType="BOOL" Value="0"/>
+<DataValueMember Name="DN" DataType="BOOL" Value="0"/>
+</Structure>
+</DefaultData>
+</LocalTag>
+</LocalTags>
+<Routines>
+<Routine Name="EnableInFalse" Type="RLL">
+<RLLContent>
+<Rung Number="0" Type="N">
+<Text>
+<![CDATA[MOVE(offDelay,debounceOffTimer.PRE)RES(debounceOnTimer);]]>
+</Text>
+</Rung>
+<Rung Number="1" Type="N">
+<Comment>
+<![CDATA[Performs the same task as the normal logic, but for when the AOI is off/disabled. Turns off the output state only once the AOI has been off for the debounce Off Time.
+]]>
+</Comment>
+<Text>
+<![CDATA[[TON(debounceOffTimer,?,?) ,XIC(debounceOffTimer.DN) OTU(state) ];]]>
+</Text>
+</Rung>
+</RLLContent>
+</Routine>
+<Routine Name="Logic" Type="RLL">
+<RLLContent>
+<Rung Number="0" Type="N">
+<Comment>
+<![CDATA[Debounce: Appplies a debounce timer to the AOI rung in condition and returns a "filtered" state output. This is typically applied to inputs to deal with chatter or noise, but can apply to any signal.
+To use: place in-line with a boolean condition that needs to be debounced or timed.
+
+
+For this style of debouncing, the rung in condition must stay true for the "onDelay" amount of time (ms) before the state output will be set on, and vice-a-versa for turning off. 
+Note that there IS an EnableInFalse condition if you are modifying this code.]]>
+</Comment>
+<Text>
+<![CDATA[NOP();]]>
+</Text>
+</Rung>
+<Rung Number="1" Type="N">
+<Text>
+<![CDATA[MOVE(onDelay,debounceOnTimer.PRE)RES(debounceOffTimer);]]>
+</Text>
+</Rung>
+<Rung Number="2" Type="N">
+<Comment>
+<![CDATA[Set the output state if the AOI is enabled for at least the debounce On Time. IF the AOI is ever disabled, this timer will reset and state will not be set on.]]>
+</Comment>
+<Text>
+<![CDATA[[TON(debounceOnTimer,?,?) ,XIC(debounceOnTimer.DN) OTL(state) ];]]>
+</Text>
+</Rung>
+</RLLContent>
+</Routine>
+</Routines>
+</AddOnInstructionDefinition>
+</AddOnInstructionDefinitions>
+</Controller>
+</RSLogix5000Content>

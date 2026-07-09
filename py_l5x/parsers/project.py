@@ -29,19 +29,31 @@ Usage:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 from xml.etree import ElementTree as ET
 
-from py_l5x.parsers.aoi import AOICollection
+from py_l5x.parsers.aoi import AOICollection, AOIDefinition
 from py_l5x.parsers.controller import ControllerInfo
 from py_l5x.parsers.datatype import AddOnDataTypeCollection, DataTypesCollection
-from py_l5x.parsers.module import ModulesCollection
-from py_l5x.parsers.program import ProgramsCollection
-from py_l5x.parsers.tag import TagsCollection, TypeRegistry
+from py_l5x.parsers.module import Module, ModulesCollection
+from py_l5x.parsers.program import Program, ProgramsCollection
+from py_l5x.parsers.routine import Routine, Rung
+from py_l5x.parsers.tag import Tag, TagsCollection, TypeRegistry
 from py_l5x.parsers.task import TasksCollection
 
 if TYPE_CHECKING:
-    pass
+    from py_l5x.parsers.datatype import DataType
+
+# Union of all possible target types returned by ``Project.target``.
+_TargetObject = Union[
+    "DataType",
+    AOIDefinition,
+    Module,
+    Program,
+    Routine,
+    Rung,
+    Tag,
+]
 
 
 class Project:
@@ -97,6 +109,137 @@ class Project:
             self._controller_element, self._type_registry
         )
         self._tasks = TasksCollection(self._controller_element, self._type_registry)
+
+    # ------------------------------------------------------------------
+    # Target / export-type introspection
+    # ------------------------------------------------------------------
+
+    @property
+    def target_type(self) -> str:
+        """The ``TargetType`` attribute from ``<RSLogix5000Content>``.
+
+        For full project exports this is ``"Controller"``; for component
+        exports it describes the specific exported object, e.g. ``"Program"``,
+        ``"Routine"``, ``"DataType"``, ``"AddOnInstructionDefinition"``,
+        ``"Module"``, ``"Rung"``, or ``"Tag"``.
+
+        Returns:
+            The target type string, or ``""`` if the attribute is absent.
+        """
+        return self._root.get("TargetType", "")
+
+    @property
+    def target_name(self) -> str:
+        """The ``TargetName`` attribute from ``<RSLogix5000Content>``.
+
+        Returns:
+            The target name string, or ``""`` if the attribute is absent.
+        """
+        return self._root.get("TargetName", "")
+
+    @property
+    def contains_context(self) -> bool:
+        """Whether this L5X file is a component export (contains context).
+
+        Full project exports have ``ContainsContext="false"``; component
+        exports set this to ``"true"`` and include dependency data.
+
+        Returns:
+            ``True`` for component exports; ``False`` for full project exports.
+        """
+        return self._root.get("ContainsContext", "false").lower() == "true"
+
+    @property
+    def target(self) -> _TargetObject | None:
+        """The specific object marked ``Use="Target"`` in a component export.
+
+        For component exports, Studio 5000 marks exactly one child element
+        with ``Use="Target"``; all other elements are context/dependencies.
+        This property locates that element and returns the appropriate typed
+        wrapper by dispatching on :attr:`target_type`:
+
+        * ``"DataType"`` → :class:`~py_l5x.parsers.datatype.DataType`
+        * ``"AddOnInstructionDefinition"`` → :class:`~py_l5x.parsers.aoi.AOIDefinition`
+        * ``"Module"`` → :class:`~py_l5x.parsers.module.Module`
+        * ``"Program"`` → :class:`~py_l5x.parsers.program.Program`
+        * ``"Routine"`` → :class:`~py_l5x.parsers.routine.Routine`
+        * ``"Rung"`` → :class:`~py_l5x.parsers.routine.Rung`
+        * ``"Tag"`` → :class:`~py_l5x.parsers.tag.Tag`
+
+        For a full project export (``TargetType="Controller"``) there is no
+        component target, so ``None`` is returned.  ``None`` is also returned
+        if the target cannot be located (unexpected ``TargetType`` value or
+        missing element).
+
+        Returns:
+            The typed target object, or ``None`` for full-project exports or
+            unknown target types.
+        """
+        tt = self.target_type
+        name = self.target_name
+
+        if tt == "DataType":
+            try:
+                return self._data_types[name]
+            except KeyError:
+                return None
+
+        if tt == "AddOnInstructionDefinition":
+            try:
+                return self._aois[name]
+            except KeyError:
+                return None
+
+        if tt == "Module":
+            try:
+                return self._modules[name]
+            except KeyError:
+                return None
+
+        if tt == "Program":
+            try:
+                return self._programs[name]
+            except KeyError:
+                return None
+
+        if tt == "Routine":
+            # Walk all programs (including context programs) to find the one
+            # whose routine carries Use="Target".
+            for prog in self._programs.values():
+                try:
+                    routine = prog.routines[name]
+                    if routine.use == "Target":
+                        return routine
+                except KeyError:
+                    continue
+            return None
+
+        if tt == "Rung":
+            # The target rung lives inside the target routine, which lives
+            # inside the target program.  Walk programs → routines until we
+            # find a rung marked Use="Target".
+            for prog in self._programs.values():
+                for routine in prog.routines.values():
+                    rung = routine.target_rung
+                    if rung is not None:
+                        return rung
+            return None
+
+        if tt == "Tag":
+            # Try controller-level tags first, then program-local tags.
+            try:
+                return self._tags[name]
+            except KeyError:
+                pass
+            for prog in self._programs.values():
+                try:
+                    return prog.tags[name]
+                except KeyError:
+                    continue
+            return None
+
+        # "Controller" (full project) or unknown TargetType → no component target.
+        return None
 
     # ------------------------------------------------------------------
     # Root XML access
@@ -219,16 +362,33 @@ class Project:
     def __repr__(self) -> str:
         """Return a concise representation of the project.
 
-        Includes the controller name, processor type, and counts of
-        data types, modules, AOIs, tags, programs, and tasks.
+        Includes the export target, controller name, processor type, and
+        counts of data types, modules, AOIs, tags, programs, and tasks.
 
         Returns:
             A formatted string suitable for display in debug output.
         """
+        if self.contains_context:
+            # For Rung exports the root has no TargetName; use the resolved
+            # rung number instead so the repr is informative.
+            if self.target_type == "Rung":
+                t = self.target
+                rung_label = f"number={t.number}" if t is not None else "?"
+                target_line = f"  Target:       Rung {rung_label}"
+            else:
+                target_line = f"  Target:       {self.target_type} {self.target_name!r}"
+        else:
+            target_line = "  Target:       Full project"
+
+        processor = self.controller.processor_type or "—"
+        major = self.controller.major_rev or "—"
+        minor = self.controller.minor_rev or "—"
+
         lines = [
             f"Project({self.controller.name!r})",
-            f"  Processor:    {self.controller.processor_type}",
-            f"  Firmware:     {self.controller.major_rev}.{self.controller.minor_rev}",
+            target_line,
+            f"  Processor:    {processor}",
+            f"  Firmware:     {major}.{minor}",
             f"  Data Types:   {len(self._data_types)}",
             f"  Modules:      {len(self._modules)}",
             f"  AOIs:         {len(self._aois)}",

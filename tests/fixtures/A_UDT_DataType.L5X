@@ -1,0 +1,467 @@
+﻿<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<RSLogix5000Content SchemaRevision="1.0" SoftwareRevision="37.00" TargetName="A_UDT" TargetType="DataType" ContainsContext="true" ExportDate="Thu Jul 09 14:05:10 2026" ExportOptions="References NoRawData L5KData DecoratedData Context Dependencies ForceProtectedEncoding AllProjDocTrans">
+<Controller Use="Context" Name="Example_PLC">
+<DataTypes Use="Context">
+<DataType Use="Target" Name="A_UDT" Family="NoFamily" Class="User">
+<Members>
+<Member Name="ZZZZZZZZZZA_UDT0" DataType="SINT" Dimension="0" Radix="Decimal" Hidden="true" ExternalAccess="Read/Write"/>
+<Member Name="a_Bool" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="ZZZZZZZZZZA_UDT0" BitNumber="0" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[This is a bool]]>
+</Description>
+</Member>
+<Member Name="on_off_bool" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="ZZZZZZZZZZA_UDT0" BitNumber="1" ExternalLogging="true" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[This is a bool with extended properties]]>
+</Description>
+<EngineeringUnit>
+<![CDATA[Boolean]]>
+</EngineeringUnit>
+<State0>
+<![CDATA[Off]]>
+</State0>
+<State1>
+<![CDATA[On]]>
+</State1>
+</Member>
+<Member Name="a_sint" DataType="SINT" Dimension="0" Radix="Decimal" Hidden="false" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[This is a sint or byte]]>
+</Description>
+</Member>
+<Member Name="a_sint_with_props" DataType="SINT" Dimension="0" Radix="Decimal" Hidden="false" Max="25" Min="0" ExternalLogging="false" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[This is a SINT with extended properties]]>
+</Description>
+<EngineeringUnit>
+<![CDATA[mm]]>
+</EngineeringUnit>
+</Member>
+<Member Name="a_real" DataType="REAL" Dimension="0" Radix="Float" Hidden="false" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[a floating point value]]>
+</Description>
+</Member>
+<Member Name="ZZZZZZZZZZA_UDT6" DataType="SINT" Dimension="0" Radix="Decimal" Hidden="true" ExternalAccess="Read/Write"/>
+<Member Name="another_bool" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="ZZZZZZZZZZA_UDT6" BitNumber="0" ExternalAccess="Read/Write"/>
+<Member Name="a_dint" DataType="DINT" Dimension="0" Radix="Decimal" Hidden="false" ExternalAccess="Read/Write"/>
+<Member Name="a_nested_UDT" DataType="simple_udt" Dimension="0" Radix="NullType" Hidden="false" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[a nest UDT type]]>
+</Description>
+</Member>
+<Member Name="an_aoi" DataType="GenericInput" Dimension="0" Radix="NullType" Hidden="false" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[a nested Add On Instruction type]]>
+</Description>
+</Member>
+<Member Name="an_array" DataType="REAL" Dimension="4" Radix="Float" Hidden="false" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[an array of two floating point values. Only 1D is allowed in UDTs.]]>
+</Description>
+</Member>
+</Members>
+<Dependencies>
+<Dependency Type="DataType" Name="simple_udt"/>
+<Dependency Type="AddOnInstructionDefinition" Name="GenericInput"/>
+</Dependencies>
+</DataType>
+<DataType Name="simple_udt" Family="NoFamily" Class="User">
+<Members>
+<Member Name="ZZZZZZZZZZsimple_udt0" DataType="SINT" Dimension="0" Radix="Decimal" Hidden="true" ExternalAccess="Read/Write"/>
+<Member Name="bool1" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="ZZZZZZZZZZsimple_udt0" BitNumber="0" ExternalAccess="Read/Write"/>
+<Member Name="bool2" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="ZZZZZZZZZZsimple_udt0" BitNumber="1" ExternalAccess="Read/Write"/>
+<Member Name="bool3" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="ZZZZZZZZZZsimple_udt0" BitNumber="2" ExternalAccess="Read/Write"/>
+<Member Name="bool4" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="ZZZZZZZZZZsimple_udt0" BitNumber="3" ExternalAccess="Read/Write"/>
+<Member Name="Dint" DataType="DINT" Dimension="0" Radix="Decimal" Hidden="false" ExternalAccess="Read/Write"/>
+<Member Name="real" DataType="DINT" Dimension="0" Radix="Decimal" Hidden="false" ExternalAccess="Read/Write"/>
+<Member Name="lint" DataType="LINT" Dimension="0" Radix="Decimal" Hidden="false" ExternalAccess="Read/Write"/>
+</Members>
+</DataType>
+</DataTypes>
+<AddOnInstructionDefinitions Use="Context">
+<AddOnInstructionDefinition Name="Debounce" Revision="1.2" ExecutePrescan="false" ExecutePostscan="false" ExecuteEnableInFalse="true" CreatedDate="2018-04-24T14:53:35.092Z" CreatedBy="A-I-CORP\zwood" EditedDate="2026-07-08T19:40:38.750Z" EditedBy="ROCKWELL-VM\Zac" SoftwareRevision="v37.00">
+<RevisionNote>
+<![CDATA[v1.2: Changed outputBit to state. Added more documentation
+v1.1: Made outputBit not required]]>
+</RevisionNote>
+<Parameters>
+<Parameter Name="EnableIn" TagType="Base" DataType="BOOL" Usage="Input" Radix="Decimal" Required="false" Visible="false" ExternalAccess="Read Only">
+<Description>
+<![CDATA[Enable Input - System Defined Parameter]]>
+</Description>
+</Parameter>
+<Parameter Name="EnableOut" TagType="Base" DataType="BOOL" Usage="Output" Radix="Decimal" Required="false" Visible="false" ExternalAccess="Read Only">
+<Description>
+<![CDATA[Enable Output - System Defined Parameter]]>
+</Description>
+</Parameter>
+<Parameter Name="state" TagType="Base" DataType="BOOL" Usage="Output" Radix="Decimal" Required="false" Visible="true" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[debounced output]]>
+</Description>
+<State0s>
+<State0>
+<![CDATA[off]]>
+</State0>
+</State0s>
+<State1s>
+<State1>
+<![CDATA[on]]>
+</State1>
+</State1s>
+<DefaultData Format="L5K">
+<![CDATA[0]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<DataValue DataType="BOOL" Radix="Decimal" Value="0"/>
+</DefaultData>
+</Parameter>
+<Parameter Name="onDelay" TagType="Base" DataType="DINT" Usage="Input" Radix="Decimal" Required="false" Visible="true" ExternalAccess="Read/Write" Max="2147483647" Min="0">
+<Description>
+<![CDATA[milliseconds before output bit turns ON]]>
+</Description>
+<EngineeringUnits>
+<EngineeringUnit>
+<![CDATA[ms]]>
+</EngineeringUnit>
+</EngineeringUnits>
+<DefaultData Format="L5K">
+<![CDATA[0]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<DataValue DataType="DINT" Radix="Decimal" Value="0"/>
+</DefaultData>
+</Parameter>
+<Parameter Name="offDelay" TagType="Base" DataType="DINT" Usage="Input" Radix="Decimal" Required="false" Visible="true" ExternalAccess="Read/Write" Max="2147483647" Min="0">
+<Description>
+<![CDATA[milliseconds before output bit turns OFF]]>
+</Description>
+<EngineeringUnits>
+<EngineeringUnit>
+<![CDATA[ms]]>
+</EngineeringUnit>
+</EngineeringUnits>
+<DefaultData Format="L5K">
+<![CDATA[0]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<DataValue DataType="DINT" Radix="Decimal" Value="0"/>
+</DefaultData>
+</Parameter>
+</Parameters>
+<LocalTags>
+<LocalTag Name="debounceOnTimer" DataType="TIMER" ExternalAccess="None">
+<DefaultData Format="L5K">
+<![CDATA[[0,0,0]]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<Structure DataType="TIMER">
+<DataValueMember Name="PRE" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="ACC" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="EN" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TT" DataType="BOOL" Value="0"/>
+<DataValueMember Name="DN" DataType="BOOL" Value="0"/>
+</Structure>
+</DefaultData>
+</LocalTag>
+<LocalTag Name="debounceOffTimer" DataType="TIMER" ExternalAccess="None">
+<DefaultData Format="L5K">
+<![CDATA[[0,0,0]]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<Structure DataType="TIMER">
+<DataValueMember Name="PRE" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="ACC" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="EN" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TT" DataType="BOOL" Value="0"/>
+<DataValueMember Name="DN" DataType="BOOL" Value="0"/>
+</Structure>
+</DefaultData>
+</LocalTag>
+</LocalTags>
+<Routines>
+<Routine Name="EnableInFalse" Type="RLL">
+<RLLContent>
+<Rung Number="0" Type="N">
+<Text>
+<![CDATA[MOVE(offDelay,debounceOffTimer.PRE)RES(debounceOnTimer);]]>
+</Text>
+</Rung>
+<Rung Number="1" Type="N">
+<Comment>
+<![CDATA[Performs the same task as the normal logic, but for when the AOI is off/disabled. Turns off the output state only once the AOI has been off for the debounce Off Time.
+]]>
+</Comment>
+<Text>
+<![CDATA[[TON(debounceOffTimer,?,?) ,XIC(debounceOffTimer.DN) OTU(state) ];]]>
+</Text>
+</Rung>
+</RLLContent>
+</Routine>
+<Routine Name="Logic" Type="RLL">
+<RLLContent>
+<Rung Number="0" Type="N">
+<Comment>
+<![CDATA[Debounce: Appplies a debounce timer to the AOI rung in condition and returns a "filtered" state output. This is typically applied to inputs to deal with chatter or noise, but can apply to any signal.
+To use: place in-line with a boolean condition that needs to be debounced or timed.
+
+
+For this style of debouncing, the rung in condition must stay true for the "onDelay" amount of time (ms) before the state output will be set on, and vice-a-versa for turning off. 
+Note that there IS an EnableInFalse condition if you are modifying this code.]]>
+</Comment>
+<Text>
+<![CDATA[NOP();]]>
+</Text>
+</Rung>
+<Rung Number="1" Type="N">
+<Text>
+<![CDATA[MOVE(onDelay,debounceOnTimer.PRE)RES(debounceOffTimer);]]>
+</Text>
+</Rung>
+<Rung Number="2" Type="N">
+<Comment>
+<![CDATA[Set the output state if the AOI is enabled for at least the debounce On Time. IF the AOI is ever disabled, this timer will reset and state will not be set on.]]>
+</Comment>
+<Text>
+<![CDATA[[TON(debounceOnTimer,?,?) ,XIC(debounceOnTimer.DN) OTL(state) ];]]>
+</Text>
+</Rung>
+</RLLContent>
+</Routine>
+</Routines>
+</AddOnInstructionDefinition>
+<AddOnInstructionDefinition Name="GenericInput" Revision="1.2" ExecutePrescan="false" ExecutePostscan="false" ExecuteEnableInFalse="false" CreatedDate="2023-05-30T16:02:10.176Z" CreatedBy="A-I-CORP\DLim" EditedDate="2025-11-19T02:06:15.825Z" EditedBy="ROCKWELL-VM\Zac" SoftwareRevision="v37.00">
+<RevisionNote>
+<![CDATA[v1.2: added held output for pushbuttons
+v1.1: Added invert input
+v1.0: Initial Release]]>
+</RevisionNote>
+<Parameters>
+<Parameter Name="EnableIn" TagType="Base" DataType="BOOL" Usage="Input" Radix="Decimal" Required="false" Visible="false" ExternalAccess="Read Only">
+<Description>
+<![CDATA[Enable Input - System Defined Parameter]]>
+</Description>
+</Parameter>
+<Parameter Name="EnableOut" TagType="Base" DataType="BOOL" Usage="Output" Radix="Decimal" Required="false" Visible="false" ExternalAccess="Read Only">
+<Description>
+<![CDATA[Enable Output - System Defined Parameter]]>
+</Description>
+</Parameter>
+<Parameter Name="physicalInput" TagType="Base" DataType="BOOL" Usage="Input" Radix="Decimal" Required="true" Visible="true" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[value from device]]>
+</Description>
+<DefaultData Format="L5K">
+<![CDATA[0]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<DataValue DataType="BOOL" Radix="Decimal" Value="0"/>
+</DefaultData>
+</Parameter>
+<Parameter Name="onDelay" TagType="Base" DataType="DINT" Usage="Input" Radix="Decimal" Required="false" Visible="true" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[Debounce On Delay (ms)]]>
+</Description>
+<DefaultData Format="L5K">
+<![CDATA[25]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<DataValue DataType="DINT" Radix="Decimal" Value="25"/>
+</DefaultData>
+</Parameter>
+<Parameter Name="offDelay" TagType="Base" DataType="DINT" Usage="Input" Radix="Decimal" Required="false" Visible="true" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[Debounce Off Delay (ms)]]>
+</Description>
+<DefaultData Format="L5K">
+<![CDATA[25]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<DataValue DataType="DINT" Radix="Decimal" Value="25"/>
+</DefaultData>
+</Parameter>
+<Parameter Name="state" TagType="Base" DataType="BOOL" Usage="Output" Radix="Decimal" Required="false" Visible="true" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[Debounced device value]]>
+</Description>
+<DefaultData Format="L5K">
+<![CDATA[0]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<DataValue DataType="BOOL" Radix="Decimal" Value="0"/>
+</DefaultData>
+</Parameter>
+<Parameter Name="risingEdge" TagType="Base" DataType="BOOL" Usage="Output" Radix="Decimal" Required="false" Visible="false" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[One-shot rising edge (post debounce)]]>
+</Description>
+<DefaultData Format="L5K">
+<![CDATA[0]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<DataValue DataType="BOOL" Radix="Decimal" Value="0"/>
+</DefaultData>
+</Parameter>
+<Parameter Name="fallingEdge" TagType="Base" DataType="BOOL" Usage="Output" Radix="Decimal" Required="false" Visible="false" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[One-shot falling edge (post debounce)]]>
+</Description>
+<DefaultData Format="L5K">
+<![CDATA[0]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<DataValue DataType="BOOL" Radix="Decimal" Value="0"/>
+</DefaultData>
+</Parameter>
+<Parameter Name="invert" TagType="Base" DataType="BOOL" Usage="Input" Radix="Decimal" Required="false" Visible="true" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[Set to invert (NOT) the input]]>
+</Description>
+<DefaultData Format="L5K">
+<![CDATA[0]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<DataValue DataType="BOOL" Radix="Decimal" Value="0"/>
+</DefaultData>
+</Parameter>
+<Parameter Name="held" TagType="Base" DataType="BOOL" Usage="Output" Radix="Decimal" Required="false" Visible="true" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[output was on longer than the hold time (useful for pushbuttons)]]>
+</Description>
+<DefaultData Format="L5K">
+<![CDATA[0]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<DataValue DataType="BOOL" Radix="Decimal" Value="0"/>
+</DefaultData>
+</Parameter>
+<Parameter Name="holdTime" TagType="Base" DataType="DINT" Usage="Input" Radix="Decimal" Required="false" Visible="false" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[time output must be on before held turns on]]>
+</Description>
+<DefaultData Format="L5K">
+<![CDATA[500]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<DataValue DataType="DINT" Radix="Decimal" Value="500"/>
+</DefaultData>
+</Parameter>
+</Parameters>
+<LocalTags>
+<LocalTag Name="risingOns" DataType="BOOL" Radix="Decimal" ExternalAccess="None">
+<DefaultData Format="L5K">
+<![CDATA[0]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<DataValue DataType="BOOL" Radix="Decimal" Value="0"/>
+</DefaultData>
+</LocalTag>
+<LocalTag Name="fallingOns" DataType="BOOL" Radix="Decimal" ExternalAccess="None">
+<DefaultData Format="L5K">
+<![CDATA[0]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<DataValue DataType="BOOL" Radix="Decimal" Value="0"/>
+</DefaultData>
+</LocalTag>
+<LocalTag Name="debounce" DataType="Debounce" ExternalAccess="None">
+<DefaultData Format="L5K">
+<![CDATA[[1,0,0,[0,0,0],[0,0,0]]]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<Structure DataType="Debounce">
+<DataValueMember Name="EnableIn" DataType="BOOL" Value="1"/>
+<DataValueMember Name="EnableOut" DataType="BOOL" Value="0"/>
+<DataValueMember Name="state" DataType="BOOL" Value="0"/>
+<DataValueMember Name="onDelay" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="offDelay" DataType="DINT" Radix="Decimal" Value="0"/>
+</Structure>
+</DefaultData>
+</LocalTag>
+<LocalTag Name="input" DataType="BOOL" Radix="Decimal" ExternalAccess="None">
+<Description>
+<![CDATA[physical input with invert polarity applied]]>
+</Description>
+<DefaultData Format="L5K">
+<![CDATA[0]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<DataValue DataType="BOOL" Radix="Decimal" Value="0"/>
+</DefaultData>
+</LocalTag>
+<LocalTag Name="heldTimer" DataType="TIMER" ExternalAccess="None">
+<DefaultData Format="L5K">
+<![CDATA[[0,0,0]]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<Structure DataType="TIMER">
+<DataValueMember Name="PRE" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="ACC" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="EN" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TT" DataType="BOOL" Value="0"/>
+<DataValueMember Name="DN" DataType="BOOL" Value="0"/>
+</Structure>
+</DefaultData>
+</LocalTag>
+</LocalTags>
+<Routines>
+<Routine Name="Logic" Type="RLL">
+<RLLContent>
+<Rung Number="0" Type="N">
+<Comment>
+<![CDATA[GenericInput: adds debouncing and edge triggers to sensor and other input signals
+
+To use:
+- Place this AOI on a rung that runs every scan
+- Connect the signal to monitor to the physicalInput input. This is typically from some sort of IO or ethernet device.
+- Check the "state" or rising/falling Edge outputs when checking the signal]]>
+</Comment>
+<Text>
+<![CDATA[NOP();]]>
+</Text>
+</Rung>
+<Rung Number="1" Type="N">
+<Text>
+<![CDATA[[XIC(invert) XIO(physicalInput) ,XIO(invert) XIC(physicalInput) ]OTE(input);]]>
+</Text>
+</Rung>
+<Rung Number="2" Type="N">
+<Comment>
+<![CDATA[debounce the inputValue]]>
+</Comment>
+<Text>
+<![CDATA[[MOVE(onDelay,debounce.onDelay) MOVE(offDelay,debounce.offDelay) ,XIC(input) Debounce(debounce) ,XIC(debounce.state) OTE(state) ];]]>
+</Text>
+</Rung>
+<Rung Number="3" Type="N">
+<Comment>
+<![CDATA[set the rising and falling edge ons values based on the debounced output]]>
+</Comment>
+<Text>
+<![CDATA[XIC(debounce.state)ONS(risingOns)OTE(risingEdge);]]>
+</Text>
+</Rung>
+<Rung Number="4" Type="N">
+<Text>
+<![CDATA[XIO(debounce.state)ONS(fallingOns)OTE(fallingEdge);]]>
+</Text>
+</Rung>
+<Rung Number="5" Type="N">
+<Comment>
+<![CDATA[Check if the input is held on (useful for pushbutton logic)]]>
+</Comment>
+<Text>
+<![CDATA[[XIC(state) MOVE(holdTime,heldTimer.PRE) TON(heldTimer,?,?) ,XIC(heldTimer.DN) OTE(held) ];]]>
+</Text>
+</Rung>
+</RLLContent>
+</Routine>
+</Routines>
+<Dependencies>
+<Dependency Type="AddOnInstructionDefinition" Name="Debounce"/>
+</Dependencies>
+</AddOnInstructionDefinition>
+</AddOnInstructionDefinitions>
+</Controller>
+</RSLogix5000Content>
