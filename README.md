@@ -1,6 +1,6 @@
 # py_l5x
 
-A pythonic interface for reading Rockwell Automation L5X project files.
+A pythonic interface for reading Rockwell Automation L5X files.
 
 > [!IMPORTANT]
 > **⚠️ Work in Progress**: This project is currently under active development. APIs are subject to change, and not all features may be fully implemented or tested.
@@ -15,6 +15,12 @@ I don't yet have plans to upload this to PyPi. For now, download the `.whl` and 
 
 ```bash
 pip install py_l5x-0.1.0-py3-none-any.whl
+```
+
+or
+
+```bash
+uv add py_l5x-0.1.0-py3-none-any.whl
 ```
 
 ## Quick start
@@ -61,6 +67,8 @@ All collections implement `Mapping[str, T]` so they support the usual `dict`-lik
 
 ## Controller metadata
 
+The `ControllerInfo` object exposes project-level metadata such as the controller name, processor type, firmware version, and project dates. For full-project exports, all metadata is populated; for component exports (single Programs, AOIs, etc.), this metadata is sparse or `None` since Studio 5000 does not include it in the export envelope.
+
 ```python
 ctrl = project.controller
 
@@ -76,6 +84,8 @@ print(ctrl.is_context)            # False (True when loaded from a component exp
 For component exports (see [Component exports](#component-exports)), `is_context` is `True` and the firmware/processor/date attributes are `None` because Studio 5000 does not include them.
 
 ## Data types (UDTs)
+
+User-defined data types (UDTs) are custom type definitions that group members (fields) of various data types together. They can be atomic (NoFamily) or string-based (StringFamily). Every UDT member carries metadata like descriptions, engineering units, min/max bounds, and state labels. The `visible_members` property excludes hidden packed-boolean host bytes, showing only user-facing fields.
 
 ```python
 # Iterate all UDTs - show if the UDT is a custom string
@@ -126,6 +136,8 @@ print(stype.max_length)    # 8
 
 ## Add-On Instructions (AOIs)
 
+Add-On Instructions are parameterized routines (logic blocks) that can be instantiated and called like built-in instructions (e.g., `MOV`, `ADD`). Each AOI has parameters (inputs/outputs), local tags (internal state), and one or more routines containing the logic. AOIs are reusable across the project and can be used as building blocks in other programs and AOIs.
+
 ```python
 for name, aoi in project.aois.items():
     print(name, aoi.revision)
@@ -163,6 +175,10 @@ print(logic.as_text())
 
 ## Modules
 
+Modules represent physical or logical I/O hardware (local processors, communication modules, analog/digital I/O, etc.) connected to the controller. Each module has ports (connection points), communication settings, and optional configuration/input/output tag payloads that define the data exchanged with the module. Note that in the L5X structure, the `Module` holds the tags. You will not find module tags in the controller level tags list.
+
+> Warning: only a few modules have been tested. You results may vary with module parsing and how useful the available info is.
+
 ```python
 for name, mod in project.modules.items():
     print(f"{name}: {mod.catalog_number}")
@@ -191,6 +207,8 @@ if mod.communications:
 ```
 
 ## Tags and the value tree
+
+Tags are typed variables that hold data in the controller. Each tag can be a scalar (a single value like an integer or boolean), a structure (an instance of a UDT or AOI), or an array. The **value tree** (`TagNode`) is a hierarchical representation of a tag's data that lets you drill down into members, array elements, and nested structures while carrying full metadata (descriptions, engineering units, min/max, state labels) at every level.
 
 ### Accessing tags
 
@@ -298,6 +316,10 @@ for i in range(3):
 
 ## Programs, routines, and rungs
 
+Programs are the main organizational units for logic in the controller. Each program contains local tags and one or more routines. Routines are where the actual logic lives — either in **ladder rung** format (RLL, relay ladder logic) or **structured text** (ST). A rung is a single line of ladder logic with contacts, coils, and logic blocks. Programs and routines can be disabled independently.
+
+> At this time, only Ladder Logic and Structured Text are supported. Support for other program types is TBD.
+
 ```python
 for prog_name, prog in project.programs.items():
     print(prog_name, "—", prog.main_routine_name)
@@ -342,6 +364,8 @@ rtn.print_text()
 
 ## Tasks
 
+Tasks are executors that schedule programs to run at specified intervals or on specific events. Each task collection holds a collection of programs it is responsible for scheduling and executing. These are the same as the program obejects found in `Project.programs`, just organized by their parent task.
+
 ```python
 for task_name, task in project.tasks.items():
     print(task_name, task.type_)
@@ -365,9 +389,7 @@ for prog_name in task.scheduled_program_names:
 
 ## Component exports
 
-Studio 5000 can export individual components (a single Program, Routine, AOI,
-DataType, Module, or Rung) rather than an entire project. `py_l5x` supports
-these through the same `load()` API.
+Studio 5000 can export individual components (a single Program, Routine, AOI, DataType, Module, Rung, or Tag) rather than an entire project. Component exports are wrapped in the same `<RSLogix5000Content>` envelope as full projects but carry a `TargetType` indicating what was exported (e.g., `"Program"`, `"Routine"`, `"Rung"`) and a `<Controller Use="Context">` section containing all dependencies (UDTs, AOIs, parent programs, etc.). `py_l5x` supports component exports through the same `load()` API and provides a `.target` property to quickly access the exported object.
 
 ```python
 project = load("MainProgram_Program.L5X")
@@ -513,3 +535,26 @@ The project uses [Ruff](https://docs.astral.sh/ruff/) for linting and import sor
 uv run ruff check .
 uv run ruff check --fix .   # auto-fix where possible
 ```
+
+## Known Limitation
+
+- Not all L5X components have wrappers/parsers yet. Know top level tags that are ignored for now are:
+  - \<ParameterConnection\>
+  - \<Trends\>
+  - \<QuickWatchList\>
+  - \<CommPorts\>
+  - \<CST\>
+  - \<WallClockTime\>
+    > Note that the top level Project exposes the `Project.root` XML element so you can manually find any extra info you need using Python's build in [XML Element Tree](https://docs.python.org/3/library/xml.etree.elementtree.html).
+- Some attributes may be missing or hard to find.
+  - Similar to the project, all elements (Module, ProgramsCollection, etc.) have a `_element` property that exposes the top level xml element.
+- Motion and safety have not yet been test. Your mileage may vary with servos and safety Tasks/programs.
+- No write support
+
+## Road Map
+
+- [ ] Test more special tag types (CIP_AXIS, MESSAGE, etc.)
+- [ ] Test safety features (safety network numbers, safety routines, tag mapping to/from safety routines)
+- [ ] Implement a write feature to allow for modifying an exported L5X file
+- [ ] Implement a generate component template feature
+  - The intent is to create a blank component L5X file that you can then modify external to Studio 5000. This could be useful for an MCP tool or other external editing tools since Studio 5000's menu heavy UI can often be tedious.
