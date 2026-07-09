@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<RSLogix5000Content SchemaRevision="1.0" SoftwareRevision="37.00" TargetName="Example_PLC" TargetType="Controller" ContainsContext="false" ExportDate="Wed Jul 08 13:40:52 2026" ExportOptions="NoRawData L5KData DecoratedData ForceProtectedEncoding AllProjDocTrans">
-<Controller Use="Target" Name="Example_PLC" ProcessorType="5069-L306ERM" MajorRev="37" MinorRev="11" ProjectCreationDate="Tue Jun 30 10:14:37 2026" LastModifiedDate="Wed Jul 08 13:40:40 2026" SFCExecutionControl="CurrentActive" SFCRestartPosition="MostRecent" SFCLastScan="DontScan" ProjectSN="16#0000_0000"
+<RSLogix5000Content SchemaRevision="1.0" SoftwareRevision="37.00" TargetName="Example_PLC" TargetType="Controller" ContainsContext="false" ExportDate="Wed Jul 08 18:08:53 2026" ExportOptions="NoRawData L5KData DecoratedData ForceProtectedEncoding AllProjDocTrans">
+<Controller Use="Target" Name="Example_PLC" ProcessorType="5069-L306ERM" MajorRev="37" MinorRev="11" ProjectCreationDate="Tue Jun 30 10:14:37 2026" LastModifiedDate="Wed Jul 08 18:08:42 2026" SFCExecutionControl="CurrentActive" SFCRestartPosition="MostRecent" SFCLastScan="DontScan" ProjectSN="16#0000_0000"
  MatchProjectToController="false" CanUseRPIFromProducer="false" InhibitAutomaticFirmwareUpdate="0" PassThroughConfiguration="EnabledWithAppend" DownloadProjectDocumentationAndExtendedProperties="true" DownloadProjectCustomProperties="true" ReportMinorOverflow="false" EtherNetIPMode="A1/A2: Dual-IP" AutoDiagsEnabled="true" WebServerEnabled="false" DataExchangeId="{09B2637D-051F-4EFE-989A-EAD35A27AB93}"
 >
 <RedundancyInfo Enabled="false" KeepTestEditsOnSwitchOver="false"/>
@@ -1739,6 +1739,51 @@
 </Ports>
 <ExtendedProperties>
 <public><ConfigID>100</ConfigID><CatNum>5069-L306ER</CatNum></public>
+</ExtendedProperties>
+</Module>
+<Module Name="ValveBank" CatalogNumber="EX600-SEN7/8" Vendor="7" ProductType="12" ProductCode="258" Major="1" Minor="1" ParentModule="Local" ParentModPortId="3" Inhibited="false" MajorFault="false"
+ SafetyEnabled="false" DataExchangeId="{729A7EBB-63FE-4A99-8DED-96008DFD2B05}">
+<EKey State="CompatibleModule"/>
+<Ports>
+<Port Id="2" Address="192.168.1.5" Type="Ethernet" Upstream="true"/>
+</Ports>
+<Communications>
+<Connections>
+<Connection Name="_200424692C962C64" RPI="10000" Type="StandardDataDriven" OutputSize="4" InputSize="8" EventID="0" ProgrammaticallySendEventTrigger="false" Priority="Scheduled" InputConnectionType="Unicast" InputProductionTrigger="Cyclic" ConnectionPath="20 04 24 69 2c 96 2c 64"
+ InputTagSuffix="I" OutputTagSuffix="O">
+<InputTag ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="Decorated">
+<Structure DataType="_0007:EX600_SEN78_85D36DB4:I:0">
+<DataValueMember Name="ConnectionFaulted" DataType="BOOL" Value="0"/>
+<ArrayMember Name="Data" DataType="SINT" Dimensions="4" Radix="Decimal">
+<Element Index="[0]" Value="0"/>
+<Element Index="[1]" Value="0"/>
+<Element Index="[2]" Value="0"/>
+<Element Index="[3]" Value="0"/>
+</ArrayMember>
+</Structure>
+</Data>
+</InputTag>
+<OutputTag ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[[[0,0,0,0]]]]>
+</Data>
+<Data Format="Decorated">
+<Structure DataType="_0007:EX600_SEN78_AAB94180:O:0">
+<ArrayMember Name="Data" DataType="SINT" Dimensions="4" Radix="Decimal">
+<Element Index="[0]" Value="0"/>
+<Element Index="[1]" Value="0"/>
+<Element Index="[2]" Value="0"/>
+<Element Index="[3]" Value="0"/>
+</ArrayMember>
+</Structure>
+</Data>
+</OutputTag>
+</Connection>
+</Connections>
+</Communications>
+<ExtendedProperties>
+<public><PL>01<Version Name="1.0"/><Connection Name="_200424692C962C64" Format="0"/></PL><Vendor>SMC Corporation</Vendor><CatNum>EX600-SEN7/8</CatNum><DataTypeFormats><DataTypeFormat InstanceApplicationPath="20 04 2C 64 30 03" Format="1" Type="Input"/><DataTypeFormat InstanceApplicationPath="20 04 2C 96 30 03" Format="1" Type="Output"/></DataTypeFormats></public>
 </ExtendedProperties>
 </Module>
 </Modules>
@@ -4185,6 +4230,32 @@ Step 7000: Robot program stopped. Waiting for start command]]>
 </Routine>
 </Routines>
 </Program>
+<Program Name="EventProgram" TestEdits="false" MainRoutineName="Main" Disabled="false" UseAsFolder="false">
+<Tags>
+<Tag Name="count" TagType="Base" DataType="LINT" Radix="Decimal" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[0]]>
+</Data>
+<Data Format="Decorated">
+<DataValue DataType="LINT" Radix="Decimal" Value="0"/>
+</Data>
+</Tag>
+</Tags>
+<Routines>
+<Routine Name="Main" Type="RLL">
+<RLLContent>
+<Rung Number="0" Type="N">
+<Comment>
+<![CDATA[Increment a count whenever triggered]]>
+</Comment>
+<Text>
+<![CDATA[ADD(1,count,count);]]>
+</Text>
+</Rung>
+</RLLContent>
+</Routine>
+</Routines>
+</Program>
 <Program Name="MainProgram" TestEdits="false" MainRoutineName="MainRoutine" Disabled="false" UseAsFolder="false">
 <Tags>
 <Tag Name="an_alias_tag" TagType="Alias" Radix="Decimal" AliasFor="Local:1:I.Pt01.Data" ExternalAccess="Read/Write" OpcUaAccess="None" DataExchangeId="{E29C6BF6-707C-4B80-B3CD-9BA6B39A8A9D}"/>
@@ -5395,6 +5466,15 @@ Last (most recent) Alarm]]>
 </Program>
 </Programs>
 <Tasks>
+<Task Name="EventTask" Type="EVENT" Rate="10" Priority="15" Watchdog="500" DisableUpdateOutputs="true" InhibitTask="true">
+<Description>
+<![CDATA[An example of an event taks]]>
+</Description>
+<EventInfo EventTrigger="EVENT Instruction Only" EnableTimeout="true"/>
+<ScheduledPrograms>
+<ScheduledProgram Name="EventProgram"/>
+</ScheduledPrograms>
+</Task>
 <Task Name="MainTask" Type="CONTINUOUS" Priority="10" Watchdog="500" DisableUpdateOutputs="false" InhibitTask="false">
 <ScheduledPrograms>
 <ScheduledProgram Name="MainProgram"/>

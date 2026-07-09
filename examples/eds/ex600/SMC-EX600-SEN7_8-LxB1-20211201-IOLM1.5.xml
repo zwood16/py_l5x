@@ -1,0 +1,101 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<IOMaster xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.tmgte.com/IOLM/2020/11" xsi:schemaLocation="http://www.tmgte.com/IOLM/2020/11 tmg_iolm_v15.xsd">
+  <DocumentInfo version="5.1" releaseDate="2021-12-01" copyright="Copyright 2021, TMG TE GmbH"/>
+  <ProfileHeader>
+    <ProfileIdentification>IO Master Profile</ProfileIdentification>
+    <ProfileRevision>1.5</ProfileRevision>
+    <ProfileSource>TMG TE GmbH</ProfileSource>
+  </ProfileHeader>
+  <ProfileBody>
+    <DeviceIdentity vendorId="0x0083" vendorName="SMC Corporation" vendorLogo="SMC-logo.png" deviceId="0x020102" deviceNameId="TID_DeviceName" devicePicture="SMC-EX600-LxB1-pic.png" deviceTextId="TID_DeviceText"/>
+    <EngineeringTool masterControl="IOLM2" masterGui="SMC-EX600-SEN7_8-Master-20211201-IOMGUI1.0.dll"/>
+  </ProfileBody>
+  <CommNetworkProfile>
+    <!-- USB,IndustrialEthernet, PROFINET, PROFIBUS, EtherNetIP, EtherCAT -->
+    <FieldbusInterface type="EtherNetIP" vendorId="0x0007" deviceId="0x0102" dd="ex600_sen7_8_v10.eds">
+      <MasterToolCommunication type="PLCI_SMI_TCP" revision="V2" blinkNotSupported="true" discoveryType="TMG_UDP"/>
+    </FieldbusInterface>
+    <IOModules moduleNameHeader="Module" portNameHeader="Port" pinNameHeader="">
+      <!-- 
+      IOFunction:
+        siehe "IO-Link Device Tool - Interface Protocol.doc"
+        der erste Eintrag ist jeweils die Default Config
+            
+        physics
+        0x00  NONE              Port ist leer
+        0x01  SIO               Port, der nur digital input / output kann
+        0x02  IOLINK            IO-Link
+        0x03  IOLINKWIRELESS    IO-Link wireless
+      -->
+      <IOModuleType moduleId="59" connector="M12" portClass="A" minMasterCycleTime="1200" moduleNameTId="TID_ModuleName_1" moduleDescriptionTId="TID_ModuleDescription_1">
+        <IOChannels>
+          <IOChannel id="0" portName="0" pinName="4" physics="IOLINK">
+            <IOFunction mode="IOLINK_OP"/>
+            <IOFunction mode="SIO_INPUT"/>
+            <IOFunction mode="SIO_OUTPUT"/>
+            <IOFunction mode="DEACTIVATED"/>
+          </IOChannel>
+          <IOChannel id="1" portName="1" pinName="4" physics="IOLINK">
+            <IOFunction mode="IOLINK_OP"/>
+            <IOFunction mode="SIO_INPUT"/>
+            <IOFunction mode="SIO_OUTPUT"/>
+            <IOFunction mode="DEACTIVATED"/>
+          </IOChannel>
+          <IOChannel id="2" portName="2" pinName="4" physics="IOLINK">
+            <IOFunction mode="IOLINK_OP"/>
+            <IOFunction mode="SIO_INPUT"/>
+            <IOFunction mode="SIO_OUTPUT"/>
+            <IOFunction mode="DEACTIVATED"/>
+          </IOChannel>
+          <IOChannel id="3" portName="3" pinName="4" physics="IOLINK">
+            <IOFunction mode="IOLINK_OP"/>
+            <IOFunction mode="SIO_INPUT"/>
+            <IOFunction mode="SIO_OUTPUT"/>
+            <IOFunction mode="DEACTIVATED"/>
+          </IOChannel>
+        </IOChannels>
+      </IOModuleType>
+      <IOModuleType moduleId="60" connector="M12" portClass="B" minMasterCycleTime="1200" moduleNameTId="TID_ModuleName_2" moduleDescriptionTId="TID_ModuleDescription_2">
+        <IOChannels>
+          <IOChannel id="0" portName="0" pinName="4" physics="IOLINK">
+            <IOFunction mode="IOLINK_OP"/>
+            <IOFunction mode="SIO_INPUT"/>
+            <IOFunction mode="SIO_OUTPUT"/>
+            <IOFunction mode="DEACTIVATED"/>
+          </IOChannel>
+          <IOChannel id="1" portName="1" pinName="4" physics="IOLINK">
+            <IOFunction mode="IOLINK_OP"/>
+            <IOFunction mode="SIO_INPUT"/>
+            <IOFunction mode="SIO_OUTPUT"/>
+            <IOFunction mode="DEACTIVATED"/>
+          </IOChannel>
+          <IOChannel id="2" portName="2" pinName="4" physics="IOLINK">
+            <IOFunction mode="IOLINK_OP"/>
+            <IOFunction mode="SIO_INPUT"/>
+            <IOFunction mode="SIO_OUTPUT"/>
+            <IOFunction mode="DEACTIVATED"/>
+          </IOChannel>
+          <IOChannel id="3" portName="3" pinName="4" physics="IOLINK">
+            <IOFunction mode="IOLINK_OP"/>
+            <IOFunction mode="SIO_INPUT"/>
+            <IOFunction mode="SIO_OUTPUT"/>
+            <IOFunction mode="DEACTIVATED"/>
+          </IOChannel>
+        </IOChannels>
+      </IOModuleType>
+      <IOModuleDef moduleId="59" countMin="0" countMax="10"/>
+      <IOModuleDef moduleId="60" countMin="0" countMax="10"/>
+    </IOModules>
+  </CommNetworkProfile>
+  <ExternalTextCollection>
+    <PrimaryLanguage xml:lang="en">
+      <Text id="TID_DeviceText" value="Centralised multipoint Fieldbus System for digital and analogue I/O and IO-Link"/>
+      <Text id="TID_DeviceName" value="SMC-EX600-SEN7/8"/>
+      <Text id="TID_ModuleName_1" value="SMC-EX600-LAB1"/>
+      <Text id="TID_ModuleDescription_1" value="4 channel IO-Link master port type A"/>
+      <Text id="TID_ModuleName_2" value="SMC-EX600-LBB1"/>
+      <Text id="TID_ModuleDescription_2" value="4 channel IO-Link master port type B"/>
+    </PrimaryLanguage>
+  </ExternalTextCollection>
+  <Stamp crc="3426141179"><Checker version="V3.0.0"/></Stamp>
+</IOMaster>
