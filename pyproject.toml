@@ -3,15 +3,15 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "py-l5x"
+name = "py_l5x"
 version = "0.1.0"
 description = "Parse Rockwell Automation L5X project files into a hierarchical Python object model."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = []
 
-[tool.setuptools]
-packages = ["py_l5x"]
+[tool.setuptools.packages.find]
+include = ["py_l5x*"]
 
 [tool.ruff]
 line-length = 88
