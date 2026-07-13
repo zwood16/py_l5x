@@ -145,6 +145,49 @@ class TestAtomicTags:
 
 
 # ---------------------------------------------------------------------------
+# Root-level tag metadata (min/max/engineering unit/state text/ext logging)
+# ---------------------------------------------------------------------------
+
+
+class TestRootTagMetadata:
+    """Tests for metadata set directly on the ``<Tag>`` element itself."""
+
+    def test_engineering_unit(self, main_program_tags: TagsCollection) -> None:
+        """a_real's tag-level EngineeringUnits (no Operand) is exposed."""
+        assert main_program_tags["a_real"].engineering_unit == "mm"
+
+    def test_engineering_unit_absent(self, main_program_tags: TagsCollection) -> None:
+        """a_dint has no EngineeringUnits container at all."""
+        assert main_program_tags["a_dint"].engineering_unit == ""
+
+    def test_state0_and_state1(self, main_program_tags: TagsCollection) -> None:
+        """a_bool's tag-level State0s/State1s (no Operand) are exposed."""
+        assert main_program_tags["a_bool"].state0 == "off"
+        assert main_program_tags["a_bool"].state1 == "on"
+
+    def test_external_logging(self, main_program_tags: TagsCollection) -> None:
+        """a_bool's tag-level ExternalLoggings (no Operand) is exposed."""
+        assert main_program_tags["a_bool"].external_logging is True
+
+    def test_external_logging_absent(self, main_program_tags: TagsCollection) -> None:
+        """a_dint has no ExternalLoggings container at all."""
+        assert main_program_tags["a_dint"].external_logging is None
+
+    def test_root_scalar_data_has_no_metadata(
+        self, main_program_tags: TagsCollection
+    ) -> None:
+        """The root value-tree node does not surface Tag-level metadata.
+
+        min/max/engineering_unit/etc. belong on the ``Tag`` object itself,
+        not on its ``.data`` value-tree node (which only carries operand
+        overrides and type-def metadata for nested members/bits).
+        """
+        node = main_program_tags["a_real"].data
+        assert isinstance(node, TagNode)
+        assert node.engineering_unit == ""
+
+
+# ---------------------------------------------------------------------------
 # STRING-family top-level tags (Format="String" fallback)
 # ---------------------------------------------------------------------------
 

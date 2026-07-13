@@ -4319,6 +4319,19 @@ Step 7000: Robot program stopped. Waiting for start command]]>
 </Data>
 </Tag>
 <Tag Name="a_bool" TagType="Base" DataType="BOOL" Radix="Decimal" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<State0s>
+<State0>
+<![CDATA[off]]>
+</State0>
+</State0s>
+<State1s>
+<State1>
+<![CDATA[on]]>
+</State1>
+</State1s>
+<ExternalLoggings>
+<ExternalLogging>true</ExternalLogging>
+</ExternalLoggings>
 <Data Format="L5K">
 <![CDATA[0]]>
 </Data>
@@ -4447,6 +4460,11 @@ Step 7000: Robot program stopped. Waiting for start command]]>
 </Data>
 </Tag>
 <Tag Name="a_real" TagType="Base" DataType="REAL" Radix="Float" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<EngineeringUnits>
+<EngineeringUnit>
+<![CDATA[mm]]>
+</EngineeringUnit>
+</EngineeringUnits>
 <Data Format="L5K">
 <![CDATA[0.00000000e+000]]>
 </Data>

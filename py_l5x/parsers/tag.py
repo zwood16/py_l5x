@@ -644,8 +644,9 @@ class Tag(BaseElement):
         return self._get_description()
 
     # ------------------------------------------------------------------
-    # Root-level limits (fallback, separate from the operand override maps
-    # used for nested members)
+    # Root-level metadata (the tag's own min/max/engineering unit/state
+    # text/external logging, separate from the operand override maps used
+    # for nested members -- see :class:`_TagOverrides`)
     # ------------------------------------------------------------------
 
     @property
@@ -659,6 +660,58 @@ class Tag(BaseElement):
         """The tag's own maximum value, if set directly on ``<Tag>``."""
         value = self._element.get("Max")
         return None if value is None else convert_numeric(value, self.data_type)
+
+    def _root_metadata(self, container_tag: str, child_tag: str) -> str | None:
+        """Return CDATA text for a container child with no ``Operand`` attribute.
+
+        ``EngineeringUnits``/``State0s``/``State1s``/``ExternalLoggings``
+        containers on a ``<Tag>`` element can hold both the tag's own
+        (un-qualified) metadata entry and per-member/per-bit entries
+        qualified by an ``Operand`` attribute (see :class:`_TagOverrides`,
+        which handles the latter). This returns only the former.
+
+        Args:
+            container_tag: The plural wrapper element name (e.g.
+                ``"EngineeringUnits"``).
+            child_tag: The child element name to read CDATA text from (e.g.
+                ``"EngineeringUnit"``).
+
+        Returns:
+            The text content, stripped of surrounding whitespace, or
+            ``None`` if no un-qualified entry is present.
+        """
+        container = self._element.find(container_tag)
+        if container is None:
+            return None
+        for child in container.findall(child_tag):
+            if child.get("Operand"):
+                continue
+            cdata_el = child.find(CDATA_TAG)
+            if cdata_el is not None and cdata_el.text:
+                return cdata_el.text.strip()
+            return child.text.strip() if child.text else ""
+        return None
+
+    @property
+    def engineering_unit(self) -> str:
+        """The tag's own engineering unit, if set directly on ``<Tag>``."""
+        return self._root_metadata("EngineeringUnits", "EngineeringUnit") or ""
+
+    @property
+    def state0(self) -> str:
+        """The tag's own zero-state text, if set directly on ``<Tag>``."""
+        return self._root_metadata("State0s", "State0") or ""
+
+    @property
+    def state1(self) -> str:
+        """The tag's own one-state text, if set directly on ``<Tag>``."""
+        return self._root_metadata("State1s", "State1") or ""
+
+    @property
+    def external_logging(self) -> bool | None:
+        """Whether external logging is enabled, if set directly on ``<Tag>``."""
+        value = self._root_metadata("ExternalLoggings", "ExternalLogging")
+        return None if value is None else value == "true"
 
     # ------------------------------------------------------------------
     # Special tag kinds
