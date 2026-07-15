@@ -11,16 +11,22 @@ Both **full project exports** (an entire `.L5X` file exported from the controlle
 
 ## Installation
 
-I don't yet have plans to upload this to PyPi. For now, download the `.whl` and install it with pip manually:
+I don't yet have plans to upload this to PyPi. For now, download the `.whl` and install it manually:
 
 ```bash
-pip install py_l5x-0.1.0-py3-none-any.whl
+pip install py_l5x-0.2.0-py3-none-any.whl
 ```
 
 or
 
 ```bash
-uv add py_l5x-0.1.0-py3-none-any.whl
+uv add py_l5x-0.2.0-py3-none-any.whl
+```
+
+Or pull it straight from the Github release:
+
+```base
+uv add https://github.com/zwood16/py_l5x/releases/download/v0.2.0/py_l5x-0.2.0-py3-none-any.whl
 ```
 
 ## Quick start
