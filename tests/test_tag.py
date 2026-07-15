@@ -441,3 +441,58 @@ class TestEdgeCases:
         assert tag.value == 0
         assert tag.produce_info is not None
         assert tag.produce_info["ProduceCount"] == "1"
+
+
+# ---------------------------------------------------------------------------
+# Safety program / tags
+# ---------------------------------------------------------------------------
+
+
+class TestSafetyProgram:
+    """Tests for the SafetyProgram (Class="Safety") and its safety tags."""
+
+    def test_program_class(self, programs: ProgramsCollection) -> None:
+        """SafetyProgram reports Class="Safety"."""
+        assert programs["SafetyProgram"].class_ == "Safety"
+
+    def test_program_is_safety(self, programs: ProgramsCollection) -> None:
+        """SafetyProgram.is_safety is True."""
+        assert programs["SafetyProgram"].is_safety is True
+
+    def test_standard_programs_are_not_safety(
+        self, programs: ProgramsCollection
+    ) -> None:
+        """Standard programs report Class="Standard" and is_safety=False."""
+        for name in ("MainProgram", "AnotherProgram", "Robot"):
+            assert programs[name].class_ == "Standard"
+            assert programs[name].is_safety is False
+
+    def test_program_routines(self, programs: ProgramsCollection) -> None:
+        """SafetyProgram's routines are parsed normally."""
+        routines = programs["SafetyProgram"].routines
+        assert set(routines) == {"Main", "Inputs", "Outputs"}
+
+    def test_safety_tag_class(self, controller_tags: TagsCollection) -> None:
+        """Controller-scoped safety tag reports Class="Safety"."""
+        tag = controller_tags["fromNormal_reset"]
+        assert tag.class_ == "Safety"
+        assert tag.is_safety is True
+
+    def test_standard_tag_is_not_safety(self, controller_tags: TagsCollection) -> None:
+        """A Standard-class controller tag is not flagged as safety."""
+        tag = controller_tags["toSafety_reset"]
+        assert tag.class_ == "Standard"
+        assert tag.is_safety is False
+
+    def test_safety_program_local_tags(self, programs: ProgramsCollection) -> None:
+        """SafetyProgram's local safety I/O tags are present and readable."""
+        safety_tags = programs["SafetyProgram"].tags
+        assert "door_dcs" in safety_tags
+        assert "estop_dcs" in safety_tags
+        assert safety_tags["input_ok"].value == 0
+
+    def test_safety_program_alias_tag(self, programs: ProgramsCollection) -> None:
+        """reset_signal aliases the controller-scoped safety tag."""
+        alias = programs["SafetyProgram"].tags["reset_signal"]
+        assert alias.alias_for == "fromNormal_reset"
+        assert alias.value is None

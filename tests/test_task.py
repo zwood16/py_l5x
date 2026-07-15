@@ -309,3 +309,69 @@ class TestTaskRepr:
     def test_periodic_task_repr(self, tasks: TasksCollection) -> None:
         """PeriodicTask repr includes the name."""
         assert repr(tasks["PeriodicTask"]) == "Task('PeriodicTask')"
+
+
+# ---------------------------------------------------------------------------
+# SafetyTask
+# ---------------------------------------------------------------------------
+
+
+class TestSafetyTask:
+    """Tests for the PERIODIC SafetyTask (Class="Safety")."""
+
+    @pytest.fixture
+    def safety_task(self, tasks: TasksCollection) -> Task:
+        """The SafetyTask from the example L5X."""
+        return tasks["SafetyTask"]
+
+    def test_name(self, safety_task: Task) -> None:
+        """Task name matches."""
+        assert safety_task.name == "SafetyTask"
+
+    def test_type(self, safety_task: Task) -> None:
+        """SafetyTask type is PERIODIC."""
+        assert safety_task.type_ == "PERIODIC"
+
+    def test_rate(self, safety_task: Task) -> None:
+        """Rate is parsed as float."""
+        assert safety_task.rate == 20.0
+
+    def test_watchdog(self, safety_task: Task) -> None:
+        """Watchdog is parsed as int."""
+        assert safety_task.watchdog == 20
+
+    def test_class(self, safety_task: Task) -> None:
+        """class_ reports the safety partition class."""
+        assert safety_task.class_ == "Safety"
+
+    def test_is_safety(self, safety_task: Task) -> None:
+        """is_safety is True for a safety task."""
+        assert safety_task.is_safety is True
+
+    def test_scheduled_program_names(self, safety_task: Task) -> None:
+        """Single scheduled safety program."""
+        assert safety_task.scheduled_program_names == ("SafetyProgram",)
+
+    def test_programs_returns_safety_program(self, safety_task: Task) -> None:
+        """task.programs["SafetyProgram"] is a safety-class Program."""
+        from py_l5x.parsers.program import Program
+
+        prog = safety_task.programs["SafetyProgram"]
+        assert isinstance(prog, Program)
+        assert prog.name == "SafetyProgram"
+        assert prog.is_safety is True
+
+    def test_repr(self, safety_task: Task) -> None:
+        """SafetyTask repr includes the name."""
+        assert repr(safety_task) == "Task('SafetyTask')"
+
+
+class TestNonSafetyTasksAreNotSafety:
+    """Standard tasks should not be misreported as safety tasks."""
+
+    @pytest.mark.parametrize("name", ["MainTask", "PeriodicTask", "EventTask"])
+    def test_class_and_is_safety(self, tasks: TasksCollection, name: str) -> None:
+        """Standard tasks report Class="Standard" and is_safety=False."""
+        task = tasks[name]
+        assert task.class_ == "Standard"
+        assert task.is_safety is False

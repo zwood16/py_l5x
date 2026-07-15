@@ -28,6 +28,7 @@ _TASK_KNOWN_XML_KEYS: frozenset[str] = frozenset(
         "Watchdog",
         "DisableUpdateOutputs",
         "InhibitTask",
+        "Class",
     }
 )
 """Known XML attribute names on ``<Task>`` elements."""
@@ -189,6 +190,8 @@ class Task(BaseElement):
         watchdog: Watchdog timeout value (``None`` if not present).
         disable_update_outputs: Whether output updates are disabled.
         inhibit_task: Whether the task is inhibited.
+        class_: Task class (``"Standard"`` or ``"Safety"``).
+        is_safety: Whether this is a safety task.
         event_info: Event-specific configuration (``None`` for non-EVENT tasks).
         scheduled_program_names: Ordered names of programs scheduled under this task.
         programs: A ``Mapping`` of scheduled program names to ``Program`` instances.
@@ -303,6 +306,24 @@ class Task(BaseElement):
             ``True`` if ``InhibitTask`` is ``"true"``, ``False`` otherwise.
         """
         return self._get("InhibitTask") == "true"
+
+    @property
+    def class_(self) -> str:
+        """Task class: ``"Standard"`` or ``"Safety"``.
+
+        Returns:
+            The value of the ``Class`` XML attribute.
+        """
+        return self._get("Class")
+
+    @property
+    def is_safety(self) -> bool:
+        """Whether this is a safety task.
+
+        Returns:
+            ``True`` if :attr:`class_` is ``"Safety"``, ``False`` otherwise.
+        """
+        return self.class_ == "Safety"
 
     @property
     def event_info(self) -> EventInfo | None:

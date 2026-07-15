@@ -15,7 +15,7 @@ from py_l5x.parsers.routine import RoutinesCollection
 from py_l5x.parsers.tag import TagsCollection, TypeRegistry
 
 _PROGRAM_KNOWN_XML_KEYS: frozenset[str] = frozenset(
-    {"Name", "TestEdits", "MainRoutineName", "Disabled", "UseAsFolder", "Use"}
+    {"Name", "TestEdits", "MainRoutineName", "Disabled", "UseAsFolder", "Use", "Class"}
 )
 """Known XML attribute names on ``<Program>`` elements."""
 
@@ -30,6 +30,8 @@ class Program(BaseElement):
         main_routine_name: Name of the program's main routine.
         disabled: Whether the program is disabled.
         use_as_folder: Whether the program is used purely as an organizational folder.
+        class_: Program class (``"Standard"`` or ``"Safety"``).
+        is_safety: Whether this is a safety program.
         tags: This program's local tags, keyed by name.
         routines: This program's routines, keyed by routine name.
 
@@ -114,6 +116,24 @@ class Program(BaseElement):
             True if the program is a folder, False otherwise.
         """
         return self._get("UseAsFolder") == "true"
+
+    @property
+    def class_(self) -> str:
+        """Program class: ``"Standard"`` or ``"Safety"``.
+
+        Returns:
+            The value of the ``Class`` XML attribute.
+        """
+        return self._get("Class")
+
+    @property
+    def is_safety(self) -> bool:
+        """Whether this is a safety program.
+
+        Returns:
+            ``True`` if :attr:`class_` is ``"Safety"``, ``False`` otherwise.
+        """
+        return self.class_ == "Safety"
 
     @property
     def tags(self) -> TagsCollection:

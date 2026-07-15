@@ -8,7 +8,12 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
-from py_l5x.parsers.controller import ControllerInfo
+from py_l5x.parsers.controller import (
+    ControllerInfo,
+    EthernetPort,
+    SafetyInfo,
+    TimeSynchronize,
+)
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 EXAMPLE_L5X = FIXTURES_DIR / "example.L5X"
@@ -253,3 +258,154 @@ class TestControllerEdgeCases:
         )
         ctrl = ControllerInfo(el)
         assert "Extra Attributes:" not in repr(ctrl)
+
+
+# ---------------------------------------------------------------------------
+# Safety controller
+# ---------------------------------------------------------------------------
+
+
+class TestControllerSafety:
+    """Tests for SafetyInfo / is_safety_controller."""
+
+    def test_is_safety_controller(self, controller: ControllerInfo) -> None:
+        """Example controller has a SafetyInfo element."""
+        assert controller.is_safety_controller is True
+
+    def test_safety_info_type(self, controller: ControllerInfo) -> None:
+        """safety_info returns a SafetyInfo instance."""
+        assert isinstance(controller.safety_info, SafetyInfo)
+
+    def test_safety_info_fields(self, controller: ControllerInfo) -> None:
+        """SafetyInfo exposes the safety partition configuration."""
+        info = controller.safety_info
+        assert info.safety_locked is False
+        assert info.signature_run_mode_protect is False
+        assert info.configure_safety_io_always is False
+        assert info.safety_level == "SIL3/PLe"
+
+    def test_safety_tag_map(self, controller: ControllerInfo) -> None:
+        """safety_tag_map returns the mapping text."""
+        assert (
+            controller.safety_info.safety_tag_map == "toSafety_reset=fromNormal_reset"
+        )
+
+    def test_safety_info_repr(self, controller: ControllerInfo) -> None:
+        """SafetyInfo repr includes the safety level."""
+        assert "SIL3/PLe" in repr(controller.safety_info)
+
+    def test_no_safety_info_returns_none(self) -> None:
+        """Controllers without a SafetyInfo child are not safety controllers."""
+        el = ET.Element("Controller", Name="Test", Use="Target")
+        ctrl = ControllerInfo(el)
+        assert ctrl.safety_info is None
+        assert ctrl.is_safety_controller is False
+
+
+# ---------------------------------------------------------------------------
+# Time synchronization / clock
+# ---------------------------------------------------------------------------
+
+
+class TestControllerTimeSync:
+    """Tests for TimeSynchronize / CST / WallClockTime."""
+
+    def test_time_synchronize_type(self, controller: ControllerInfo) -> None:
+        """time_synchronize returns a TimeSynchronize instance."""
+        assert isinstance(controller.time_synchronize, TimeSynchronize)
+
+    def test_time_synchronize_fields(self, controller: ControllerInfo) -> None:
+        """TimeSynchronize exposes priority and PTP enable state."""
+        ts = controller.time_synchronize
+        assert ts.priority1 == 128
+        assert ts.priority2 == 128
+        assert ts.ptp_enable is True
+
+    def test_time_synchronize_repr(self, controller: ControllerInfo) -> None:
+        """TimeSynchronize repr includes the PTP enable state."""
+        assert "PTPEnable=True" in repr(controller.time_synchronize)
+
+    def test_cst_master_id(self, controller: ControllerInfo) -> None:
+        """cst_master_id matches the <CST MasterID="..."/> attribute."""
+        assert controller.cst_master_id == "0"
+
+    def test_wall_clock_time(self, controller: ControllerInfo) -> None:
+        """wall_clock_time returns the WallClockTime attribute dict."""
+        assert controller.wall_clock_time == {
+            "LocalTimeAdjustment": "0",
+            "TimeZone": "0",
+        }
+
+    def test_missing_time_synchronize_returns_none(self) -> None:
+        """Controllers without a TimeSynchronize child return None."""
+        el = ET.Element("Controller", Name="Test", Use="Target")
+        ctrl = ControllerInfo(el)
+        assert ctrl.time_synchronize is None
+        assert ctrl.cst_master_id is None
+        assert ctrl.wall_clock_time is None
+
+
+# ---------------------------------------------------------------------------
+# Ethernet ports
+# ---------------------------------------------------------------------------
+
+
+class TestControllerEthernetPorts:
+    """Tests for the ethernet_ports mapping."""
+
+    def test_ports_mapping_length(self, controller: ControllerInfo) -> None:
+        """Two Ethernet ports are exported for the example controller."""
+        assert len(controller.ethernet_ports) == 2
+
+    def test_port_1(self, controller: ControllerInfo) -> None:
+        """Port 1 (A1) is enabled."""
+        port = controller.ethernet_ports[1]
+        assert isinstance(port, EthernetPort)
+        assert port.port == 1
+        assert port.label == "A1"
+        assert port.port_enabled is True
+
+    def test_port_2(self, controller: ControllerInfo) -> None:
+        """Port 2 (A2) is enabled."""
+        port = controller.ethernet_ports[2]
+        assert port.label == "A2"
+        assert port.port_enabled is True
+
+    def test_missing_port_raises_keyerror(self, controller: ControllerInfo) -> None:
+        """Accessing a non-existent port raises KeyError."""
+        with pytest.raises(KeyError):
+            _ = controller.ethernet_ports[99]
+
+    def test_port_repr(self, controller: ControllerInfo) -> None:
+        """EthernetPort repr includes the label and enabled state."""
+        assert repr(controller.ethernet_ports[1]) == "EthernetPort('A1', enabled=True)"
+
+    def test_no_ethernet_ports_element(self) -> None:
+        """Controllers without an EthernetPorts child expose an empty mapping."""
+        el = ET.Element("Controller", Name="Test", Use="Target")
+        ctrl = ControllerInfo(el)
+        assert len(ctrl.ethernet_ports) == 0
+
+
+# ---------------------------------------------------------------------------
+# OPC UA
+# ---------------------------------------------------------------------------
+
+
+class TestControllerOpcUa:
+    """Tests for opc_ua_enabled / opc_ua_enabled_ports."""
+
+    def test_opc_ua_enabled(self, controller: ControllerInfo) -> None:
+        """The example controller has OPC UA enabled."""
+        assert controller.opc_ua_enabled is True
+
+    def test_opc_ua_enabled_ports(self, controller: ControllerInfo) -> None:
+        """opc_ua_enabled_ports returns the EnabledPorts bitmask as an int."""
+        assert controller.opc_ua_enabled_ports == 2
+
+    def test_opc_ua_disabled_when_no_element(self) -> None:
+        """Controllers without an OpcUaInfo child report OPC UA as disabled."""
+        el = ET.Element("Controller", Name="Test", Use="Target")
+        ctrl = ControllerInfo(el)
+        assert ctrl.opc_ua_enabled is False
+        assert ctrl.opc_ua_enabled_ports is None

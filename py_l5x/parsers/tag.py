@@ -614,6 +614,40 @@ class Tag(BaseElement):
         return self._get("TagType")
 
     @property
+    def class_(self) -> str:
+        """Tag class: ``"Standard"`` or ``"Safety"``.
+
+        Safety-class tags live in a safety-partitioned program/task and are
+        subject to the controller's ``SafetyInfo`` restrictions (see
+        :attr:`py_l5x.parsers.controller.ControllerInfo.safety_info`).
+
+        Returns:
+            The value of the ``Class`` XML attribute, or ``""`` if absent
+            (Rockwell omits it for ordinary ``"Standard"`` tags in some
+            exports).
+        """
+        return self._get("Class")
+
+    @property
+    def is_safety(self) -> bool:
+        """Whether this is a safety-class tag.
+
+        Returns:
+            ``True`` if :attr:`class_` is ``"Safety"``, ``False`` otherwise.
+        """
+        return self.class_ == "Safety"
+
+    @property
+    def opc_ua_access(self) -> str:
+        """OPC UA exposure level for this tag (e.g. ``"None"``).
+
+        Returns:
+            The value of the ``OpcUaAccess`` XML attribute, or ``""`` if
+            absent.
+        """
+        return self._get("OpcUaAccess")
+
+    @property
     def data_type(self) -> str:
         """The tag's data type name."""
         return self._get("DataType")
