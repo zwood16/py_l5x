@@ -582,22 +582,23 @@ uv run ruff check --fix .   # auto-fix where possible
 
 ## Known Limitation
 
-- Not all L5X components have wrappers/parsers yet. Know top level tags that are ignored for now are:
+- Not all L5X components have wrappers/parsers yet. Known top level tags that are currently ignored include:
   - \<ParameterConnection\>
   - \<Trends\>
   - \<QuickWatchList\>
   - \<CommPorts\>
   - \<WallClockTime\>
-    > Note that the top level Project exposes the `Project.root` XML element so you can manually find any extra info you need using Python's build in [XML Element Tree](https://docs.python.org/3/library/xml.etree.elementtree.html).
-- Some attributes may be missing or hard to find.
-  - Similar to the project, all elements (Module, ProgramsCollection, etc.) have a `_element` property that exposes the top level xml element.
-- Motion and safety have not yet been test. Your mileage may vary with servos and safety Tasks/programs.
-- No write support
+    > Note that the top level Project object exposes the `Project.root` XML element so you can manually find any extra info you need using Python's build in [XML Element Tree](https://docs.python.org/3/library/xml.etree.elementtree.html).
+- Similarly, some attributes may be missing or hard to find. Attributes for objects can vary wildly, so I've done my best to expose common ones via a little reverse engineering of example files.
+  - As a fallback, all elements (Module, ProgramsCollection, etc.) also include a `_element` property that exposes the top level xml element.
+- Not all features or specialty tag types are supported. For example:
+  - Alarms
+  - Motion Coordinate Groups
+- There is no write support. `py_l5x` can only read L5X files. It cannnot write back to them.
 
 ## Road Map
 
 - [x] Test more special tag types (CIP_AXIS, MESSAGE, etc.)
-- [x] Test safety features (safety network numbers, safety routines, tag mapping to/from safety routines)
+- [x] Test safety features (safety network numbers, safety routines, safety tags, etc.)
 - [ ] Implement a write feature to allow for modifying an exported L5X file
-- [ ] Implement a generate component template feature
-  - The intent is to create a blank component L5X file that you can then modify external to Studio 5000. This could be useful for an MCP tool or other external editing tools since Studio 5000's menu heavy UI can often be tedious.
+- [ ] Implement a generate component feature to go along with write allowing users to create component imports using python.
