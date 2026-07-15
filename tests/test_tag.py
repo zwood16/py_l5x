@@ -9,6 +9,7 @@ import pytest
 
 from py_l5x.parsers.datatype import AddOnDataTypeCollection, DataTypesCollection
 from py_l5x.parsers.program import Program, ProgramsCollection
+from py_l5x.parsers.specialty_tags import AxisParameters, MotionGroupParameters
 from py_l5x.parsers.tag import Tag, TagNode, TagsCollection, TypeRegistry
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -418,10 +419,127 @@ class TestEdgeCases:
         assert controller_tags["message_tag"].value is None
 
     def test_message_tag_parameters(self, controller_tags: TagsCollection) -> None:
-        """MESSAGE-type tags expose their MessageParameters attributes."""
+        """MESSAGE-type tags expose a typed MessageParameters wrapper."""
         params = controller_tags["message_tag"].message_parameters
         assert params is not None
-        assert params["MessageType"] == "CIP Data Table Write"
+        assert params.message_type == "CIP Data Table Write"
+        assert params.local_element == "message_data"
+        assert params.connected is True
+        assert params.cache_connections is True
+
+
+# ---------------------------------------------------------------------------
+# Specialty tag data: MOTION_GROUP / AXIS_CIP_DRIVE / generic Data fallback
+# ---------------------------------------------------------------------------
+
+
+class TestSpecialtyTagData:
+    """Tests for MOTION_GROUP/AXIS_CIP_DRIVE typed wrappers and the fallback."""
+
+    def test_motion_group_parameters(self, controller_tags: TagsCollection) -> None:
+        """MOTION_GROUP tags expose a typed MotionGroupParameters wrapper."""
+        params = controller_tags["ServosMotionGroup"].motion_group_parameters
+        assert isinstance(params, MotionGroupParameters)
+        assert params.coarse_update_period == 2000
+        assert params.phase_shift == 0
+        assert params.general_fault_type == "Non Major Fault"
+        assert params.auto_tag_update == "Enabled"
+        assert params.alternate1_update_multiplier == 1
+        assert params.alternate2_update_multiplier == 1
+
+    def test_motion_group_value_is_none(self, controller_tags: TagsCollection) -> None:
+        """MOTION_GROUP tags have no parsed Decorated value tree."""
+        assert controller_tags["ServosMotionGroup"].value is None
+
+    def test_axis_parameters(self, controller_tags: TagsCollection) -> None:
+        """AXIS_CIP_DRIVE tags expose a typed AxisParameters wrapper."""
+        params = controller_tags["testServo"].axis_parameters
+        assert isinstance(params, AxisParameters)
+        assert params.motion_group == "ServosMotionGroup"
+        assert params.motion_module == "Test_Servo_Drive:Ch1"
+        assert params.axis_configuration == "Position Loop"
+        assert params.motor_catalog_number == "VPL-B0631T-C"
+        assert params.conversion_constant == 10000.0
+        assert params.position_units == "mm"
+        assert params.maximum_speed == 226.66667
+        assert params.home_mode == "Active"
+        assert params.soft_travel_limit_checking is True
+        assert params.feedback1_type == "Hiperface DSL"
+        assert params.axis_id == 1598518072
+
+    def test_axis_parameters_scaling(self, controller_tags: TagsCollection) -> None:
+        """AXIS_CIP_DRIVE tags expose typed scaling/actuator properties."""
+        params = controller_tags["testServo"].axis_parameters
+        assert isinstance(params, AxisParameters)
+        assert params.scaling_source == "From Calculator"
+        assert params.load_type == "Linear Actuator"
+        assert params.actuator_type == "Screw"
+        assert params.travel_mode == "Limited"
+        assert params.travel_range == 1000.0
+        assert params.position_scaling_numerator == 1.0
+        assert params.position_scaling_denominator == 1.0
+        assert params.position_unwind_numerator == 1.0
+        assert params.position_unwind_denominator == 1.0
+        assert params.actuator_lead == 10.0
+        assert params.actuator_lead_unit == "Millimeter/Rev"
+        assert params.actuator_diameter == 1.0
+        assert params.actuator_diameter_unit == "Millimeter"
+        assert params.transmission_ratio_input == 5.0
+        assert params.transmission_ratio_output == 1.0
+
+    def test_axis_parameters_motor_nameplate(
+        self, controller_tags: TagsCollection
+    ) -> None:
+        """AXIS_CIP_DRIVE tags expose typed motor nameplate properties."""
+        params = controller_tags["testServo"].axis_parameters
+        assert isinstance(params, AxisParameters)
+        assert params.motor_unit == "Rev"
+        assert params.motor_polarity == "Normal"
+        assert params.motor_rated_voltage == 480.0
+        assert params.motor_rated_continuous_current == 0.85
+        assert params.motor_rated_peak_current == 2.97
+        assert params.motor_rated_output_power == 0.31
+        assert params.motor_overload_limit == 100.0
+        assert params.rotary_motor_poles == 8
+        assert params.rotary_motor_inertia == 0.000011
+        assert params.rotary_motor_rated_speed == 8000.0
+        assert params.rotary_motor_max_speed == 8000.0
+        assert params.pm_motor_rated_torque == 0.46
+        assert params.pm_motor_torque_constant == 0.58
+        assert params.pm_motor_rotary_voltage_constant == 35.05671
+
+    def test_axis_parameters_extra_attributes(
+        self, controller_tags: TagsCollection
+    ) -> None:
+        """Attributes without a dedicated property are in extra_attributes."""
+        params = controller_tags["testServo"].axis_parameters
+        assert isinstance(params, AxisParameters)
+        assert params.extra_attributes["TorqueLoopBandwidth"] == "1000.0"
+
+    def test_non_specialty_tag_has_no_specialty_data(
+        self, controller_tags: TagsCollection
+    ) -> None:
+        """Ordinary tags have no message/motion-group/axis parameters."""
+        tag = controller_tags["toSafety_reset"]
+        assert tag.message_parameters is None
+        assert tag.motion_group_parameters is None
+        assert tag.axis_parameters is None
+        assert tag.special_data_format is None
+        assert tag.special_data_attributes is None
+
+    def test_special_data_format(self, controller_tags: TagsCollection) -> None:
+        """special_data_format reports the non-value Data section's Format."""
+        assert controller_tags["message_tag"].special_data_format == "Message"
+        assert controller_tags["ServosMotionGroup"].special_data_format == "MotionGroup"
+        assert controller_tags["testServo"].special_data_format == "Axis"
+
+    def test_special_data_attributes_fallback(
+        self, controller_tags: TagsCollection
+    ) -> None:
+        """special_data_attributes returns the root Data element's attributes."""
+        assert controller_tags["ServosMotionGroup"].special_data_attributes == {
+            "Format": "MotionGroup"
+        }
 
     def test_consumed_tag_value_and_info(self, controller_tags: TagsCollection) -> None:
         """Consumed tags parse their atomic value and expose ConsumeInfo."""

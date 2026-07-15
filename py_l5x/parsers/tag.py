@@ -40,12 +40,26 @@ from py_l5x.parsers.datatype import (
     DataTypeMember,
     DataTypesCollection,
 )
+from py_l5x.parsers.specialty_tags import (
+    AxisParameters,
+    MessageParameters,
+    MotionGroupParameters,
+)
 from py_l5x.parsers.utils import CDATA_TAG, convert_numeric
 
 #: A member/parameter definition used for metadata cross-reference. Both
 #: classes expose the same property surface (description/min/max/
 #: engineering_unit/state0/state1/radix/external_access).
 MemberDef = DataTypeMember | AddOnParameter
+
+#: ``Data`` element ``Format`` values that carry a normal value tree. ``L5K``
+#: is a legacy, redundant raw-text mirror of the same data present in the
+#: ``Decorated``/``String``/(specialty parameter) sibling and is intentionally
+#: ignored throughout this module. Any ``Format`` not in this set (e.g.
+#: ``Message``, ``MotionGroup``, ``Axis``, or an unrecognised future format)
+#: has no standard value tree -- see :attr:`Tag.special_data_format`/
+#: :attr:`Tag.special_data_attributes`.
+_VALUE_DATA_FORMATS: frozenset[str] = frozenset({"L5K", "Decorated", "String"})
 
 
 class TypeRegistry:
@@ -769,10 +783,91 @@ class Tag(BaseElement):
         return dict(el.attrib) if el is not None else None
 
     @property
-    def message_parameters(self) -> dict[str, str] | None:
-        """``MessageParameters`` attributes, for ``MESSAGE`` type tags."""
+    def message_parameters(self) -> MessageParameters | None:
+        """``MessageParameters``, for ``MESSAGE`` type tags.
+
+        Returns:
+            A :class:`~py_l5x.parsers.specialty_tags.MessageParameters`
+            instance if this tag has a ``<Data Format="Message">`` section,
+            ``None`` otherwise.
+        """
         el = self._element.find("Data[@Format='Message']/MessageParameters")
-        return dict(el.attrib) if el is not None else None
+        return MessageParameters(el) if el is not None else None
+
+    @property
+    def motion_group_parameters(self) -> MotionGroupParameters | None:
+        """``MotionGroupParameters``, for ``MOTION_GROUP`` type tags.
+
+        A ``MOTION_GROUP`` tag represents a group of coordinated servo axes
+        (at least one is required when any ``AXIS_CIP_DRIVE`` tag is
+        present).
+
+        Returns:
+            A :class:`~py_l5x.parsers.specialty_tags.MotionGroupParameters`
+            instance if this tag has a ``<Data Format="MotionGroup">``
+            section, ``None`` otherwise.
+        """
+        el = self._element.find("Data[@Format='MotionGroup']/MotionGroupParameters")
+        return MotionGroupParameters(el) if el is not None else None
+
+    @property
+    def axis_parameters(self) -> AxisParameters | None:
+        """``AxisParameters``, for ``AXIS_CIP_DRIVE`` (and other Axis-family,
+        e.g. ``AXIS_CIP_DRIVE_SAFETY``) type tags.
+
+        Represents a single EtherNet/IP servo axis.
+
+        Returns:
+            An :class:`~py_l5x.parsers.specialty_tags.AxisParameters`
+            instance if this tag has a ``<Data Format="Axis">`` section,
+            ``None`` otherwise.
+        """
+        el = self._element.find("Data[@Format='Axis']/AxisParameters")
+        return AxisParameters(el) if el is not None else None
+
+    @property
+    def special_data_format(self) -> str | None:
+        """``Format`` of this tag's non-value ``<Data>`` section, if any.
+
+        Tags whose data type has no standard value-tree export (e.g.
+        ``MESSAGE``, ``MOTION_GROUP``, ``AXIS_CIP_DRIVE``, or any future/
+        unrecognised type Logix exports this way) use a single ``<Data
+        Format="...">`` element wrapping one parameter child instead of the
+        usual ``Decorated``/``String`` pair. The legacy ``L5K`` mirror is
+        ignored (see :data:`_VALUE_DATA_FORMATS`).
+
+        Returns:
+            The ``Format`` attribute value (e.g. ``"Message"``,
+            ``"MotionGroup"``, ``"Axis"``), or ``None`` for ordinary tags.
+        """
+        for data_el in self._element.findall("Data"):
+            fmt = data_el.get("Format")
+            if fmt and fmt not in _VALUE_DATA_FORMATS:
+                return fmt
+        return None
+
+    @property
+    def special_data_attributes(self) -> dict[str, str] | None:
+        """Fallback attributes for tag data types py_l5x doesn't dedicate a
+        typed wrapper to.
+
+        Reads the attributes directly on this tag's non-value ``<Data>``
+        element (see :attr:`special_data_format`) -- typically just
+        ``Format``. Known formats have dedicated typed wrappers
+        (:attr:`message_parameters`/:attr:`motion_group_parameters`/
+        :attr:`axis_parameters`); this exists for anything py_l5x doesn't
+        yet recognise. If more detail is needed than this exposes, drop
+        down to the underlying element via the parser internals.
+
+        Returns:
+            A dict of attribute names to values, or ``None`` if this tag
+            has no special (non-value) ``<Data>`` section at all.
+        """
+        for data_el in self._element.findall("Data"):
+            fmt = data_el.get("Format")
+            if fmt and fmt not in _VALUE_DATA_FORMATS:
+                return dict(data_el.attrib)
+        return None
 
     # ------------------------------------------------------------------
     # Value tree
