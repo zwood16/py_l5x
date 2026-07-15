@@ -1,11 +1,13 @@
 ﻿<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<RSLogix5000Content SchemaRevision="1.0" SoftwareRevision="37.00" TargetName="Example_PLC" TargetType="Controller" ContainsContext="false" ExportDate="Wed Jul 15 11:30:46 2026" ExportOptions="NoRawData L5KData DecoratedData ForceProtectedEncoding AllProjDocTrans">
-<Controller Use="Target" Name="Example_PLC" ProcessorType="5069-L306ERM" MajorRev="37" MinorRev="11" ProjectCreationDate="Tue Jun 30 10:14:37 2026" LastModifiedDate="Wed Jul 15 11:30:32 2026" SFCExecutionControl="CurrentActive" SFCRestartPosition="MostRecent" SFCLastScan="DontScan" ProjectSN="16#0000_0000"
+<RSLogix5000Content SchemaRevision="1.0" SoftwareRevision="37.00" TargetName="Example_PLC" TargetType="Controller" ContainsContext="false" ExportDate="Wed Jul 15 12:48:16 2026" ExportOptions="NoRawData L5KData DecoratedData ForceProtectedEncoding AllProjDocTrans">
+<Controller Use="Target" Name="Example_PLC" ProcessorType="5069-L310ERMS3" MajorRev="37" MinorRev="11" ProjectCreationDate="Tue Jun 30 10:14:37 2026" LastModifiedDate="Wed Jul 15 12:44:06 2026" SFCExecutionControl="CurrentActive" SFCRestartPosition="MostRecent" SFCLastScan="DontScan" ProjectSN="16#0000_0000"
  MatchProjectToController="false" CanUseRPIFromProducer="false" InhibitAutomaticFirmwareUpdate="0" PassThroughConfiguration="EnabledWithAppend" DownloadProjectDocumentationAndExtendedProperties="true" DownloadProjectCustomProperties="true" ReportMinorOverflow="false" EtherNetIPMode="A1/A2: Dual-IP" AutoDiagsEnabled="true" WebServerEnabled="false" DataExchangeId="{09B2637D-051F-4EFE-989A-EAD35A27AB93}"
 >
 <RedundancyInfo Enabled="false" KeepTestEditsOnSwitchOver="false"/>
 <Security Code="0" ChangesToDetect="16#ffff_ffff_ffff_ffff"/>
-<SafetyInfo/>
+<SafetyInfo SafetyLocked="false" SignatureRunModeProtect="false" ConfigureSafetyIOAlways="false" SafetyLevel="SIL3/PLe">
+<SafetyTagMap> toSafety_reset=fromNormal_reset</SafetyTagMap>
+</SafetyInfo>
 <DataTypes>
 <DataType Name="A_UDT" Family="NoFamily" Class="User">
 <Members>
@@ -770,20 +772,23 @@
 </DataType>
 </DataTypes>
 <Modules>
-<Module Name="Local" CatalogNumber="5069-L306ERM" Vendor="1" ProductType="14" ProductCode="189" Major="37" Minor="11" ParentModule="Local" ParentModPortId="1" Inhibited="false" MajorFault="true"
+<Module Name="Local" CatalogNumber="5069-L310ERMS3" Vendor="1" ProductType="14" ProductCode="244" Major="37" Minor="11" ParentModule="Local" ParentModPortId="1" Inhibited="false" MajorFault="true"
 >
 <EKey State="Disabled"/>
 <Ports>
-<Port Id="1" Address="0" Type="5069" Upstream="false">
+<Port Id="1" Address="0" Type="5069" Upstream="false" SafetyNetwork="16#0000_4dcf_03d4_a6f1">
 <Bus Size="9"/>
 </Port>
-<Port Id="3" Type="Ethernet" Upstream="false">
+<Port Id="3" Type="Ethernet" Upstream="false" SafetyNetwork="16#0000_4dcf_03d4_a6f2">
 <Bus/>
 </Port>
-<Port Id="4" Type="Ethernet" Upstream="false">
+<Port Id="4" Type="Ethernet" Upstream="false" SafetyNetwork="16#0000_4dcf_03d4_a6f3">
 <Bus/>
 </Port>
 </Ports>
+<Communications>
+<Connections/>
+</Communications>
 </Module>
 <Module Name="Test_Input_Module" CatalogNumber="5069-IB16/A" Vendor="1" ProductType="7" ProductCode="390" Major="2" Minor="1" ParentModule="Local" ParentModPortId="1" Inhibited="false" MajorFault="false"
  SafetyEnabled="false" AutoDiagsEnabled="true" DataExchangeId="{4BD11653-8FB3-44A6-9DFA-05BD9D6EF443}">
@@ -967,6 +972,128 @@
 </Communications>
 <ExtendedProperties>
 <public><Vendor>Rockwell Automation/Allen-Bradley</Vendor><CatNum>5069-IB16</CatNum><ConfigID>500</ConfigID><ADDAVersion>1</ADDAVersion></public>
+</ExtendedProperties>
+</Module>
+<Module Name="Test_Safety_Input" CatalogNumber="5069-IB8S/A" Vendor="1" ProductType="35" ProductCode="23" Major="2" Minor="1" ParentModule="Local" ParentModPortId="1" Inhibited="false" MajorFault="false"
+ SafetyNetwork="16#0000_4dcf_03d4_a6f1" SafetyEnabled="true" DataExchangeId="{98D7E0CB-2C97-4A67-90F2-0DB351D757CD}">
+<EKey State="CompatibleModule"/>
+<Ports>
+<Port Id="1" Address="2" Type="5069" Upstream="true"/>
+</Ports>
+<Communications>
+<SafetyScript Size="137">
+<Data Format="L5K">
+<![CDATA[[-123,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0,117,0,0,0,0,0,0,0,0,3,0,0,0,103,0,0,0,0,0,0,96,0,0,0,-89,0,0,0,39,90,-14,27,-103,46,-42,3,-49,77,0,0,2
+		,0,0,0,2,0,0,0,3,0,0,0,3,0,0,0,0,0,0,0,-24,3,113,0,0,0,0,0,-24,3,113,1,0,0,0,0,-24,3,114,0,0,0,0,0,-24,3,114,0,0,0,0,0,-24,3,112,0,0,0,0,0,-24
+		,3,112,0,0,0,0,0,-24,3,112,0,0,0,0,0,-24,3,112,0,0]]]>
+</Data>
+</SafetyScript>
+<Connections>
+<Connection Name="SafetyInput" RPI="20000" Type="SafetyInputDataDriven" InputSize="52" EventID="0" ProgrammaticallySendEventTrigger="false" TimeoutMultiplier="2" NetworkDelayMultiplier="200" ReactionTimeLimit="80" MaxObservedNetworkDelay="0" Priority="High"
+ InputConnectionType="Multicast" InputProductionTrigger="Application" ConnectionPath="20 04 24 a7 20 04 24 c7 20 04 25 00 42 03" InputTagSuffix="I">
+<InputTag ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="Decorated">
+<Structure DataType="AB:5000_SDI8:I:0">
+<DataValueMember Name="RunMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ConnectionFaulted" DataType="BOOL" Value="1"/>
+<DataValueMember Name="DiagnosticActive" DataType="BOOL" Value="0"/>
+<DataValueMember Name="DiagnosticSequenceCount" DataType="SINT" Radix="Decimal" Value="0"/>
+<StructureMember Name="Pt00" DataType="CHANNEL_SDI:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="1"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Status" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt01" DataType="CHANNEL_SDI:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="1"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Status" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt02" DataType="CHANNEL_SDI:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="1"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Status" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt03" DataType="CHANNEL_SDI:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="1"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Status" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt04" DataType="CHANNEL_SDI:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="1"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Status" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt05" DataType="CHANNEL_SDI:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="1"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Status" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt06" DataType="CHANNEL_SDI:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="1"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Status" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt07" DataType="CHANNEL_SDI:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="1"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Status" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Test00" DataType="AB:5000_SafetyReadback_Channel:I:0">
+<DataValueMember Name="Readback" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="1"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FieldPowerOff" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Status" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Test01" DataType="AB:5000_SafetyReadback_Channel:I:0">
+<DataValueMember Name="Readback" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="1"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FieldPowerOff" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Status" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Test02" DataType="AB:5000_SafetyReadback_Channel:I:0">
+<DataValueMember Name="Readback" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="1"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FieldPowerOff" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Status" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Test03" DataType="AB:5000_SafetyReadback_Channel:I:0">
+<DataValueMember Name="Readback" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="1"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FieldPowerOff" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Status" DataType="BOOL" Value="0"/>
+</StructureMember>
+</Structure>
+</Data>
+</InputTag>
+</Connection>
+</Connections>
+</Communications>
+<ExtendedProperties>
+<public><ConfigID>16777344</ConfigID><CatNum>5069-IB8S</CatNum></public>
 </ExtendedProperties>
 </Module>
 <Module Name="ShopRobot" CatalogNumber="ETHERNET-MODULE" Vendor="1" ProductType="0" ProductCode="18" Major="1" Minor="1" ParentModule="Local" ParentModPortId="3" Inhibited="false" MajorFault="false"
@@ -1786,9 +1913,95 @@
 <public><PL>01<Version Name="1.0"/><Connection Name="_200424692C962C64" Format="0"/></PL><Vendor>SMC Corporation</Vendor><CatNum>EX600-SEN7/8</CatNum><DataTypeFormats><DataTypeFormat InstanceApplicationPath="20 04 2C 64 30 03" Format="1" Type="Input"/><DataTypeFormat InstanceApplicationPath="20 04 2C 96 30 03" Format="1" Type="Output"/></DataTypeFormats></public>
 </ExtendedProperties>
 </Module>
+<Module Name="Test_Servo_Drive" CatalogNumber="2198-H003-ERS2" Vendor="1" ProductType="45" ProductCode="1" Major="7" Minor="1" ParentModule="Local" ParentModPortId="3" Inhibited="false" MajorFault="false"
+ SafetyNetwork="16#0000_4dcf_03d4_a6f2" SafetyEnabled="true" DataExchangeId="{95D4F5EF-B9FB-4EF6-B4D9-B596CE56C90D}">
+<EKey State="CompatibleModule"/>
+<Ports>
+<Port Id="2" Address="192.168.1.6" Type="Ethernet" Upstream="true"/>
+</Ports>
+<Communications>
+<ConfigData ConfigSize="376">
+<Data Format="L5K">
+<![CDATA[[380,3,257,1,430572775,0,2565904,131588,1,0,0,0,0,0,0,0,0,-1027080192,0,0,0,0,0,0,0,524296000,524296000,524296000
+		,524296000,0,0,1,0,0,460,-65536,1045220557,0,0,0,0,1120403456,1120403456,0,1120403456,1124859904,0,0,1120403456
+		,1,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,1,0,8192000,8192125,1286,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]]]>
+</Data>
+</ConfigData>
+<SafetyScript Size="59">
+<Data Format="L5K">
+<![CDATA[[55,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0,39,0,0,0,0,0,0,0,0,3,0,0,0,25,0,0,0,0,0,0,18,0,0,0,0,0,0,0,0,-19,38,-66,116,126,-7,3,-49,77,0,0,0,0,0]]]>
+</Data>
+</SafetyScript>
+<Connections>
+<Connection Name="AMotionDiagnostics" RPI="1000" Type="DiagnosticInput" EventID="0" ProgrammaticallySendEventTrigger="false">
+<InputTag ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="Decorated">
+<Structure DataType="AB:Motion_Diagnostics:S:1">
+<DataValueMember Name="LostControllerToDriveTransmissions" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="LateControllerToDriveTransmissions" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="LostDriveToControllerTransmissions" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="LateDriveToControllerTransmissions" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="LastControllerToDriveTime" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="AverageControllerToDriveTime" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="MaximumControllerToDriveTime" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="LastDriveToControllerTime" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="AverageDriveToControllerTime" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="MaximumDriveToControllerTime" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="LastSystemClockJitter" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="AverageSystemClockJitter" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="MaximumSystemClockJitter" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimingStatisticsEnabled" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="ControllerToDriveConnectionSize" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="DriveToControllerConnectionSize" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="NominalControllerToDriveTime" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="NominalDriveToControllerTime" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="CoarseUpdatePeriod" DataType="INT" Radix="Decimal" Value="0"/>
+</Structure>
+</Data>
+</InputTag>
+</Connection>
+<Connection Name="BMotionSync" RPI="2000" Type="MotionSync" EventID="0" ProgrammaticallySendEventTrigger="false"/>
+<Connection Name="CSafety_Output" Type="SafetyOutputDataDriven" OutputSize="1" EventID="0" ProgrammaticallySendEventTrigger="false" TimeoutMultiplier="2" NetworkDelayMultiplier="200" ReactionTimeLimit="60" MaxObservedNetworkDelay="0" Priority="High" InputConnectionType="Unicast"
+ InputProductionTrigger="Application" ConnectionPath="20 04 25 00 60 03 20 04 25 00 80 01 20 04 24 c7" OutputTagSuffix="SO">
+<OutputTag ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[[0]]]>
+</Data>
+<Data Format="Decorated">
+<Structure DataType="AB:CIP_Drive_Safety1:SO:0">
+<DataValueMember Name="Command" DataType="SINT" Radix="Binary" Value="2#0000_0000"/>
+<DataValueMember Name="SafeTorqueOff" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Reset" DataType="BOOL" Value="0"/>
+</Structure>
+</Data>
+</OutputTag>
+</Connection>
+<Connection Name="DSafety_Input" RPI="10000" Type="SafetyInputDataDriven" InputSize="5" EventID="0" ProgrammaticallySendEventTrigger="false" TimeoutMultiplier="2" NetworkDelayMultiplier="200" ReactionTimeLimit="40.064" MaxObservedNetworkDelay="0" Priority="High"
+ InputConnectionType="Unicast" InputProductionTrigger="Application" ConnectionPath="20 04 25 00 60 03 20 04 24 c7 20 04 25 00 a0 01" InputTagSuffix="SI">
+<InputTag ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="Decorated">
+<Structure DataType="AB:CIP_Drive_Safety1:SI:0">
+<DataValueMember Name="ConnectionStatus" DataType="DINT" Radix="Binary" Value="2#0000_0000_0000_0000_0000_0000_0000_0000"/>
+<DataValueMember Name="RunMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ConnectionFaulted" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Status" DataType="SINT" Radix="Binary" Value="2#0000_0000"/>
+<DataValueMember Name="TorqueDisabled" DataType="BOOL" Value="0"/>
+<DataValueMember Name="SafetyFault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ResetRequired" DataType="BOOL" Value="0"/>
+</Structure>
+</Data>
+</InputTag>
+</Connection>
+</Connections>
+</Communications>
+<ExtendedProperties>
+<public><Vendor>Rockwell Automation/Allen-Bradley</Vendor><CatNum>2198-H003-ERS2</CatNum><FeedbackDevice1>1</FeedbackDevice1><ConfigID>50331751</ConfigID></public>
+</ExtendedProperties>
+</Module>
 </Modules>
 <AddOnInstructionDefinitions>
-<AddOnInstructionDefinition Name="Debounce" Revision="1.2" ExecutePrescan="false" ExecutePostscan="false" ExecuteEnableInFalse="true" CreatedDate="2018-04-24T14:53:35.092Z" CreatedBy="A-I-CORP\zwood" EditedDate="2026-07-08T19:40:38.750Z" EditedBy="ROCKWELL-VM\Zac" SoftwareRevision="v37.00">
+<AddOnInstructionDefinition Name="Debounce" Class="Standard" Revision="1.2" ExecutePrescan="false" ExecutePostscan="false" ExecuteEnableInFalse="true" CreatedDate="2018-04-24T14:53:35.092Z" CreatedBy="A-I-CORP\zwood" EditedDate="2026-07-08T19:40:38.750Z" EditedBy="ROCKWELL-VM\Zac" SoftwareRevision="v37.00"
+>
 <RevisionNote>
 <![CDATA[v1.2: Changed outputBit to state. Added more documentation
 v1.1: Made outputBit not required]]>
@@ -1939,7 +2152,8 @@ Note that there IS an EnableInFalse condition if you are modifying this code.]]>
 </Routine>
 </Routines>
 </AddOnInstructionDefinition>
-<AddOnInstructionDefinition Name="GenericInput" Revision="1.2" ExecutePrescan="false" ExecutePostscan="false" ExecuteEnableInFalse="false" CreatedDate="2023-05-30T16:02:10.176Z" CreatedBy="A-I-CORP\DLim" EditedDate="2025-11-19T02:06:15.825Z" EditedBy="ROCKWELL-VM\Zac" SoftwareRevision="v37.00">
+<AddOnInstructionDefinition Name="GenericInput" Class="Standard" Revision="1.2" ExecutePrescan="false" ExecutePostscan="false" ExecuteEnableInFalse="false" CreatedDate="2023-05-30T16:02:10.176Z" CreatedBy="A-I-CORP\DLim" EditedDate="2025-11-19T02:06:15.825Z" EditedBy="ROCKWELL-VM\Zac" SoftwareRevision="v37.00"
+>
 <RevisionNote>
 <![CDATA[v1.2: added held output for pushbuttons
 v1.1: Added invert input
@@ -2167,7 +2381,8 @@ To use:
 </Routine>
 </Routines>
 </AddOnInstructionDefinition>
-<AddOnInstructionDefinition Name="FanucAlarmLookup" Revision="1.0" ExecutePrescan="false" ExecutePostscan="false" ExecuteEnableInFalse="false" CreatedDate="2021-10-18T18:28:33.762Z" CreatedBy="A-I-CORP\ZWood" EditedDate="2023-06-27T20:02:36.212Z" EditedBy="A-I-CORP\ZWood" SoftwareRevision="v33.01">
+<AddOnInstructionDefinition Name="FanucAlarmLookup" Class="Standard" Revision="1.0" ExecutePrescan="false" ExecutePostscan="false" ExecuteEnableInFalse="false" CreatedDate="2021-10-18T18:28:33.762Z" CreatedBy="A-I-CORP\ZWood" EditedDate="2023-06-27T20:02:36.212Z" EditedBy="A-I-CORP\ZWood" SoftwareRevision="v33.01"
+>
 <RevisionNote>
 <![CDATA[V1.0: Initial release]]>
 </RevisionNote>
@@ -2295,7 +2510,8 @@ To use:
 </Routine>
 </Routines>
 </AddOnInstructionDefinition>
-<AddOnInstructionDefinition Name="FanucPNS" Revision="1.0" ExecutePrescan="false" ExecutePostscan="false" ExecuteEnableInFalse="true" CreatedDate="2016-04-06T17:38:41.989Z" CreatedBy="A-I-CORP\zwood" EditedDate="2023-06-28T17:55:09.879Z" EditedBy="A-I-CORP\ZWood" SoftwareRevision="v33.01">
+<AddOnInstructionDefinition Name="FanucPNS" Class="Standard" Revision="1.0" ExecutePrescan="false" ExecutePostscan="false" ExecuteEnableInFalse="true" CreatedDate="2016-04-06T17:38:41.989Z" CreatedBy="A-I-CORP\zwood" EditedDate="2023-06-28T17:55:09.879Z" EditedBy="A-I-CORP\ZWood" SoftwareRevision="v33.01"
+>
 <RevisionNote>
 <![CDATA[V1.1 Updated documentation
 V1.0: Modernized version of PNS_Action designed for use with the fanucRobot AOI. Changes from PNS_Action V3 include:  
@@ -2572,7 +2788,8 @@ Otherwise flag as an error]]>
 </Routine>
 </Routines>
 </AddOnInstructionDefinition>
-<AddOnInstructionDefinition Name="SeqCtrl" Revision="3.3" ExecutePrescan="false" ExecutePostscan="false" ExecuteEnableInFalse="false" CreatedDate="2017-04-12T15:18:43.317Z" CreatedBy="A-I-CORP\ZWood" EditedDate="2024-09-04T21:38:06.473Z" EditedBy="A-I-CORP\ZWood" SoftwareRevision="v35.01">
+<AddOnInstructionDefinition Name="SeqCtrl" Class="Standard" Revision="3.3" ExecutePrescan="false" ExecutePostscan="false" ExecuteEnableInFalse="false" CreatedDate="2017-04-12T15:18:43.317Z" CreatedBy="A-I-CORP\ZWood" EditedDate="2024-09-04T21:38:06.473Z" EditedBy="A-I-CORP\ZWood" SoftwareRevision="v35.01"
+>
 <RevisionNote>
 <![CDATA[v3.3 Fixed bug where state bits and step where out of sync for 1 scan
 v3.2 fixed bug where first scan would not init to aborted
@@ -3337,7 +3554,8 @@ Set faulted status bit if any fault bit is set on]]>
 </Routine>
 </Routines>
 </AddOnInstructionDefinition>
-<AddOnInstructionDefinition Name="FanucRobot" Revision="1.4" ExecutePrescan="false" ExecutePostscan="false" ExecuteEnableInFalse="false" CreatedDate="2021-10-18T17:00:59.819Z" CreatedBy="A-I-CORP\ZWood" EditedDate="2025-11-19T02:25:29.668Z" EditedBy="ROCKWELL-VM\Zac" SoftwareRevision="v37.00">
+<AddOnInstructionDefinition Name="FanucRobot" Class="Standard" Revision="1.4" ExecutePrescan="false" ExecutePostscan="false" ExecuteEnableInFalse="false" CreatedDate="2021-10-18T17:00:59.819Z" CreatedBy="A-I-CORP\ZWood" EditedDate="2025-11-19T02:25:29.668Z" EditedBy="ROCKWELL-VM\Zac" SoftwareRevision="v37.00"
+>
 <RevisionNote>
 <![CDATA[v1.4: added faulted status
 V1.3 - added seq faults to reset input and fixed some issues with auto aborting
@@ -3875,7 +4093,7 @@ Step 7000: Robot program stopped. Waiting for start command]]>
 </AddOnInstructionDefinition>
 </AddOnInstructionDefinitions>
 <Tags>
-<Tag Name="ALLOWABLE_ALARMS" TagType="Base" DataType="robotAlarmCode" Dimensions="20" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Tag Name="ALLOWABLE_ALARMS" Class="Standard" TagType="Base" DataType="robotAlarmCode" Dimensions="20" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
 <Data Format="L5K">
 <![CDATA[[[0,'$00$00$00$00$00$00$00$00'],[8,'SRVO-003'],[8,'SYST-043'],[8,'SYST-045'],[8,'SRVO-408'],[8,'SRVO-407'
 		],[8,'SRVO-002'],[8,'SRVO-001'],[8,'SRVO-004'],[8,'SRVO-007'],[8,'SRVO-199'],[8,'SRVO-233'],[8,'SYST-034'],[0,'$00$00$00$00$00$00$00$00'
@@ -4048,7 +4266,7 @@ Step 7000: Robot program stopped. Waiting for start command]]>
 </Array>
 </Data>
 </Tag>
-<Tag Name="consumed_tag" TagType="Consumed" DataType="DINT" Radix="Decimal" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Tag Name="consumed_tag" Class="Standard" TagType="Consumed" DataType="DINT" Radix="Decimal" ExternalAccess="Read/Write" OpcUaAccess="None">
 <ConsumeInfo Producer="AnotherPLC" RemoteTag="fake_other_tag" RemoteInstance="0" RPI="20" Unicast="true"/>
 <Data Format="L5K">
 <![CDATA[0]]>
@@ -4057,7 +4275,15 @@ Step 7000: Robot program stopped. Waiting for start command]]>
 <DataValue DataType="DINT" Radix="Decimal" Value="0"/>
 </Data>
 </Tag>
-<Tag Name="message_data" TagType="Base" DataType="DINT" Radix="Decimal" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Tag Name="fromNormal_reset" Class="Safety" TagType="Base" DataType="BOOL" Radix="Decimal" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[0]]>
+</Data>
+<Data Format="Decorated">
+<DataValue DataType="BOOL" Radix="Decimal" Value="0"/>
+</Data>
+</Tag>
+<Tag Name="message_data" Class="Standard" TagType="Base" DataType="DINT" Radix="Decimal" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
 <Data Format="L5K">
 <![CDATA[0]]>
 </Data>
@@ -4065,7 +4291,7 @@ Step 7000: Robot program stopped. Waiting for start command]]>
 <DataValue DataType="DINT" Radix="Decimal" Value="0"/>
 </Data>
 </Tag>
-<Tag Name="message_tag" TagType="Base" DataType="MESSAGE" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Tag Name="message_tag" Class="Standard" TagType="Base" DataType="MESSAGE" ExternalAccess="Read/Write" OpcUaAccess="None">
 <Description>
 <![CDATA[write to AnotherPLC]]>
 </Description>
@@ -4073,7 +4299,7 @@ Step 7000: Robot program stopped. Waiting for start command]]>
 <MessageParameters MessageType="CIP Data Table Write" RemoteElement="fake_tag" RequestedLength="1" ConnectedFlag="1" ConnectionPath="AnotherPLC" CommTypeCode="0" LocalIndex="0" LocalElement="message_data" CacheConnections="TRUE"/>
 </Data>
 </Tag>
-<Tag Name="produced_tag" TagType="Produced" DataType="DINT" Radix="Decimal" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Tag Name="produced_tag" Class="Standard" TagType="Produced" DataType="DINT" Radix="Decimal" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
 <ProduceInfo ProduceCount="1" ProgrammaticallySendEventTrigger="false" UnicastPermitted="true" MinimumRPI="0.200" MaximumRPI="536870.900" DefaultRPI="0"/>
 <Data Format="L5K">
 <![CDATA[0]]>
@@ -4082,9 +4308,46 @@ Step 7000: Robot program stopped. Waiting for start command]]>
 <DataValue DataType="DINT" Radix="Decimal" Value="0"/>
 </Data>
 </Tag>
+<Tag Name="ServosMotionGroup" Class="Standard" TagType="Base" DataType="MOTION_GROUP" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="MotionGroup">
+<MotionGroupParameters CoarseUpdatePeriod="2000" PhaseShift="0" GeneralFaultType="Non Major Fault" AutoTagUpdate="Enabled" Alternate1UpdateMultiplier="1" Alternate2UpdateMultiplier="1"/>
+</Data>
+</Tag>
+<Tag Name="testServo" Class="Standard" TagType="Base" DataType="AXIS_CIP_DRIVE" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="Axis">
+<AxisParameters MotionGroup="ServosMotionGroup" MotionModule="Test_Servo_Drive:Ch1" ApplicationCatalogNumberInstance="0" ApplicationCatalogNumberVersion="0" AxisConfiguration="Position Loop" FeedbackConfiguration="Motor Feedback" MotorDataSource="Database" MotorCatalogNumber="VPL-B0631T-C" Feedback1Type="Hiperface DSL" MotorType="Rotary Permanent Magnet" MotionScalingConfiguration="Control Scaling"
+ ConversionConstant="10000.0" OutputCamExecutionTargets="0" PositionUnits="mm" AverageVelocityTimebase="0.25" PositionUnwind="1000000" HomeMode="Active" HomeDirection="Bi-directional Reverse" HomeSequence="Switch" HomeConfigurationBits="16#0000_0000" HomePosition="0.0" HomeOffset="0.0"
+ HomeSpeed="10.0" HomeReturnSpeed="1.0" MaximumSpeed="226.66667" MaximumAcceleration="29371.322" MaximumDeceleration="29371.322" ProgrammedStopMode="Fast Stop" MasterInputConfigurationBits="1" MasterPositionFilterBandwidth="0.1" VelocityFeedforwardGain="100.0" AccelerationFeedforwardGain="0.0" PositionErrorTolerance="4.5829887"
+ PositionLockTolerance="0.02" VelocityOffset="0.0" TorqueOffset="0.0" FrictionCompensationWindow="0.0" BacklashReversalOffset="0.0" TuningTravelLimit="0.0" TuningSpeed="0.0" TuningTorque="100.0" DampingFactor="1.0" DriveModelTimeConstant="0.000537069" PositionServoBandwidth="18.52124"
+ VelocityServoBandwidth="74.08496" VelocityDroop="0.0" VelocityLimitPositive="300.0" VelocityLimitNegative="-300.0" VelocityThreshold="239.99998" VelocityStandstillWindow="2.6666665" TorqueLimitPositive="294.11765" TorqueLimitNegative="-294.11765" TorqueThreshold="264.70587" StoppingTorque="294.11765" StoppingTimeLimit="1.0"
+ LoadInertiaRatio="0.0" RegistrationInputs="2" MaximumAccelerationJerk="3805917.2" MaximumDecelerationJerk="3805917.2" DynamicsConfigurationBits="7" AccelerationLimit="83918.06" DecelerationLimit="83918.06" PositionIntegratorBandwidth="0.0" PositionErrorToleranceTime="0.0" PositionIntegratorControl="0" VelocityErrorTolerance="180.27916"
+ VelocityErrorToleranceTime="0.01" VelocityIntegratorControl="0" VelocityLockTolerance="2.6666665" SystemInertia="0.014019278" TorqueLowPassFilterBandwidth="370.4248" TorqueNotchFilterFrequency="0.0" TorqueRateLimit="1000000.0" OvertorqueLimit="200.0" OvertorqueLimitTime="0.0" UndertorqueLimit="10.0" UndertorqueLimitTime="0.0"
+ FluxCurrentReference="0.0" CurrentError="0.0" TorqueLoopBandwidth="1000.0" StoppingAction="Current Decel Disable" MechanicalBrakeControl="Automatic" MechanicalBrakeReleaseDelay="0.0" MechanicalBrakeEngageDelay="0.0" InverterCapacity="0.0" ConverterCapacity="0.0" InverterOverloadAction="None" MotorOverloadAction="None"
+ CIPAxisExceptionAction="Unsupported Unsupported Unsupported Disable Disable Disable Unsupported Disable Disable Disable Disable Disable Unsupported Disable Disable Disable Disable Unsupported Disable Unsupported Disable Disable Unsupported Disable Unsupported Disable Unsupported Unsupported Unsupported Disable Disable Disable Unsupported Disable Disable Disable Unsupported Unsupported Unsupported Disable Disable Unsupported Unsupported Unsupported Unsupported Disable Unsupported Disable Unsupported Disable Disable Disable Unsupported Unsupported Disable Disable Disable Disable Unsupported Unsupported Unsupported Unsupported Disable Unsupported" CIPAxisExceptionActionRA="Unsupported Unsupported Disable Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Disable Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Disable Disable Unsupported Disable Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported" MotorOverspeedUserLimit="120.0" MotorThermalOverloadUserLimit="110.0" InverterThermalOverloadUserLimit="110.0" PositionLeadLagFilterBandwidth="0.0" PositionLeadLagFilterGain="0.0" VelocityNegativeFeedforwardGain="0.0" BacklashCompensationWindow="0.0" TorqueLeadLagFilterBandwidth="0.0" TorqueLeadLagFilterGain="1.0"
+ MotorDeviceCode="16#0000_094f" MotorUnit="Rev" MotorPolarity="Normal" MotorRatedVoltage="480.0" MotorRatedContinuousCurrent="0.85" MotorRatedPeakCurrent="2.97" MotorRatedOutputPower="0.31" MotorOverloadLimit="100.0" MotorIntegralThermalSwitch="false" MotorMaxWindingTemperature="155.0" MotorWindingToAmbientCapacitance="1336.0"
+ MotorWindingToAmbientResistance="0.52" PMMotorResistance="29.01" PMMotorInductance="0.0397" RotaryMotorPoles="8" RotaryMotorInertia="0.000011" RotaryMotorRatedSpeed="8000.0" RotaryMotorMaxSpeed="8000.0" PMMotorRatedTorque="0.46" PMMotorTorqueConstant="0.58" PMMotorRotaryVoltageConstant="35.05671" Feedback1Unit="Rev"
+ Feedback1StartupMethod="Absolute" Feedback1CycleResolution="262144" Feedback1CycleInterpolation="1" Feedback1Turns="1" Feedback1VelocityFilterBandwidth="5092.9575" Feedback1AccelFilterBandwidth="0.0" PMMotorFluxSaturation="95.0 88.0 83.0 80.0 70.0 65.0 60.0 55.0" Feedback1VelocityFilterTaps="1" Feedback1AccelFilterTaps="1" ScalingSource="From Calculator" LoadType="Linear Actuator"
+ ActuatorType="Screw" TravelMode="Limited" PositionScalingNumerator="1.0" PositionScalingDenominator="1.0" PositionUnwindNumerator="1.0" PositionUnwindDenominator="1.0" TravelRange="1000.0" MotionResolution="10000" MotionPolarity="Normal" MotorTestResistance="0.0" MotorTestInductance="0.0"
+ TuneFriction="0.0" TuneLoadOffset="0.0" TotalInertia="0.000011" TuningSelect="Total Inertia" TuningDirection="Uni-directional Forward" ApplicationType="Basic" LoopResponse="Medium" FeedbackCommutationAligned="Motor Offset" FrictionCompensationSliding="0.0" FrictionCompensationStatic="0.0" FrictionCompensationViscous="0.0"
+ PositionLoopBandwidth="18.52124" VelocityLoopBandwidth="74.08496" VelocityIntegratorBandwidth="0.0" FeedbackDataLossUserLimit="4" MotionExceptionAction="Unsupported Disable Disable Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported Unsupported" SoftTravelLimitChecking="true" LoadRatio="0.0" TuneInertiaMass="0.0" SoftTravelLimitPositive="990.0" SoftTravelLimitNegative="-5.0" GainTuningConfigurationBits="16#0143"
+ CommutationOffset="0.0" SystemBandwidth="0.0" VelocityLowPassFilterBandwidth="0.0" TransmissionRatioInput="5" TransmissionRatioOutput="1" ActuatorLead="10.0" ActuatorLeadUnit="Millimeter/Rev" ActuatorDiameter="1.0" ActuatorDiameterUnit="Millimeter" SystemAccelerationBase="7133.035" DriveModelTimeConstantBase="0.000505819"
+ DriveRatedPeakCurrent="2.5" HookupTestDistance="1.0" HookupTestFeedbackChannel="Feedback 1" LoadCoupling="Rigid" SystemDamping="1.0" CurrentVectorLimit="294.11765" LoadObserverConfiguration="Disabled" LoadObserverBandwidth="0.0" LoadObserverIntegratorBandwidth="0.0" LoadObserverFeedbackGain="0.5" AxisID="1598518072"
+ InterpolatedPositionConfiguration="16#0000_0002" AxisUpdateSchedule="Base" ProvingConfiguration="Disabled" TorqueProveCurrent="0.0" BrakeTestTorque="0.0" BrakeSlipTolerance="0.0" ZeroSpeed="1.0" ZeroSpeedTime="0.0" AdaptiveTuningConfiguration="Disabled" TorqueNotchFilterHighFrequencyLimit="4000.0" TorqueNotchFilterLowFrequencyLimit="296.33984"
+ TorqueNotchFilterTuningThreshold="5.0" CoastingTimeLimit="0.0" BusOvervoltageOperationalLimit="730.0" CurrentLoopBandwidthScalingFactor="1.0" CurrentLoopBandwidth="1000.0" DriveRatedVoltage="460.0" MaxOutputFrequency="600.0" MotorTestDataValid="False" HookupTestSpeed="0.0" TestModeConfiguration="Controller Loop Back" TestModeEnable="Disabled"
+/>
+</Data>
+</Tag>
+<Tag Name="toSafety_reset" Class="Standard" TagType="Base" DataType="BOOL" Radix="Decimal" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[0]]>
+</Data>
+<Data Format="Decorated">
+<DataValue DataType="BOOL" Radix="Decimal" Value="0"/>
+</Data>
+</Tag>
 </Tags>
 <Programs>
-<Program Name="AnotherProgram" TestEdits="false" MainRoutineName="Main" Disabled="false" UseAsFolder="false">
+<Program Name="AnotherProgram" TestEdits="false" MainRoutineName="Main" Disabled="false" Class="Standard" UseAsFolder="false">
 <Description>
 <![CDATA[A different program example]]>
 </Description>
@@ -4245,7 +4508,7 @@ Step 7000: Robot program stopped. Waiting for start command]]>
 </Routine>
 </Routines>
 </Program>
-<Program Name="EventProgram" TestEdits="false" MainRoutineName="Main" Disabled="false" UseAsFolder="false">
+<Program Name="EventProgram" TestEdits="false" MainRoutineName="Main" Disabled="false" Class="Standard" UseAsFolder="false">
 <Tags>
 <Tag Name="count" TagType="Base" DataType="LINT" Radix="Decimal" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
 <Data Format="L5K">
@@ -4271,7 +4534,7 @@ Step 7000: Robot program stopped. Waiting for start command]]>
 </Routine>
 </Routines>
 </Program>
-<Program Name="MainProgram" TestEdits="false" MainRoutineName="MainRoutine" Disabled="false" UseAsFolder="false">
+<Program Name="MainProgram" TestEdits="false" MainRoutineName="MainRoutine" Disabled="false" Class="Standard" UseAsFolder="false">
 <Tags>
 <Tag Name="an_alias_tag" TagType="Alias" Radix="Decimal" AliasFor="Local:1:I.Pt01.Data" ExternalAccess="Read/Write" OpcUaAccess="None" DataExchangeId="{E29C6BF6-707C-4B80-B3CD-9BA6B39A8A9D}"/>
 <Tag Name="an_input_param" TagType="Base" DataType="DINT" Radix="Decimal" Usage="Input" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
@@ -4689,6 +4952,48 @@ Step 7000: Robot program stopped. Waiting for start command]]>
 <DataValue DataType="LTIME" Radix="LTime (ns)" Value="LT#0ns"/>
 </Data>
 </Tag>
+<Tag Name="opcua_bool" TagType="Base" DataType="BOOL" Radix="Decimal" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="Read Only" ExternalLogging="false">
+<Description>
+<![CDATA[a read-only boolean exposed to OPC UA]]>
+</Description>
+<EngineeringUnits>
+<EngineeringUnit>
+<![CDATA[Furlong]]>
+</EngineeringUnit>
+</EngineeringUnits>
+<State0s>
+<State0>
+<![CDATA[Off]]>
+</State0>
+</State0s>
+<State1s>
+<State1>
+<![CDATA[On]]>
+</State1>
+</State1s>
+<Data Format="L5K">
+<![CDATA[0]]>
+</Data>
+<Data Format="Decorated">
+<DataValue DataType="BOOL" Radix="Decimal" Value="0"/>
+</Data>
+</Tag>
+<Tag Name="opcua_dint" TagType="Base" DataType="DINT" Radix="Decimal" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="Read/Write" Max="200" Min="-400" ExternalLogging="true">
+<Description>
+<![CDATA[a dint exposed to OPC UA]]>
+</Description>
+<EngineeringUnits>
+<EngineeringUnit>
+<![CDATA[in]]>
+</EngineeringUnit>
+</EngineeringUnits>
+<Data Format="L5K">
+<![CDATA[0]]>
+</Data>
+<Data Format="Decorated">
+<DataValue DataType="DINT" Radix="Decimal" Value="0"/>
+</Data>
+</Tag>
 <Tag Name="sequence" TagType="Base" DataType="SeqCtrl" Usage="Public" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
 <Data Format="L5K">
 <![CDATA[[33558535,7000,7000,0,0,5000,0,0,64,7000,128,[0,2000,0]]]]>
@@ -4920,7 +5225,7 @@ Step transition handled by SeqCtrl AOI]]>
 </Routine>
 </Routines>
 </Program>
-<Program Name="PeriodicProgram" TestEdits="false" MainRoutineName="main" Disabled="false" UseAsFolder="false">
+<Program Name="PeriodicProgram" TestEdits="false" MainRoutineName="main" Disabled="false" Class="Standard" UseAsFolder="false">
 <Tags>
 <Tag Name="test_bool" TagType="Base" DataType="BOOL" Radix="Decimal" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
 <Data Format="L5K">
@@ -4967,7 +5272,7 @@ Step transition handled by SeqCtrl AOI]]>
 </Routine>
 </Routines>
 </Program>
-<Program Name="Robot" TestEdits="false" MainRoutineName="Main" Disabled="false" UseAsFolder="false">
+<Program Name="Robot" TestEdits="false" MainRoutineName="Main" Disabled="false" Class="Standard" UseAsFolder="false">
 <Tags>
 <Tag Name="ShopRobot" TagType="Base" DataType="GenericRobotIO" Usage="Public" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
 <Data Format="L5K">
@@ -5515,7 +5820,146 @@ Last (most recent) Alarm]]>
 </Routine>
 </Routines>
 </Program>
-<Program Name="Unscheduled" TestEdits="false" MainRoutineName="Main" Disabled="false" UseAsFolder="false">
+<Program Name="SafetyProgram" TestEdits="false" MainRoutineName="Main" Disabled="false" Class="Safety" UseAsFolder="false">
+<Description>
+<![CDATA[Safety tag and routine parsing test. Not a real safety program.]]>
+</Description>
+<Tags>
+<Tag Name="door_dcs" TagType="Base" DataType="DCI_STOP" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]]]>
+</Data>
+<Data Format="Decorated">
+<Structure DataType="DCI_STOP">
+<DataValueMember Name="EnableIn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ChannelA" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ChannelB" DataType="BOOL" Value="0"/>
+<DataValueMember Name="InputStatus" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Reset" DataType="BOOL" Value="0"/>
+<DataValueMember Name="RestartType" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ColdStartType" DataType="BOOL" Value="0"/>
+<DataValueMember Name="SafetyFunction" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="InputType" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="DiscrepancyTime" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="EnableOut" DataType="BOOL" Value="0"/>
+<DataValueMember Name="O1" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FP" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultCode" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="DiagnosticCode" DataType="DINT" Radix="Decimal" Value="0"/>
+</Structure>
+</Data>
+</Tag>
+<Tag Name="estop_dcs" TagType="Base" DataType="DCI_STOP" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]]]>
+</Data>
+<Data Format="Decorated">
+<Structure DataType="DCI_STOP">
+<DataValueMember Name="EnableIn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ChannelA" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ChannelB" DataType="BOOL" Value="0"/>
+<DataValueMember Name="InputStatus" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Reset" DataType="BOOL" Value="0"/>
+<DataValueMember Name="RestartType" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ColdStartType" DataType="BOOL" Value="0"/>
+<DataValueMember Name="SafetyFunction" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="InputType" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="DiscrepancyTime" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="EnableOut" DataType="BOOL" Value="0"/>
+<DataValueMember Name="O1" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FP" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultCode" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="DiagnosticCode" DataType="DINT" Radix="Decimal" Value="0"/>
+</Structure>
+</Data>
+</Tag>
+<Tag Name="input_ok" TagType="Base" DataType="BOOL" Radix="Decimal" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[0]]>
+</Data>
+<Data Format="Decorated">
+<DataValue DataType="BOOL" Radix="Decimal" Value="0"/>
+</Data>
+</Tag>
+<Tag Name="reset_signal" TagType="Alias" Radix="Decimal" AliasFor="fromNormal_reset" ExternalAccess="Read/Write" OpcUaAccess="None"/>
+<Tag Name="safe_output" TagType="Base" DataType="BOOL" Radix="Decimal" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Description>
+<![CDATA[door and estop ok]]>
+</Description>
+<Data Format="L5K">
+<![CDATA[0]]>
+</Data>
+<Data Format="Decorated">
+<DataValue DataType="BOOL" Radix="Decimal" Value="0"/>
+</Data>
+</Tag>
+</Tags>
+<Routines>
+<Routine Name="Inputs" Type="RLL">
+<RLLContent>
+<Rung Number="0" Type="N">
+<Comment>
+<![CDATA[Input Card Status]]>
+</Comment>
+<Text>
+<![CDATA[XIC(Local:2:I.RunMode)XIO(Local:2:I.ConnectionFaulted)OTE(input_ok);]]>
+</Text>
+</Rung>
+<Rung Number="1" Type="N">
+<Comment>
+<![CDATA[Monitor Estop]]>
+</Comment>
+<Text>
+<![CDATA[DCS(estop_dcs,EMERGENCY STOP,EQUIVALENT - ACTIVE HIGH,250,AUTOMATIC,AUTOMATIC,Local:2:I.Pt00.Data,Local:2:I.Pt01.Data,input_ok,reset_signal);]]>
+</Text>
+</Rung>
+<Rung Number="2" Type="N">
+<Comment>
+<![CDATA[Monitor Door]]>
+</Comment>
+<Text>
+<![CDATA[DCS(door_dcs,SAFETY GATE,EQUIVALENT - ACTIVE HIGH,250,AUTOMATIC,AUTOMATIC,Local:2:I.Pt02.Data,Local:2:I.Pt03.Data,input_ok,reset_signal);]]>
+</Text>
+</Rung>
+</RLLContent>
+</Routine>
+<Routine Name="Main" Type="RLL">
+<RLLContent>
+<Rung Number="0" Type="N">
+<Comment>
+<![CDATA[This safety routine is for py_l5x testing ONLY. This is NOT a real, tested safety routine.]]>
+</Comment>
+<Text>
+<![CDATA[JSR(Inputs,0);]]>
+</Text>
+</Rung>
+<Rung Number="1" Type="N">
+<Text>
+<![CDATA[JSR(Outputs,0);]]>
+</Text>
+</Rung>
+</RLLContent>
+</Routine>
+<Routine Name="Outputs" Type="RLL">
+<RLLContent>
+<Rung Number="0" Type="N">
+<Comment>
+<![CDATA[Estop and Door output]]>
+</Comment>
+<Text>
+<![CDATA[[XIC(reset_signal) ,XIC(safe_output) ]XIC(estop_dcs.O1)XIC(door_dcs.O1)OTE(safe_output);]]>
+</Text>
+</Rung>
+<Rung Number="1" Type="N">
+<Text>
+<![CDATA[XIC(safe_output)OTE(Test_Servo_Drive:SO.SafeTorqueOff);]]>
+</Text>
+</Rung>
+</RLLContent>
+</Routine>
+</Routines>
+</Program>
+<Program Name="Unscheduled" TestEdits="false" MainRoutineName="Main" Disabled="false" Class="Standard" UseAsFolder="false">
 <Description>
 <![CDATA[unscheduled program example]]>
 </Description>
@@ -5546,7 +5990,7 @@ Last (most recent) Alarm]]>
 </Program>
 </Programs>
 <Tasks>
-<Task Name="EventTask" Type="EVENT" Rate="10" Priority="15" Watchdog="500" DisableUpdateOutputs="true" InhibitTask="true">
+<Task Name="EventTask" Type="EVENT" Rate="10" Priority="15" Watchdog="500" DisableUpdateOutputs="true" InhibitTask="true" Class="Standard">
 <Description>
 <![CDATA[An example of an event taks]]>
 </Description>
@@ -5555,14 +5999,14 @@ Last (most recent) Alarm]]>
 <ScheduledProgram Name="EventProgram"/>
 </ScheduledPrograms>
 </Task>
-<Task Name="MainTask" Type="CONTINUOUS" Priority="10" Watchdog="500" DisableUpdateOutputs="false" InhibitTask="false">
+<Task Name="MainTask" Type="CONTINUOUS" Priority="10" Watchdog="500" DisableUpdateOutputs="false" InhibitTask="false" Class="Standard">
 <ScheduledPrograms>
 <ScheduledProgram Name="MainProgram"/>
 <ScheduledProgram Name="AnotherProgram"/>
 <ScheduledProgram Name="Robot"/>
 </ScheduledPrograms>
 </Task>
-<Task Name="PeriodicTask" Type="PERIODIC" Rate="10" Priority="10" Watchdog="500" DisableUpdateOutputs="false" InhibitTask="false">
+<Task Name="PeriodicTask" Type="PERIODIC" Rate="10" Priority="10" Watchdog="500" DisableUpdateOutputs="false" InhibitTask="false" Class="Standard">
 <Description>
 <![CDATA[Periodic type task with a 10ms rate]]>
 </Description>
@@ -5570,16 +6014,21 @@ Last (most recent) Alarm]]>
 <ScheduledProgram Name="PeriodicProgram"/>
 </ScheduledPrograms>
 </Task>
+<Task Name="SafetyTask" Type="PERIODIC" Rate="20" Priority="10" Watchdog="20" DisableUpdateOutputs="false" InhibitTask="false" Class="Safety">
+<ScheduledPrograms>
+<ScheduledProgram Name="SafetyProgram"/>
+</ScheduledPrograms>
+</Task>
 </Tasks>
 <CST MasterID="0"/>
 <WallClockTime LocalTimeAdjustment="0" TimeZone="0"/>
 <Trends/>
 <DataLogs/>
-<TimeSynchronize Priority1="128" Priority2="128" PTPEnable="false"/>
+<TimeSynchronize Priority1="128" Priority2="128" PTPEnable="true"/>
 <EthernetPorts>
 <EthernetPort Port="1" Label="A1" PortEnabled="true"/>
 <EthernetPort Port="2" Label="A2" PortEnabled="true"/>
 </EthernetPorts>
-<OpcUaInfo EnabledPorts=""/>
+<OpcUaInfo EnabledPorts="2"/>
 </Controller>
 </RSLogix5000Content>

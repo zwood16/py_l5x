@@ -60,7 +60,7 @@ class TestProjectStructure:
     def test_controller(self, project: Project) -> None:
         """project.controller returns ControllerInfo."""
         assert project.controller.name == "Example_PLC"
-        assert project.controller.processor_type == "5069-L306ERM"
+        assert project.controller.processor_type == "5069-L310ERMS3"
 
     def test_root_element(self, project: Project) -> None:
         """project.root is the RSLogix5000Content element."""

@@ -60,12 +60,14 @@ class TestModulesCollection:
 
     def test_contains_expected_modules(self, modules: ModulesCollection) -> None:
         """Fixture exposes expected module names."""
-        assert len(modules) == 5
+        assert len(modules) == 7
         assert "Local" in modules
         assert "Test_Input_Module" in modules
+        assert "Test_Safety_Input" in modules
         assert "ShopRobot" in modules
         assert "AnotherPLC" in modules
         assert "ValveBank" in modules
+        assert "Test_Servo_Drive" in modules
 
     def test_getitem_returns_module(self, modules: ModulesCollection) -> None:
         """Indexing returns a Module wrapper."""
@@ -83,10 +85,10 @@ class TestLocalModule:
     def test_identity(self, modules: ModulesCollection) -> None:
         """Core identity properties map from XML attributes."""
         local = modules["Local"]
-        assert local.catalog_number == "5069-L306ERM"
+        assert local.catalog_number == "5069-L310ERMS3"
         assert local.vendor == "1"
         assert local.product_type == "14"
-        assert local.product_code == "189"
+        assert local.product_code == "244"
         assert local.major == "37"
         assert local.minor == "11"
         assert local.inhibited is False
@@ -109,10 +111,15 @@ class TestLocalModule:
         assert port_3.address == ""
         assert port_3.bus_size is None
 
-    def test_no_communications(self, modules: ModulesCollection) -> None:
-        """Local module has no Communications block."""
+    def test_communications_with_no_connections(
+        self, modules: ModulesCollection
+    ) -> None:
+        """Local module's Communications block has no connections configured."""
         local = modules["Local"]
-        assert local.communications is None
+        comms = local.communications
+        assert isinstance(comms, Communications)
+        assert comms.comm_method == ""
+        assert len(comms.connections) == 0
 
 
 class TestTestInputModule:

@@ -55,7 +55,7 @@ class TestControllerIdentity:
 
     def test_processor_type(self, controller: ControllerInfo) -> None:
         """Processor type returns the catalog number."""
-        assert controller.processor_type == "5069-L306ERM"
+        assert controller.processor_type == "5069-L310ERMS3"
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +151,7 @@ class TestControllerAttributes:
         attrs = controller.attributes
         assert attrs["Name"] == "Example_PLC"
         assert attrs["Use"] == "Target"
-        assert attrs["ProcessorType"] == "5069-L306ERM"
+        assert attrs["ProcessorType"] == "5069-L310ERMS3"
 
     def test_attributes_is_dict(self, controller: ControllerInfo) -> None:
         """Attributes returns a dictionary."""
@@ -179,7 +179,7 @@ class TestControllerRepr:
 
     def test_repr_contains_processor_type(self, controller: ControllerInfo) -> None:
         """Repr string contains the processor type."""
-        assert "5069-L306ERM" in repr(controller)
+        assert "5069-L310ERMS3" in repr(controller)
 
     def test_repr_contains_firmware(self, controller: ControllerInfo) -> None:
         """Repr string contains the firmware version."""

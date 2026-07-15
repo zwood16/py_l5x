@@ -55,16 +55,17 @@ class TestTasksCollection:
     """Tests for TasksCollection mapping behavior."""
 
     def test_collection_has_three_tasks(self, tasks: TasksCollection) -> None:
-        """Tasks collection contains the three example tasks."""
-        assert len(tasks) == 3
+        """Tasks collection contains the four example tasks."""
+        assert len(tasks) == 4
         assert "MainTask" in tasks
         assert "EventTask" in tasks
         assert "PeriodicTask" in tasks
+        assert "SafetyTask" in tasks
 
     def test_iteration_order(self, tasks: TasksCollection) -> None:
         """list(tasks) preserves XML order."""
         names = list(tasks)
-        assert names == ["EventTask", "MainTask", "PeriodicTask"]
+        assert names == ["EventTask", "MainTask", "PeriodicTask", "SafetyTask"]
 
     def test_getitem_returns_task(self, tasks: TasksCollection) -> None:
         """tasks["MainTask"] returns a Task instance."""

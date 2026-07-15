@@ -297,7 +297,7 @@ class TestProjectRepr:
         assert "Full project" in repr(full_project)
 
     def test_full_project_repr_contains_processor(self, full_project: Project) -> None:
-        assert "5069-L306ERM" in repr(full_project)
+        assert "5069-L310ERMS3" in repr(full_project)
 
     def test_rung_repr_contains_rung_number(self, rung_project: Project) -> None:
         assert "number=2" in repr(rung_project)
