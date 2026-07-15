@@ -314,6 +314,50 @@ for i in range(3):
 
 `TagNode.kind` is one of `"scalar"`, `"structure"`, or `"array"`. Metadata properties (`description`, `engineering_unit`, `min`, `max`, `state0`, `state1`, `external_logging`) are available on every node and combine per-tag operand overrides with the member's type-definition defaults. Metadata tags that are not present will be set to `None`.
 
+### Specialty tag data types (`MESSAGE`, `MOTION_GROUP`, `AXIS_CIP_DRIVE`)
+
+A few tag data types don't carry a normal `Decorated`/`String` value tree — Logix instead exports a single configuration block. `py_l5x` exposes each of these through a dedicated typed wrapper (in `py_l5x.parsers.specialty_tags`) rather than through `tag.data`/`tag.value`:
+
+```python
+# MESSAGE tags — configures a CIP message instruction (e.g. MSG to another controller)
+msg_tag = project.tags["message_tag"]
+params = msg_tag.message_parameters   # MessageParameters | None
+print(params.message_type)       # "CIP Data Table Write"
+print(params.connection_path)    # "AnotherPLC"
+print(params.local_element)      # "message_data"
+print(params.connected)          # True
+print(params.cache_connections)  # True
+
+# MOTION_GROUP tags — a group of coordinated CIP Motion servo axes
+mg_tag = project.tags["ServosMotionGroup"]
+group = mg_tag.motion_group_parameters   # MotionGroupParameters | None
+print(group.coarse_update_period)  # 2000 (µs)
+print(group.auto_tag_update)       # "Enabled"
+
+# AXIS_CIP_DRIVE tags — a single EtherNet/IP servo axis
+axis_tag = project.tags["testServo"]
+axis = axis_tag.axis_parameters   # AxisParameters | None
+print(axis.motion_group)              # "ServosMotionGroup"
+print(axis.motor_catalog_number)      # "VPL-B0631T-C"
+print(axis.conversion_constant)       # 10000.0
+print(axis.position_units)            # "mm"
+print(axis.maximum_speed)             # 226.66667
+print(axis.actuator_type)             # "Screw"
+print(axis.motor_rated_output_power)  # 0.31
+print(axis)  # multi-line summary, similar to `print(project.controller)`
+```
+
+Each wrapper exposes the most commonly used attributes as typed properties (with docstrings), plus `extra_attributes`/`attributes` fallbacks for anything not explicitly modeled — `AxisParameters` in particular carries well over a hundred drive/motor/tuning attributes, only the most useful of which get dedicated properties. `tag.data`/`tag.value` are `None` for these tag types since there's no value tree to walk.
+
+The legacy `L5K` mirror some of these `<Data>` sections also export is intentionally ignored throughout — it's a redundant raw-text encoding of the same data already present in the specialty parameter element.
+
+For any tag data type `py_l5x` doesn't yet recognise by name, `tag.special_data_format` reports the `<Data Format="...">` value and `tag.special_data_attributes` returns that element's raw attributes as a fallback:
+
+```python
+tag.special_data_format       # e.g. "Message", "MotionGroup", "Axis", or None for ordinary tags
+tag.special_data_attributes   # dict of the <Data> element's own attributes, or None
+```
+
 ## Programs, routines, and rungs
 
 Programs are the main organizational units for logic in the controller. Each program contains local tags and one or more routines. Routines are where the actual logic lives — either in **ladder rung** format (RLL, relay ladder logic) or **structured text** (ST). A rung is a single line of ladder logic with contacts, coils, and logic blocks. Programs and routines can be disabled independently.
@@ -543,7 +587,6 @@ uv run ruff check --fix .   # auto-fix where possible
   - \<Trends\>
   - \<QuickWatchList\>
   - \<CommPorts\>
-  - \<CST\>
   - \<WallClockTime\>
     > Note that the top level Project exposes the `Project.root` XML element so you can manually find any extra info you need using Python's build in [XML Element Tree](https://docs.python.org/3/library/xml.etree.elementtree.html).
 - Some attributes may be missing or hard to find.
@@ -553,8 +596,8 @@ uv run ruff check --fix .   # auto-fix where possible
 
 ## Road Map
 
-- [ ] Test more special tag types (CIP_AXIS, MESSAGE, etc.)
-- [ ] Test safety features (safety network numbers, safety routines, tag mapping to/from safety routines)
+- [x] Test more special tag types (CIP_AXIS, MESSAGE, etc.)
+- [x] Test safety features (safety network numbers, safety routines, tag mapping to/from safety routines)
 - [ ] Implement a write feature to allow for modifying an exported L5X file
 - [ ] Implement a generate component template feature
   - The intent is to create a blank component L5X file that you can then modify external to Studio 5000. This could be useful for an MCP tool or other external editing tools since Studio 5000's menu heavy UI can often be tedious.
