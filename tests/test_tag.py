@@ -153,21 +153,25 @@ class TestRootTagMetadata:
     """Tests for metadata set directly on the ``<Tag>`` element itself."""
 
     def test_engineering_unit(self, main_program_tags: TagsCollection) -> None:
-        """a_real's tag-level EngineeringUnits (no Operand) is exposed."""
-        assert main_program_tags["a_real"].engineering_unit == "mm"
+        """a_real_with_properties's tag-level EngineeringUnits is exposed."""
+        assert main_program_tags["a_real_with_properties"].engineering_unit == "mm"
 
     def test_engineering_unit_absent(self, main_program_tags: TagsCollection) -> None:
         """a_dint has no EngineeringUnits container at all."""
         assert main_program_tags["a_dint"].engineering_unit == ""
 
     def test_state0_and_state1(self, main_program_tags: TagsCollection) -> None:
-        """a_bool's tag-level State0s/State1s (no Operand) are exposed."""
-        assert main_program_tags["a_bool"].state0 == "off"
-        assert main_program_tags["a_bool"].state1 == "on"
+        """a_bool_with_properties's tag-level State0s/State1s are exposed."""
+        assert main_program_tags["a_bool_with_properties"].state0 == "Off"
+        assert main_program_tags["a_bool_with_properties"].state1 == "On"
 
     def test_external_logging(self, main_program_tags: TagsCollection) -> None:
-        """a_bool's tag-level ExternalLoggings (no Operand) is exposed."""
-        assert main_program_tags["a_bool"].external_logging is True
+        """a_bool_with_properties's tag-level ExternalLogging is exposed."""
+        assert main_program_tags["a_bool_with_properties"].external_logging is True
+
+    def test_external_logging_false(self, main_program_tags: TagsCollection) -> None:
+        """a_real_with_properties's tag-level ExternalLogging is exposed."""
+        assert main_program_tags["a_real_with_properties"].external_logging is False
 
     def test_external_logging_absent(self, main_program_tags: TagsCollection) -> None:
         """a_dint has no ExternalLoggings container at all."""

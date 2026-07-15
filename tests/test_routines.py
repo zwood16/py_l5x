@@ -118,3 +118,36 @@ class TestRoutineParsing:
         main.print_text()
         out = capsys.readouterr().out
         assert out == "0 :\n    JSR(SequenceRoutine,0);\n"
+
+    def test_st_comments_extract_line_and_block_comments(
+        self, programs: ProgramsCollection
+    ) -> None:
+        """ST comments include both // lines and (* ... *) blocks."""
+        st = programs["AnotherProgram"].routines["StructuredTextRoutine"]
+
+        assert (
+            "Example of a structured text program. Loops through an inc a number"
+            "\n\nThis is a multiline comment\n\t- Some indented text" in st.comments
+        )
+        assert "loop here" in st.comments
+        assert "multiline if" in st.comments
+        assert "some comment" in st.comments
+        assert "another comment nearby" in st.comments
+
+    def test_st_comments_ignore_markers_inside_string_literals(self) -> None:
+        """Comment markers inside single-quoted strings are not parsed."""
+        routine_el = ET.fromstring(
+            """
+            <Routine Name="InlineCommentTest" Type="ST">
+                <STContent>
+                    <Line Number="0">x := 'not // a comment'; // trailing</Line>
+                    <Line Number="1">y := 'not (* block *) either';</Line>
+                    <Line Number="2">(* block start</Line>
+                    <Line Number="3">block end *) z := 1;</Line>
+                </STContent>
+            </Routine>
+            """
+        )
+        routine = Routine(routine_el)
+
+        assert routine.comments == ["trailing", "block start\nblock end"]

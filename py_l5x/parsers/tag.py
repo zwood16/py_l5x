@@ -710,7 +710,7 @@ class Tag(BaseElement):
     @property
     def external_logging(self) -> bool | None:
         """Whether external logging is enabled, if set directly on ``<Tag>``."""
-        value = self._root_metadata("ExternalLoggings", "ExternalLogging")
+        value = self._element.get("ExternalLogging")
         return None if value is None else value == "true"
 
     # ------------------------------------------------------------------

@@ -12,6 +12,7 @@ module can be reused directly by both parser surfaces.
 
 from __future__ import annotations
 
+import re
 from xml.etree import ElementTree as ET
 
 from py_l5x.parsers.base import BaseCollection, BaseElement
@@ -23,6 +24,14 @@ _RUNG_KNOWN_XML_KEYS: frozenset[str] = frozenset({"Number", "Type", "Use"})
 """Known XML attribute names on ``<Rung>`` elements."""
 _ST_LINE_KNOWN_XML_KEYS: frozenset[str] = frozenset({"Number"})
 """Known XML attribute names on ``<Line>`` (ST) elements."""
+
+_ST_COMMENT_RE = re.compile(
+    r"'(?:[^']|'')*'"
+    r"|//(?P<line>[^\r\n]*)"
+    r"|\(\*(?P<block>.*?)\*\)",
+    re.DOTALL,
+)
+"""Matches ST string literals (skipped) or comments (captured by group)."""
 
 
 class Rung(BaseElement):
@@ -304,6 +313,43 @@ class Routine(BaseElement):
     def print_text(self) -> None:
         """Print :meth:`as_text` for quick interactive inspection."""
         print(self.as_text())
+
+    @property
+    def comments(self) -> list[str]:
+        """Return all comments in the routine as a list of strings.
+
+        For ST routines, both ``//`` single-line comments and ``(* ... *)``
+        block comments are extracted. Comment markers inside single-quoted
+        string literals are ignored.
+        """
+        if self.type_ == "RLL":
+            return [rung.comment for rung in self.rungs if rung.comment]
+        if self.type_ == "ST":
+            return self._extract_st_comments(self.st_code)
+        return []
+
+    @staticmethod
+    def _extract_st_comments(text: str) -> list[str]:
+        """Extract comments from Structured Text source.
+
+        Args:
+            text: Full ST source code.
+
+        Returns:
+            List of extracted comment bodies without comment delimiters.
+        """
+        comments: list[str] = []
+        for m in _ST_COMMENT_RE.finditer(text):
+            body = m.group("line")
+            if body is not None:
+                body = body.lstrip()
+            else:
+                body = m.group("block")
+                if body is not None:
+                    body = body.strip()
+            if body:
+                comments.append(body)
+        return comments
 
     @property
     def extra_attributes(self) -> dict[str, str]:

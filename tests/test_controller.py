@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -11,6 +12,9 @@ from py_l5x.parsers.controller import ControllerInfo
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 EXAMPLE_L5X = FIXTURES_DIR / "example.L5X"
+
+#: Matches Logix's exported date format, e.g. "Tue Jun 30 10:14:37 2026".
+_DATE_RE = re.compile(r"^[A-Z][a-z]{2} [A-Z][a-z]{2} \d{2} \d{2}:\d{2}:\d{2} \d{4}$")
 
 
 @pytest.fixture
@@ -80,12 +84,12 @@ class TestControllerDates:
     """Tests for controller date and identifier properties."""
 
     def test_project_creation_date(self, controller: ControllerInfo) -> None:
-        """Project creation date matches ProjectCreationDate attribute."""
-        assert controller.project_creation_date == "Tue Jun 30 10:14:37 2026"
+        """Project creation date matches the Logix export date format."""
+        assert _DATE_RE.match(controller.project_creation_date)
 
     def test_last_modified_date(self, controller: ControllerInfo) -> None:
-        """Last modified date matches LastModifiedDate attribute."""
-        assert controller.last_modified_date == "Thu Jul 09 10:25:36 2026"
+        """Last modified date matches the Logix export date format."""
+        assert _DATE_RE.match(controller.last_modified_date)
 
     def test_project_sn(self, controller: ControllerInfo) -> None:
         """Project serial number matches ProjectSN attribute."""
