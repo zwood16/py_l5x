@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator, Mapping
-from typing import Any, Generic, TypeVar
+from typing import Any, overload
 from xml.etree import ElementTree as ET
 
 from py_l5x.parsers.utils import CDATA_TAG
-
-T = TypeVar("T")
 
 
 class XmlAttrMixin:
@@ -77,15 +75,258 @@ class XmlAttrMixin:
         )
 
 
+class XmlField[T]:
+    """Descriptor mapping a Python attribute to a single XML attribute.
+
+    Reading returns the value converted by *parse*, or *default* when the
+    XML attribute is absent. Writing converts the value back via *unparse*
+    and sets it on the underlying element -- writing ``None`` instead
+    *removes* the XML attribute entirely, so fields that are never set
+    never serialize as empty/placeholder attributes.
+
+    Each class that declares one or more ``XmlField`` attributes gets a
+    ``_fields`` registry (name -> descriptor) attached automatically via
+    :meth:`__set_name__`, which powers :meth:`BaseElement.fields` and
+    :meth:`BaseElement.describe`.
+
+    Prefer the factory functions below (:func:`str_attr`, :func:`bool_attr`,
+    :func:`flag_attr`, :func:`int_attr`, :func:`float_attr`) over
+    constructing this directly.
+
+    Args:
+        xml_name: The XML attribute name this field reads/writes.
+        parse: Converts the raw attribute string to a Python value of type T.
+        unparse: Converts a Python value of type T back to an attribute
+            string. Defaults to ``str``.
+        default: Value returned when the XML attribute is absent.
+        doc: Docstring shown for the field (surfaces via ``help()``/IDE hover).
+    """
+
+    def __init__(
+        self,
+        xml_name: str,
+        *,
+        parse: Callable[[str], T],
+        unparse: Callable[[T], str] = str,
+        default: T | None = None,
+        doc: str = "",
+    ) -> None:
+        """Initialize the field descriptor.
+
+        Args:
+            xml_name: The XML attribute name this field reads/writes.
+            parse: Converts the raw attribute string to a Python value.
+            unparse: Converts a Python value back to an attribute string.
+            default: Value returned when the XML attribute is absent.
+            doc: Docstring shown for the field.
+        """
+        self.xml_name = xml_name
+        self.parse = parse
+        self.unparse = unparse
+        self.default = default
+        self.__doc__ = doc
+        self.name = xml_name
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        """Register this field under *name* in the owning class's registry.
+
+        Args:
+            owner: The class this descriptor was assigned on.
+            name: The attribute name it was assigned to.
+        """
+        self.name = name
+        # Copy-on-write so each class's registry only contains fields
+        # declared on it or an ancestor, without mutating the ancestor's dict.
+        registry: dict[str, XmlField[Any]] = dict(getattr(owner, "_fields", {}))
+        registry[name] = self
+        owner._fields = registry
+
+    @overload
+    def __get__(self, obj: None, objtype: type | None = None) -> XmlField[T]: ...
+    @overload
+    def __get__(self, obj: XmlAttrMixin, objtype: type | None = None) -> T: ...
+
+    def __get__(
+        self, obj: XmlAttrMixin | None, objtype: type | None = None
+    ) -> XmlField[T] | T:
+        """Read and convert the underlying XML attribute.
+
+        Args:
+            obj: The owning instance, or ``None`` when accessed on the class.
+            objtype: The owning class.
+
+        Returns:
+            This descriptor itself when accessed on the class; otherwise the
+            parsed attribute value, or :attr:`default` if the XML attribute
+            is absent.
+        """
+        if obj is None:
+            return self
+        raw = obj._element.get(self.xml_name)
+        return self.default if raw is None else self.parse(raw)
+
+    def __set__(self, obj: XmlAttrMixin, value: T | None) -> None:
+        """Convert and write *value* to the underlying XML attribute.
+
+        Args:
+            obj: The owning instance.
+            value: The new value, or ``None`` to remove the XML attribute.
+        """
+        if value is None:
+            obj._element.attrib.pop(self.xml_name, None)
+        else:
+            obj._element.set(self.xml_name, self.unparse(value))
+
+
+def str_attr(xml_name: str, *, default: str = "", doc: str = "") -> XmlField[str]:
+    """Create a plain string-valued :class:`XmlField`.
+
+    Args:
+        xml_name: The XML attribute name.
+        default: Value returned when the attribute is absent.
+        doc: Docstring for the field.
+
+    Returns:
+        An :class:`XmlField` that reads/writes the attribute as-is.
+    """
+    return XmlField(xml_name, parse=str, unparse=str, default=default, doc=doc)
+
+
+def bool_attr(
+    xml_name: str,
+    *,
+    default: bool | None = None,
+    true_str: str = "true",
+    false_str: str = "false",
+    doc: str = "",
+) -> XmlField[bool]:
+    """Create a word-valued boolean :class:`XmlField` (e.g. ``"true"``/``"false"``).
+
+    Matched case-insensitively against *true_str* on read. Use
+    ``true_str="TRUE", false_str="FALSE"`` for attributes exported in upper
+    case (e.g. ``CacheConnections``); the L5X convention is inconsistent
+    between elements, so this is not hard-coded.
+
+    Args:
+        xml_name: The XML attribute name.
+        default: Value returned when the attribute is absent.
+        true_str: The attribute string written for ``True``, and matched
+            (case-insensitively) as the "true" word on read.
+        false_str: The attribute string written for ``False``.
+        doc: Docstring for the field.
+
+    Returns:
+        An :class:`XmlField` for word-style boolean attributes.
+    """
+
+    def _parse(raw: str) -> bool:
+        return raw.strip().lower() == true_str.lower()
+
+    def _unparse(value: bool) -> str:
+        return true_str if value else false_str
+
+    return XmlField(xml_name, parse=_parse, unparse=_unparse, default=default, doc=doc)
+
+
+def flag_attr(
+    xml_name: str, *, default: bool | None = None, doc: str = ""
+) -> XmlField[bool]:
+    """Create a numeric-flag boolean :class:`XmlField` (``"1"``/``"0"``).
+
+    Args:
+        xml_name: The XML attribute name.
+        default: Value returned when the attribute is absent.
+        doc: Docstring for the field.
+
+    Returns:
+        An :class:`XmlField` for ``"1"``/``"0"``-style boolean attributes.
+    """
+
+    def _parse(raw: str) -> bool:
+        return raw.strip() == "1"
+
+    def _unparse(value: bool) -> str:
+        return "1" if value else "0"
+
+    return XmlField(xml_name, parse=_parse, unparse=_unparse, default=default, doc=doc)
+
+
+def int_attr(
+    xml_name: str, *, default: int | None = None, doc: str = ""
+) -> XmlField[int]:
+    """Create an integer-valued :class:`XmlField`.
+
+    Empty or unparsable text is treated the same as an absent attribute
+    (returns *default*), matching the historical behaviour of this parser's
+    hand-written numeric properties.
+
+    Args:
+        xml_name: The XML attribute name.
+        default: Value returned when the attribute is absent, empty, or
+            unparsable.
+        doc: Docstring for the field.
+
+    Returns:
+        An :class:`XmlField` for integer attributes.
+    """
+
+    def _parse(raw: str) -> int:
+        if not raw:
+            return default  # type: ignore[return-value]
+        try:
+            return int(raw)
+        except ValueError:
+            return default  # type: ignore[return-value]
+
+    return XmlField(xml_name, parse=_parse, unparse=str, default=default, doc=doc)
+
+
+def float_attr(
+    xml_name: str, *, default: float | None = None, doc: str = ""
+) -> XmlField[float]:
+    """Create a floating-point-valued :class:`XmlField`.
+
+    Empty or unparsable text is treated the same as an absent attribute
+    (returns *default*), matching the historical behaviour of this parser's
+    hand-written numeric properties.
+
+    Args:
+        xml_name: The XML attribute name.
+        default: Value returned when the attribute is absent, empty, or
+            unparsable.
+        doc: Docstring for the field.
+
+    Returns:
+        An :class:`XmlField` for floating-point attributes.
+    """
+
+    def _parse(raw: str) -> float:
+        if not raw:
+            return default  # type: ignore[return-value]
+        try:
+            return float(raw)
+        except ValueError:
+            return default  # type: ignore[return-value]
+
+    return XmlField(xml_name, parse=_parse, unparse=str, default=default, doc=doc)
+
+
 class BaseElement(XmlAttrMixin):
     """Wraps a single XML element and provides helpers for subclasses.
 
-    Subclasses define known XML attributes as explicit ``@property`` descriptors.
-    Unrecognised attributes are accessible via ``extra_attributes``.
+    Subclasses declare known XML attributes as :class:`XmlField` descriptors
+    (see :func:`str_attr`/:func:`bool_attr`/:func:`flag_attr`/:func:`int_attr`/
+    :func:`float_attr`), which are collected into a per-class ``_fields``
+    registry used by :meth:`fields` and :meth:`describe`. Unrecognised
+    attributes remain accessible via :attr:`extra_attributes`/:attr:`attributes`.
 
     Attributes:
         _element: The underlying XML element to wrap.
     """
+
+    #: name -> XmlField, populated automatically by XmlField.__set_name__.
+    #: Never mutated directly; each subclass gets its own copy-on-write dict.
+    _fields: dict[str, XmlField[Any]] = {}
 
     def __init__(self, element: ET.Element) -> None:
         """Initialize the base element wrapper.
@@ -97,6 +338,62 @@ class BaseElement(XmlAttrMixin):
         # Use object.__setattr__ so subclass @property setters work without
         # hitting any custom __setattr__ we might add later.
         object.__setattr__(self, "_element", element)
+
+    @classmethod
+    def fields(cls) -> dict[str, str]:
+        """Return every declared field name mapped to its XML attribute name.
+
+        Includes fields inherited from base classes. Useful for discovering
+        what a class *can* expose, independent of what's populated on any
+        particular instance -- see :meth:`describe` for the populated subset.
+
+        Returns:
+            A dict of Python attribute name -> XML attribute name.
+        """
+        return {name: field.xml_name for name, field in cls._fields.items()}
+
+    @property
+    def extra_attributes(self) -> dict[str, str]:
+        """XML attributes on this element with no declared :class:`XmlField`.
+
+        Returns:
+            A dict of attribute name to raw string value, for attributes not
+            covered by any field declared on this class.
+        """
+        known = {field.xml_name for field in type(self)._fields.values()}
+        return {k: v for k, v in self._element.attrib.items() if k not in known}
+
+    @property
+    def attributes(self) -> dict[str, str]:
+        """All XML attributes on this element, known or not.
+
+        Returns:
+            A dict of every attribute name to its raw string value.
+        """
+        return dict(self._element.attrib)
+
+    def describe(self) -> str:
+        """Return a multi-line summary of only this instance's populated fields.
+
+        Unlike :meth:`fields` (every field a class *can* have), this shows
+        only fields whose value differs from their declared default --
+        answering "what actually matters for this particular element?".
+        Attributes not covered by any declared field are listed separately.
+
+        Returns:
+            A formatted multi-line string suitable for interactive/debug use.
+        """
+        lines = [repr(self)]
+        for name, field in type(self)._fields.items():
+            value = getattr(self, name)
+            if value != field.default:
+                lines.append(f"  {name} = {value!r}")
+        extras = self.extra_attributes
+        if extras:
+            lines.append("  Extra Attributes:")
+            for k, v in sorted(extras.items()):
+                lines.append(f"    {k} = {v!r}")
+        return "\n".join(lines)
 
     def __repr__(self) -> str:
         """Return a concise representation including the element name.
@@ -113,7 +410,7 @@ class BaseElement(XmlAttrMixin):
         )
 
 
-class BaseCollection(Mapping[str, T], Generic[T]):
+class BaseCollection[T](Mapping[str, T]):
     """A ``Mapping`` over a set of named XML child elements.
 
     Keys are the ``Name`` attribute of each child element. Values are instances

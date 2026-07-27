@@ -7,7 +7,7 @@ name = "py_l5x"
 version = "0.2.0"
 description = "Parse Rockwell Automation L5X project files into a hierarchical Python object model."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = []
 
 [tool.setuptools.packages.find]
