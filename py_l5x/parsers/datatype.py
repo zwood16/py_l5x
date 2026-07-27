@@ -16,43 +16,14 @@ from __future__ import annotations
 
 from xml.etree import ElementTree as ET
 
-from py_l5x.parsers.base import BaseCollection, BaseElement
+from py_l5x.parsers.base import (
+    BaseCollection,
+    BaseElement,
+    CDataField,
+    bool_attr,
+    str_attr,
+)
 from py_l5x.parsers.utils import CDATA_TAG, convert_numeric
-
-# XML attribute names on <Member> exposed as explicit properties.
-_MEMBER_KNOWN_XML_KEYS: frozenset[str] = frozenset(
-    {
-        "Name",
-        "DataType",
-        "Dimension",
-        "Radix",
-        "Hidden",
-        "ExternalAccess",
-        "Target",
-        "BitNumber",
-        "Max",
-        "Min",
-        "ExternalLogging",
-    }
-)
-
-_PARAMETER_KNOWN_XML_KEYS: frozenset[str] = frozenset(
-    {
-        "Name",
-        "TagType",
-        "DataType",
-        "Usage",
-        "Radix",
-        "Required",
-        "Visible",
-        "ExternalAccess",
-        "Max",
-        "Min",
-    }
-)
-
-# XML attribute names on <DataType> exposed as explicit properties.
-_DATATYPE_KNOWN_XML_KEYS: frozenset[str] = frozenset({"Name", "Family", "Class"})
 
 # ------------------------------------------------------------------
 # DataTypes (UDTs)
@@ -66,73 +37,37 @@ class DataTypeMember(BaseElement):
         element: The ``<Member>`` element from a parsed L5X tree.
     """
 
-    def __init__(self, element: ET.Element) -> None:
-        """Initialise from a ``<Member>`` XML element.
-
-        Args:
-            element: The ``<Member>`` element to wrap.
-        """
-        super().__init__(element)
+    #: Attributes backed by plain @property (not an XmlField descriptor)
+    #: because their conversion depends on data_type at read time -- still
+    #: "known" and excluded from extra_attributes.
+    _DYNAMIC_KEYS: frozenset[str] = frozenset({"Dimension", "Min", "Max"})
 
     # ------------------------------------------------------------------
     # Identity
     # ------------------------------------------------------------------
 
-    @property
-    def name(self) -> str:
-        """Member name.
-
-        Returns:
-            The value of the ``Name`` XML attribute.
-        """
-        return self._get("Name")
-
-    @property
-    def data_type(self) -> str:
-        """Data type of this member.
-
-        This is ``"BIT"`` for packed booleans, an atomic type name (e.g.
-        ``"SINT"``, ``"REAL"``), or the name of another UDT or Add-On
-        Instruction definition.
-
-        Returns:
-            The value of the ``DataType`` XML attribute.
-        """
-        return self._get("DataType")
-
-    @property
-    def radix(self) -> str:
-        """Display radix (e.g. ``"Decimal"``, ``"Binary"``, ``"Float"``).
-
-        Returns:
-            The value of the ``Radix`` XML attribute.
-        """
-        return self._get("Radix")
+    name = str_attr("Name", doc="Member name.")
+    data_type = str_attr(
+        "DataType",
+        doc='Data type of this member. "BIT" for packed booleans, an atomic '
+        'type name (e.g. "SINT", "REAL"), or the name of another UDT/AOI.',
+    )
+    radix = str_attr("Radix", doc='Display radix (e.g. "Decimal", "Binary", "Float").')
 
     # ------------------------------------------------------------------
     # Bit packing
     # ------------------------------------------------------------------
 
-    @property
-    def hidden(self) -> bool:
-        """Whether this member is a hidden host byte for packed booleans.
-
-        Returns:
-            ``True`` if the ``Hidden`` XML attribute is ``"true"``.
-        """
-        return self._get("Hidden") == "true"
-
-    @property
-    def target(self) -> str:
-        """Name of the hidden host member this bit is packed into.
-
-        Only meaningful when :attr:`is_bit_member` is ``True``.
-
-        Returns:
-            The value of the ``Target`` XML attribute, or an empty string
-            for non-bit members.
-        """
-        return self._get("Target")
+    hidden = bool_attr(
+        "Hidden",
+        default=False,
+        doc="Whether this member is a hidden host byte for packed booleans.",
+    )
+    target = str_attr(
+        "Target",
+        doc="Name of the hidden host member this bit is packed into. Only "
+        "meaningful when is_bit_member is True.",
+    )
 
     @property
     def bit_number(self) -> int | None:
@@ -207,91 +142,36 @@ class DataTypeMember(BaseElement):
     # Access / logging
     # ------------------------------------------------------------------
 
-    @property
-    def external_access(self) -> str:
-        """External access level (e.g. ``"Read/Write"``, ``"Read Only"``).
-
-        Returns:
-            The value of the ``ExternalAccess`` XML attribute.
-        """
-        return self._get("ExternalAccess")
-
-    @property
-    def external_logging(self) -> bool | None:
-        """Whether external logging is enabled for this member.
-
-        Returns:
-            ``True``/``False`` if the ``ExternalLogging`` XML attribute is
-            present, otherwise ``None``.
-        """
-        value = self._element.get("ExternalLogging")
-        return None if value is None else value == "true"
+    external_access = str_attr(
+        "ExternalAccess",
+        doc='External access level (e.g. "Read/Write", "Read Only").',
+    )
+    external_logging = bool_attr(
+        "ExternalLogging",
+        doc="Whether external logging is enabled for this member.",
+    )
 
     # ------------------------------------------------------------------
     # Documentation
     # ------------------------------------------------------------------
 
-    @property
-    def description(self) -> str:
-        """Member description text.
-
-        Returns:
-            The ``Description`` CDATA text, or an empty string if absent.
-        """
-        return self._get_description()
-
-    @property
-    def engineering_unit(self) -> str:
-        """User-specified engineering unit (e.g. ``"mm"``).
-
-        Returns:
-            The ``EngineeringUnit`` CDATA text, or an empty string if absent.
-        """
-        return self._get_cdata_child("EngineeringUnit")
-
-    @property
-    def state0(self) -> str:
-        """Description of the boolean member's zero state.
-
-        Returns:
-            The ``State0`` CDATA text, or an empty string if absent.
-        """
-        return self._get_cdata_child("State0")
-
-    @property
-    def state1(self) -> str:
-        """Description of the boolean member's one state.
-
-        Returns:
-            The ``State1`` CDATA text, or an empty string if absent.
-        """
-        return self._get_cdata_child("State1")
-
-    # ------------------------------------------------------------------
-    # Unrecognised attributes
-    # ------------------------------------------------------------------
+    description = CDataField("Description", doc="Member description text.")
+    engineering_unit = CDataField(
+        "EngineeringUnit", doc='User-specified engineering unit (e.g. "mm").'
+    )
+    state0 = CDataField("State0", doc="Description of the boolean member's zero state.")
+    state1 = CDataField("State1", doc="Description of the boolean member's one state.")
 
     @property
     def extra_attributes(self) -> dict[str, str]:
-        """XML attributes not covered by explicit properties.
+        """XML attributes not covered by declared fields or dynamic properties.
 
-        Returns:
-            Dictionary mapping attribute names to their string values.
+        See :attr:`_DYNAMIC_KEYS` for the ``Dimension``/``Min``/``Max``
+        properties whose conversion depends on :attr:`data_type` and so
+        aren't plain :class:`~py_l5x.parsers.base.XmlField` descriptors.
         """
-        return {
-            k: v
-            for k, v in self._element.attrib.items()
-            if k not in _MEMBER_KNOWN_XML_KEYS
-        }
-
-    @property
-    def attributes(self) -> dict[str, str]:
-        """All XML attributes on the ``<Member>`` element.
-
-        Returns:
-            Dictionary mapping every XML attribute name to its string value.
-        """
-        return dict(self._element.attrib)
+        extras = super().extra_attributes
+        return {k: v for k, v in extras.items() if k not in self._DYNAMIC_KEYS}
 
     # ------------------------------------------------------------------
     # Display
@@ -338,46 +218,19 @@ class DataType(BaseElement):
         element: The ``<DataType>`` element from a parsed L5X tree.
     """
 
-    def __init__(self, element: ET.Element) -> None:
-        """Initialise from a ``<DataType>`` XML element.
-
-        Args:
-            element: The ``<DataType>`` element to wrap.
-        """
-        super().__init__(element)
-
     # ------------------------------------------------------------------
     # Identity
     # ------------------------------------------------------------------
 
-    @property
-    def name(self) -> str:
-        """Data type name.
-
-        Returns:
-            The value of the ``Name`` XML attribute.
-        """
-        return self._get("Name")
-
-    @property
-    def family(self) -> str:
-        """Data type family.
-
-        ``"StringFamily"`` for STRING-like types, ``"NoFamily"`` otherwise.
-
-        Returns:
-            The value of the ``Family`` XML attribute.
-        """
-        return self._get("Family")
-
-    @property
-    def class_(self) -> str:
-        """Data type class (always ``"User"`` for user-defined types).
-
-        Returns:
-            The value of the ``Class`` XML attribute.
-        """
-        return self._get("Class")
+    name = str_attr("Name", doc="Data type name.")
+    family = str_attr(
+        "Family",
+        doc='Data type family. "StringFamily" for STRING-like types, '
+        '"NoFamily" otherwise.',
+    )
+    class_ = str_attr(
+        "Class", doc='Data type class (always "User" for user-defined types).'
+    )
 
     @property
     def is_string(self) -> bool:
@@ -405,23 +258,11 @@ class DataType(BaseElement):
     # Documentation
     # ------------------------------------------------------------------
 
-    @property
-    def description(self) -> str:
-        """Data type description text.
-
-        Returns:
-            The ``Description`` CDATA text, or an empty string if absent.
-        """
-        return self._get_description()
-
-    @property
-    def engineering_unit(self) -> str:
-        """User-specified engineering unit for the data type.
-
-        Returns:
-            The ``EngineeringUnit`` CDATA text, or an empty string if absent.
-        """
-        return self._get_cdata_child("EngineeringUnit")
+    description = CDataField("Description", doc="Data type description text.")
+    engineering_unit = CDataField(
+        "EngineeringUnit",
+        doc="User-specified engineering unit for the data type.",
+    )
 
     # ------------------------------------------------------------------
     # Members
@@ -462,32 +303,6 @@ class DataType(BaseElement):
             if member.is_bit_member and member.target:
                 groups.setdefault(member.target, []).append(member)
         return groups
-
-    # ------------------------------------------------------------------
-    # Unrecognised attributes
-    # ------------------------------------------------------------------
-
-    @property
-    def extra_attributes(self) -> dict[str, str]:
-        """XML attributes not covered by explicit properties.
-
-        Returns:
-            Dictionary mapping attribute names to their string values.
-        """
-        return {
-            k: v
-            for k, v in self._element.attrib.items()
-            if k not in _DATATYPE_KNOWN_XML_KEYS
-        }
-
-    @property
-    def attributes(self) -> dict[str, str]:
-        """All XML attributes on the ``<DataType>`` element.
-
-        Returns:
-            Dictionary mapping every XML attribute name to its string value.
-        """
-        return dict(self._element.attrib)
 
     # ------------------------------------------------------------------
     # Display
@@ -563,56 +378,30 @@ class AddOnParameter(BaseElement):
         element: The ``<Parameter>`` element from a parsed L5X tree.
     """
 
-    def __init__(self, element: ET.Element) -> None:
-        super().__init__(element)
+    #: Attributes backed by plain @property (not an XmlField descriptor)
+    #: because their conversion depends on data_type at read time -- still
+    #: "known" and excluded from extra_attributes.
+    _DYNAMIC_KEYS: frozenset[str] = frozenset({"Min", "Max"})
 
-    @property
-    def name(self) -> str:
-        """Parameter name."""
-        return self._get("Name")
-
-    @property
-    def data_type(self) -> str:
-        """Data type of this parameter."""
-        return self._get("DataType")
-
-    @property
-    def usage(self) -> str:
-        """Usage of the parameter (e.g., ``"Input"``, ``"Output"``, ``"InOut"``)."""
-        return self._get("Usage")
-
-    @property
-    def radix(self) -> str:
-        """Display radix."""
-        return self._get("Radix")
-
-    @property
-    def required(self) -> bool:
-        """Whether the parameter is required.
-
-        Returns:
-            ``True`` if the ``Required`` XML attribute is ``"true"``.
-        """
-        return self._get("Required") == "true"
-
-    @property
-    def visible(self) -> bool:
-        """Whether the parameter is visible in Logix Designer.
-
-        Returns:
-            ``True`` if the ``Visible`` XML attribute is ``"true"``.
-        """
-        return self._get("Visible") == "true"
-
-    @property
-    def external_access(self) -> str:
-        """External access level (e.g. ``"Read/Write"``, ``"Read Only"``)."""
-        return self._get("ExternalAccess")
-
-    @property
-    def description(self) -> str:
-        """Parameter description text."""
-        return self._get_description()
+    name = str_attr("Name", doc="Parameter name.")
+    data_type = str_attr("DataType", doc="Data type of this parameter.")
+    usage = str_attr(
+        "Usage", doc='Usage of the parameter (e.g., "Input", "Output", "InOut").'
+    )
+    radix = str_attr("Radix", doc="Display radix.")
+    required = bool_attr(
+        "Required", default=False, doc="Whether the parameter is required."
+    )
+    visible = bool_attr(
+        "Visible",
+        default=False,
+        doc="Whether the parameter is visible in Logix Designer.",
+    )
+    external_access = str_attr(
+        "ExternalAccess",
+        doc='External access level (e.g. "Read/Write", "Read Only").',
+    )
+    description = CDataField("Description", doc="Parameter description text.")
 
     @property
     def is_inout(self) -> bool:
@@ -706,12 +495,14 @@ class AddOnParameter(BaseElement):
 
     @property
     def extra_attributes(self) -> dict[str, str]:
-        """XML attributes not covered by explicit properties."""
-        return {
-            k: v
-            for k, v in self._element.attrib.items()
-            if k not in _PARAMETER_KNOWN_XML_KEYS
-        }
+        """XML attributes not covered by declared fields or dynamic properties.
+
+        See :attr:`_DYNAMIC_KEYS` for the ``Min``/``Max`` properties whose
+        conversion depends on :attr:`data_type` and so aren't plain
+        :class:`~py_l5x.parsers.base.XmlField` descriptors.
+        """
+        extras = super().extra_attributes
+        return {k: v for k, v in extras.items() if k not in self._DYNAMIC_KEYS}
 
     def __repr__(self) -> str:
         lines = [

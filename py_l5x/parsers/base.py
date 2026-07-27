@@ -178,12 +178,18 @@ class XmlField[T]:
             obj._element.set(self.xml_name, self.unparse(value))
 
 
-def str_attr(xml_name: str, *, default: str = "", doc: str = "") -> XmlField[str]:
+def str_attr(
+    xml_name: str, *, default: str | None = "", doc: str = ""
+) -> XmlField[str]:
     """Create a plain string-valued :class:`XmlField`.
 
     Args:
         xml_name: The XML attribute name.
-        default: Value returned when the attribute is absent.
+        default: Value returned when the attribute is absent. Pass ``None``
+            (instead of the usual ``""``) for attributes that are entirely
+            absent in some export contexts (e.g. controller firmware/date
+            attributes on a "Context" controller element) and should be
+            distinguishable from "present but empty".
         doc: Docstring for the field.
 
     Returns:
@@ -311,22 +317,131 @@ def float_attr(
     return XmlField(xml_name, parse=_parse, unparse=str, default=default, doc=doc)
 
 
+class CDataField:
+    """Descriptor for a CDATA-bearing child element (e.g. ``Description``).
+
+    After CDATA pre-processing in ``_load_l5x``, ``<![CDATA[...]]>`` sections
+    are stored as a child element whose tag is ``CDATA_TAG``::
+
+        <Description><CDataContent>text</CDataContent></Description>
+
+    Reading delegates to :meth:`XmlAttrMixin._get_cdata_child` (with an
+    optional plain-attribute fallback for elements like ``<Tag>`` that
+    sometimes carry a bare ``Description="..."`` attribute instead). Writing
+    creates/updates/removes that child element -- setting ``None`` or ``""``
+    removes it (and the fallback attribute, if any) entirely.
+
+    Participates in the same per-class ``_fields`` registry as
+    :class:`XmlField`, so it shows up in :meth:`BaseElement.fields`/
+    :meth:`BaseElement.describe` alongside ordinary attribute fields.
+
+    Args:
+        child_tag: The child element name to read/write (e.g.
+            ``"Description"``, ``"EngineeringUnit"``).
+        attr_fallback: A plain XML attribute name to fall back to on read
+            (and clear on write) when no CDATA child is present/being set.
+        doc: Docstring shown for the field.
+    """
+
+    def __init__(
+        self, child_tag: str, *, attr_fallback: str | None = None, doc: str = ""
+    ) -> None:
+        """Initialize the field descriptor.
+
+        Args:
+            child_tag: The child element name to read/write.
+            attr_fallback: A plain XML attribute name to fall back to.
+            doc: Docstring shown for the field.
+        """
+        self.child_tag = child_tag
+        self.attr_fallback = attr_fallback
+        #: Exposed for symmetry with XmlField so fields()/describe() work
+        #: uniformly; this isn't an XML *attribute* name but the child tag.
+        self.xml_name = child_tag
+        self.default = ""
+        self.__doc__ = doc
+        self.name = child_tag
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        """Register this field under *name* in the owning class's registry.
+
+        Args:
+            owner: The class this descriptor was assigned on.
+            name: The attribute name it was assigned to.
+        """
+        self.name = name
+        registry: dict[str, XmlField[Any] | CDataField] = dict(
+            getattr(owner, "_fields", {})
+        )
+        registry[name] = self
+        owner._fields = registry
+
+    @overload
+    def __get__(self, obj: None, objtype: type | None = None) -> CDataField: ...
+    @overload
+    def __get__(self, obj: XmlAttrMixin, objtype: type | None = None) -> str: ...
+
+    def __get__(
+        self, obj: XmlAttrMixin | None, objtype: type | None = None
+    ) -> CDataField | str:
+        """Read the CDATA text (or fallback attribute) for this field.
+
+        Args:
+            obj: The owning instance, or ``None`` when accessed on the class.
+            objtype: The owning class.
+
+        Returns:
+            This descriptor itself when accessed on the class; otherwise the
+            stripped text content, or ``""`` if absent.
+        """
+        if obj is None:
+            return self
+        text = obj._get_cdata_child(self.child_tag)
+        if not text and self.attr_fallback:
+            text = obj._element.get(self.attr_fallback, "")
+        return text
+
+    def __set__(self, obj: XmlAttrMixin, value: str | None) -> None:
+        """Create/update/remove the CDATA child element for this field.
+
+        Args:
+            obj: The owning instance.
+            value: The new text content, or ``None``/``""`` to remove the
+                child element (and fallback attribute, if any).
+        """
+        child = obj._element.find(self.child_tag)
+        if not value:
+            if child is not None:
+                obj._element.remove(child)
+            if self.attr_fallback:
+                obj._element.attrib.pop(self.attr_fallback, None)
+            return
+        if child is None:
+            child = ET.SubElement(obj._element, self.child_tag)
+        else:
+            child.clear()
+        cdata_el = ET.SubElement(child, CDATA_TAG)
+        cdata_el.text = value
+
+
 class BaseElement(XmlAttrMixin):
     """Wraps a single XML element and provides helpers for subclasses.
 
     Subclasses declare known XML attributes as :class:`XmlField` descriptors
     (see :func:`str_attr`/:func:`bool_attr`/:func:`flag_attr`/:func:`int_attr`/
-    :func:`float_attr`), which are collected into a per-class ``_fields``
-    registry used by :meth:`fields` and :meth:`describe`. Unrecognised
-    attributes remain accessible via :attr:`extra_attributes`/:attr:`attributes`.
+    :func:`float_attr`) and CDATA-bearing children as :class:`CDataField`,
+    which are collected into a per-class ``_fields`` registry used by
+    :meth:`fields` and :meth:`describe`. Unrecognised attributes remain
+    accessible via :attr:`extra_attributes`/:attr:`attributes`.
 
     Attributes:
         _element: The underlying XML element to wrap.
     """
 
-    #: name -> XmlField, populated automatically by XmlField.__set_name__.
-    #: Never mutated directly; each subclass gets its own copy-on-write dict.
-    _fields: dict[str, XmlField[Any]] = {}
+    #: name -> XmlField/CDataField, populated automatically by
+    #: XmlField.__set_name__/CDataField.__set_name__. Never mutated
+    #: directly; each subclass gets its own copy-on-write dict.
+    _fields: dict[str, XmlField[Any] | CDataField] = {}
 
     def __init__(self, element: ET.Element) -> None:
         """Initialize the base element wrapper.
@@ -356,11 +471,20 @@ class BaseElement(XmlAttrMixin):
     def extra_attributes(self) -> dict[str, str]:
         """XML attributes on this element with no declared :class:`XmlField`.
 
+        A declared :class:`CDataField` with an ``attr_fallback`` also
+        reserves that plain-attribute name, since it's an alternate
+        representation of the same field.
+
         Returns:
             A dict of attribute name to raw string value, for attributes not
             covered by any field declared on this class.
         """
-        known = {field.xml_name for field in type(self)._fields.values()}
+        known: set[str] = set()
+        for field in type(self)._fields.values():
+            known.add(field.xml_name)
+            fallback = getattr(field, "attr_fallback", None)
+            if fallback:
+                known.add(fallback)
         return {k: v for k, v in self._element.attrib.items() if k not in known}
 
     @property

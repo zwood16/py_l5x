@@ -16,36 +16,17 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from xml.etree import ElementTree as ET
 
-from py_l5x.parsers.base import BaseCollection, BaseElement
+from py_l5x.parsers.base import (
+    BaseCollection,
+    BaseElement,
+    CDataField,
+    bool_attr,
+    str_attr,
+)
 from py_l5x.parsers.datatype import AddOnParameters
 from py_l5x.parsers.routine import RoutinesCollection
 from py_l5x.parsers.tag import TagNode, TypeRegistry, _build_node, _TagOverrides
 from py_l5x.parsers.utils import CDATA_TAG
-
-_AOI_KNOWN_XML_KEYS: frozenset[str] = frozenset(
-    {
-        "Name",
-        "Revision",
-        "ExecutePrescan",
-        "ExecutePostscan",
-        "ExecuteEnableInFalse",
-        "CreatedDate",
-        "CreatedBy",
-        "EditedDate",
-        "EditedBy",
-        "SoftwareRevision",
-    }
-)
-
-_AOI_LOCAL_TAG_KNOWN_XML_KEYS: frozenset[str] = frozenset(
-    {
-        "Name",
-        "DataType",
-        "Radix",
-        "ExternalAccess",
-        "Constant",
-    }
-)
 
 
 class AOILocalTag(BaseElement):
@@ -56,64 +37,22 @@ class AOILocalTag(BaseElement):
         type_registry: Shared type registry for resolving data type metadata.
     """
 
+    name = str_attr("Name", doc="Local tag name.")
+    data_type = str_attr("DataType", doc="The local tag's data type name.")
+    radix = str_attr("Radix", doc="Display radix, for atomic local tags.")
+    constant = bool_attr(
+        "Constant", default=False, doc="Whether the local tag is constant."
+    )
+    external_access = str_attr(
+        "ExternalAccess",
+        doc='External access level (commonly "None" for AOI locals).',
+    )
+    description = CDataField("Description", doc="Local tag description text.")
+
     def __init__(self, element: ET.Element, type_registry: TypeRegistry) -> None:
         super().__init__(element)
         self._type_registry = type_registry
         self._overrides = _TagOverrides(element)
-
-    @property
-    def name(self) -> str:
-        """Local tag name.
-
-        Returns:
-            The tag name as a string.
-        """
-        return self._get("Name")
-
-    @property
-    def data_type(self) -> str:
-        """The local tag's data type name.
-
-        Returns:
-            The data type name as a string.
-        """
-        return self._get("DataType")
-
-    @property
-    def radix(self) -> str:
-        """Display radix, for atomic local tags.
-
-        Returns:
-            The radix string (e.g. "Hex", "Decimal").
-        """
-        return self._get("Radix")
-
-    @property
-    def constant(self) -> bool:
-        """Whether the local tag is constant.
-
-        Returns:
-            True if the tag is marked as constant, False otherwise.
-        """
-        return self._get("Constant") == "true"
-
-    @property
-    def external_access(self) -> str:
-        """External access level (commonly ``"None"`` for AOI locals).
-
-        Returns:
-            The external access level string.
-        """
-        return self._get("ExternalAccess")
-
-    @property
-    def description(self) -> str:
-        """Local tag description text.
-
-        Returns:
-            The description string.
-        """
-        return self._get_description()
 
     @property
     def data(self) -> TagNode | None:
@@ -178,20 +117,6 @@ class AOILocalTag(BaseElement):
         node = self.data
         return node.elements if node is not None else []
 
-    @property
-    def extra_attributes(self) -> dict[str, str]:
-        """XML attributes not covered by explicit properties.
-
-        Returns:
-            A dict of attribute names to values for any XML attributes that
-            are not exposed as dedicated properties.
-        """
-        return {
-            k: v
-            for k, v in self._element.attrib.items()
-            if k not in _AOI_LOCAL_TAG_KNOWN_XML_KEYS
-        }
-
     def __repr__(self) -> str:
         return f"AOILocalTag({self.name!r}, {self.data_type!r})"
 
@@ -222,108 +147,31 @@ class AOIDefinition(BaseElement):
         type_registry: Shared type registry for resolving data type metadata.
     """
 
+    name = str_attr("Name", doc="AOI definition name.")
+    description = CDataField("Description", doc="AOI description text.")
+    revision = str_attr("Revision", doc="AOI revision string.")
+    execute_prescan = bool_attr(
+        "ExecutePrescan", default=False, doc="Whether AOI executes on prescan."
+    )
+    execute_postscan = bool_attr(
+        "ExecutePostscan", default=False, doc="Whether AOI executes on postscan."
+    )
+    execute_enable_in_false = bool_attr(
+        "ExecuteEnableInFalse",
+        default=False,
+        doc="Whether AOI executes when enable-in is false.",
+    )
+    created_date = str_attr("CreatedDate", doc="Creation timestamp.")
+    created_by = str_attr("CreatedBy", doc="Author at creation.")
+    edited_date = str_attr("EditedDate", doc="Last edit timestamp.")
+    edited_by = str_attr("EditedBy", doc="Last editor.")
+    software_revision = str_attr(
+        "SoftwareRevision", doc="Studio/Logix software revision string."
+    )
+
     def __init__(self, element: ET.Element, type_registry: TypeRegistry) -> None:
         super().__init__(element)
         self._type_registry = type_registry
-
-    @property
-    def name(self) -> str:
-        """AOI definition name.
-
-        Returns:
-            The AOI name as a string.
-        """
-        return self._get("Name")
-
-    @property
-    def description(self) -> str:
-        """AOI description text.
-
-        Returns:
-            The description string.
-        """
-        return self._get_description()
-
-    @property
-    def revision(self) -> str:
-        """AOI revision string.
-
-        Returns:
-            The revision string.
-        """
-        return self._get("Revision")
-
-    @property
-    def execute_prescan(self) -> bool:
-        """Whether AOI executes on prescan.
-
-        Returns:
-            True if the AOI executes during prescan, False otherwise.
-        """
-        return self._get("ExecutePrescan") == "true"
-
-    @property
-    def execute_postscan(self) -> bool:
-        """Whether AOI executes on postscan.
-
-        Returns:
-            True if the AOI executes during postscan, False otherwise.
-        """
-        return self._get("ExecutePostscan") == "true"
-
-    @property
-    def execute_enable_in_false(self) -> bool:
-        """Whether AOI executes when enable-in is false.
-
-        Returns:
-            True if the AOI executes when enable-in is false, False otherwise.
-        """
-        return self._get("ExecuteEnableInFalse") == "true"
-
-    @property
-    def created_date(self) -> str:
-        """Creation timestamp.
-
-        Returns:
-            The creation date/time string.
-        """
-        return self._get("CreatedDate")
-
-    @property
-    def created_by(self) -> str:
-        """Author at creation.
-
-        Returns:
-            The name of the user who created the AOI.
-        """
-        return self._get("CreatedBy")
-
-    @property
-    def edited_date(self) -> str:
-        """Last edit timestamp.
-
-        Returns:
-            The last edit date/time string.
-        """
-        return self._get("EditedDate")
-
-    @property
-    def edited_by(self) -> str:
-        """Last editor.
-
-        Returns:
-            The name of the user who last edited the AOI.
-        """
-        return self._get("EditedBy")
-
-    @property
-    def software_revision(self) -> str:
-        """Studio/Logix software revision string.
-
-        Returns:
-            The software revision string.
-        """
-        return self._get("SoftwareRevision")
 
     @property
     def parameters(self) -> AddOnParameters:
@@ -377,20 +225,6 @@ class AOIDefinition(BaseElement):
         text = self.logic_text()
         print(text)
         return text
-
-    @property
-    def extra_attributes(self) -> dict[str, str]:
-        """XML attributes not covered by explicit properties.
-
-        Returns:
-            A dict of attribute names to values for any XML attributes that
-            are not exposed as dedicated properties.
-        """
-        return {
-            k: v
-            for k, v in self._element.attrib.items()
-            if k not in _AOI_KNOWN_XML_KEYS
-        }
 
     def __repr__(self) -> str:
         return f"AddOnInstructionDefinition({self.name!r})"

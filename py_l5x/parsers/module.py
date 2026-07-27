@@ -18,61 +18,15 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping, Sequence
 from xml.etree import ElementTree as ET
 
-from py_l5x.parsers.base import BaseCollection, BaseElement
+from py_l5x.parsers.base import (
+    BaseCollection,
+    BaseElement,
+    CDataField,
+    bool_attr,
+    int_attr,
+    str_attr,
+)
 from py_l5x.parsers.tag import TagNode, TypeRegistry, _build_node, _TagOverrides
-
-_MODULE_KNOWN_XML_KEYS: frozenset[str] = frozenset(
-    {
-        "Name",
-        "CatalogNumber",
-        "Vendor",
-        "ProductType",
-        "ProductCode",
-        "Major",
-        "Minor",
-        "ParentModule",
-        "ParentModPortId",
-        "Inhibited",
-        "MajorFault",
-        "SafetyEnabled",
-        "AutoDiagsEnabled",
-        "DataExchangeId",
-    }
-)
-
-_COMM_KNOWN_XML_KEYS: frozenset[str] = frozenset(
-    {"CommMethod", "PrimCxnInputSize", "PrimCxnOutputSize"}
-)
-
-_CONNECTION_KNOWN_XML_KEYS: frozenset[str] = frozenset(
-    {
-        "Name",
-        "RPI",
-        "Type",
-        "InputCxnPoint",
-        "OutputCxnPoint",
-        "OutputSize",
-        "InputSize",
-        "EventID",
-        "ProgrammaticallySendEventTrigger",
-        "Priority",
-        "InputConnectionType",
-        "InputProductionTrigger",
-        "ConnectionPath",
-        "InputTagSuffix",
-        "OutputTagSuffix",
-        "Unicast",
-    }
-)
-
-_MODULE_DATA_TAG_BASE_KEYS: frozenset[str] = frozenset(
-    {"ExternalAccess", "OpcUaAccess"}
-)
-_CONFIG_TAG_KNOWN_XML_KEYS: frozenset[str] = _MODULE_DATA_TAG_BASE_KEYS | frozenset(
-    {"ConfigSize"}
-)
-
-_PORT_KNOWN_XML_KEYS: frozenset[str] = frozenset({"Id", "Address", "Type", "Upstream"})
 
 
 def _parse_int(value: str) -> int | None:
@@ -92,48 +46,19 @@ def _parse_int(value: str) -> int | None:
         return None
 
 
-def _parse_bool(value: str) -> bool:
-    """Parse Rockwell-style bool attributes (``"true"``/``"false"``).
-
-    Args:
-        value: The string value to parse.
-
-    Returns:
-        True if the value is "true", False otherwise.
-    """
-    return value == "true"
-
-
 class Port(BaseElement):
     """One ``<Port>`` under a module's ``<Ports>`` section.
 
-    Attributes:
-        id (int): Port id as an integer.
-        address (str): Port address string (slot, IP, etc.).
-        type (str): Port type string (for example ``"5069"`` or ``"Ethernet"``).
-        upstream (bool): Whether this port is marked as upstream.
-        bus_size (int | None): Bus size from ``<Bus Size="...">`` when present.
+    Args:
+        element: The ``<Port>`` XML element to wrap.
     """
 
-    @property
-    def id(self) -> int:
-        """Port id as an integer."""
-        return int(self._get("Id"))
-
-    @property
-    def address(self) -> str:
-        """Port address string (slot, IP, etc.)."""
-        return self._get("Address")
-
-    @property
-    def type(self) -> str:
-        """Port type string (for example ``"5069"`` or ``"Ethernet"``)."""
-        return self._get("Type")
-
-    @property
-    def upstream(self) -> bool:
-        """Whether this port is marked as upstream."""
-        return _parse_bool(self._get("Upstream"))
+    id = int_attr("Id", doc="Port id as an integer.")
+    address = str_attr("Address", doc="Port address string (slot, IP, etc.).")
+    type = str_attr("Type", doc='Port type string (for example "5069" or "Ethernet").')
+    upstream = bool_attr(
+        "Upstream", default=False, doc="Whether this port is marked as upstream."
+    )
 
     @property
     def bus_size(self) -> int | None:
@@ -142,20 +67,6 @@ class Port(BaseElement):
         if bus is None:
             return None
         return _parse_int(bus.get("Size", ""))
-
-    @property
-    def extra_attributes(self) -> dict[str, str]:
-        """XML attributes not covered by explicit properties."""
-        return {
-            k: v
-            for k, v in self._element.attrib.items()
-            if k not in _PORT_KNOWN_XML_KEYS
-        }
-
-    @property
-    def attributes(self) -> dict[str, str]:
-        """All XML attributes on this ``<Port>`` element."""
-        return dict(self._element.attrib)
 
     def __repr__(self) -> str:
         return f"Port({self.id}, {self.type!r})"
@@ -242,17 +153,15 @@ class ModuleDataTag(BaseElement):
         type_registry (TypeRegistry): The type registry used for parsing tag values.
     """
 
-    _KNOWN_KEYS: frozenset[str] = _MODULE_DATA_TAG_BASE_KEYS
+    external_access = str_attr(
+        "ExternalAccess", doc="External access level for this tag-like section."
+    )
+    opc_ua_access = str_attr("OpcUaAccess", doc="OPC UA exposure level, if configured.")
 
     def __init__(self, element: ET.Element, type_registry: TypeRegistry) -> None:
         super().__init__(element)
         self._type_registry = type_registry
         self._overrides = _TagOverrides(element)
-
-    @property
-    def external_access(self) -> str:
-        """External access level for this tag-like section."""
-        return self._get("ExternalAccess")
 
     @property
     def data(self) -> TagNode | None:
@@ -296,32 +205,18 @@ class ModuleDataTag(BaseElement):
                 return data_member.elements
         return []
 
-    @property
-    def extra_attributes(self) -> dict[str, str]:
-        """XML attributes not covered by explicit properties."""
-        return {
-            k: v for k, v in self._element.attrib.items() if k not in self._KNOWN_KEYS
-        }
-
-    @property
-    def attributes(self) -> dict[str, str]:
-        """All XML attributes on this tag-like element."""
-        return dict(self._element.attrib)
-
 
 class ConfigTag(ModuleDataTag):
     """``<ConfigTag>`` under a module ``<Communications>`` element.
 
-    Attributes:
-        config_size (int | None): Configured byte size of this config payload.
+    Args:
+        element: The ``<ConfigTag>`` XML element to wrap.
+        type_registry: The type registry used for parsing tag values.
     """
 
-    _KNOWN_KEYS: frozenset[str] = _CONFIG_TAG_KNOWN_XML_KEYS
-
-    @property
-    def config_size(self) -> int | None:
-        """Configured byte size of this config payload."""
-        return _parse_int(self._get("ConfigSize"))
+    config_size = int_attr(
+        "ConfigSize", doc="Configured byte size of this config payload."
+    )
 
     @property
     def data(self) -> TagNode | None:
@@ -373,96 +268,54 @@ class Connection(BaseElement):
         type_registry (TypeRegistry): The type registry used for parsing tag values.
     """
 
+    name = str_attr("Name", doc="Connection name.")
+    rpi = int_attr(
+        "RPI", doc="Requested Packet Interval (RPI) in milliseconds when available."
+    )
+    type = str_attr("Type", doc="Connection type string.")
+    input_cxn_point = int_attr(
+        "InputCxnPoint", doc="Input connection point number when present."
+    )
+    output_cxn_point = int_attr(
+        "OutputCxnPoint", doc="Output connection point number when present."
+    )
+    input_size = int_attr(
+        "InputSize", doc="Configured input payload size in bytes when present."
+    )
+    output_size = int_attr(
+        "OutputSize", doc="Configured output payload size in bytes when present."
+    )
+    event_id = int_attr(
+        "EventID", doc="Event trigger id when event-based messaging is configured."
+    )
+    programmatically_send_event_trigger = bool_attr(
+        "ProgrammaticallySendEventTrigger",
+        default=False,
+        doc="Whether event triggers can be sent programmatically.",
+    )
+    priority = str_attr("Priority", doc="Connection priority string.")
+    input_connection_type = str_attr(
+        "InputConnectionType", doc="Input connection type string."
+    )
+    input_production_trigger = str_attr(
+        "InputProductionTrigger", doc="Input production trigger mode string."
+    )
+    connection_path = str_attr(
+        "ConnectionPath", doc="Backplane/network connection path string."
+    )
+    input_tag_suffix = str_attr(
+        "InputTagSuffix", doc="Input tag suffix used by generated module tags."
+    )
+    output_tag_suffix = str_attr(
+        "OutputTagSuffix", doc="Output tag suffix used by generated module tags."
+    )
+    unicast = bool_attr(
+        "Unicast", doc="Whether this connection is configured for unicast traffic."
+    )
+
     def __init__(self, element: ET.Element, type_registry: TypeRegistry) -> None:
         super().__init__(element)
         self._type_registry = type_registry
-
-    @property
-    def name(self) -> str:
-        """Connection name from the ``Name`` attribute."""
-        return self._get("Name")
-
-    @property
-    def rpi(self) -> int | None:
-        """Requested Packet Interval (RPI) in milliseconds when available."""
-        return _parse_int(self._get("RPI"))
-
-    @property
-    def type(self) -> str:
-        """Connection type string from the ``Type`` attribute."""
-        return self._get("Type")
-
-    @property
-    def input_cxn_point(self) -> int | None:
-        """Input connection point number when present."""
-        return _parse_int(self._get("InputCxnPoint"))
-
-    @property
-    def output_cxn_point(self) -> int | None:
-        """Output connection point number when present."""
-        return _parse_int(self._get("OutputCxnPoint"))
-
-    @property
-    def input_size(self) -> int | None:
-        """Configured input payload size in bytes when present."""
-        return _parse_int(self._get("InputSize"))
-
-    @property
-    def output_size(self) -> int | None:
-        """Configured output payload size in bytes when present."""
-        return _parse_int(self._get("OutputSize"))
-
-    @property
-    def event_id(self) -> int | None:
-        """Event trigger id when event-based messaging is configured."""
-        return _parse_int(self._get("EventID"))
-
-    @property
-    def programmatically_send_event_trigger(self) -> bool:
-        """Whether event triggers can be sent programmatically."""
-        return _parse_bool(self._get("ProgrammaticallySendEventTrigger"))
-
-    @property
-    def priority(self) -> str:
-        """Connection priority string."""
-        return self._get("Priority")
-
-    @property
-    def input_connection_type(self) -> str:
-        """Input connection type string."""
-        return self._get("InputConnectionType")
-
-    @property
-    def input_production_trigger(self) -> str:
-        """Input production trigger mode string."""
-        return self._get("InputProductionTrigger")
-
-    @property
-    def connection_path(self) -> str:
-        """Backplane/network connection path string."""
-        return self._get("ConnectionPath")
-
-    @property
-    def input_tag_suffix(self) -> str:
-        """Input tag suffix used by generated module tags."""
-        return self._get("InputTagSuffix")
-
-    @property
-    def output_tag_suffix(self) -> str:
-        """Output tag suffix used by generated module tags."""
-        return self._get("OutputTagSuffix")
-
-    @property
-    def unicast(self) -> bool | None:
-        """Whether this connection is configured for unicast traffic.
-
-        Returns:
-            True or False when specified; None if the attribute is missing.
-        """
-        raw = self._get("Unicast")
-        if raw == "":
-            return None
-        return _parse_bool(raw)
 
     @property
     def input_tag(self) -> InputTag | None:
@@ -487,20 +340,6 @@ class Connection(BaseElement):
         if el is None:
             return None
         return OutputTag(el, self._type_registry)
-
-    @property
-    def extra_attributes(self) -> dict[str, str]:
-        """XML attributes not covered by explicit properties."""
-        return {
-            k: v
-            for k, v in self._element.attrib.items()
-            if k not in _CONNECTION_KNOWN_XML_KEYS
-        }
-
-    @property
-    def attributes(self) -> dict[str, str]:
-        """All XML attributes on this ``<Connection>`` element."""
-        return dict(self._element.attrib)
 
     def __repr__(self) -> str:
         """Return a concise debug representation for this connection."""
@@ -538,24 +377,18 @@ class Communications(BaseElement):
         type_registry (TypeRegistry): The type registry used for parsing tag values.
     """
 
+    comm_method = str_attr("CommMethod", doc="Primary communications method string.")
+    prim_cxn_input_size = int_attr(
+        "PrimCxnInputSize", doc="Primary connection input size in bytes when provided."
+    )
+    prim_cxn_output_size = int_attr(
+        "PrimCxnOutputSize",
+        doc="Primary connection output size in bytes when provided.",
+    )
+
     def __init__(self, element: ET.Element, type_registry: TypeRegistry) -> None:
         super().__init__(element)
         self._type_registry = type_registry
-
-    @property
-    def comm_method(self) -> str:
-        """Primary communications method string."""
-        return self._get("CommMethod")
-
-    @property
-    def prim_cxn_input_size(self) -> int | None:
-        """Primary connection input size in bytes when provided."""
-        return _parse_int(self._get("PrimCxnInputSize"))
-
-    @property
-    def prim_cxn_output_size(self) -> int | None:
-        """Primary connection output size in bytes when provided."""
-        return _parse_int(self._get("PrimCxnOutputSize"))
 
     @property
     def config_tag(self) -> ConfigTag | None:
@@ -574,20 +407,6 @@ class Communications(BaseElement):
         """Return live mapping of connection name to ``Connection``."""
         return ConnectionsCollection(self._element, self._type_registry)
 
-    @property
-    def extra_attributes(self) -> dict[str, str]:
-        """XML attributes not covered by explicit properties."""
-        return {
-            k: v
-            for k, v in self._element.attrib.items()
-            if k not in _COMM_KNOWN_XML_KEYS
-        }
-
-    @property
-    def attributes(self) -> dict[str, str]:
-        """All XML attributes on this ``<Communications>`` element."""
-        return dict(self._element.attrib)
-
     def __repr__(self) -> str:
         """Return a concise debug representation for communications settings."""
         return f"Communications(CommMethod={self.comm_method!r})"
@@ -601,93 +420,44 @@ class Module(BaseElement):
         type_registry (TypeRegistry): The type registry used for parsing tag values.
     """
 
+    name = str_attr("Name", doc="Module name.")
+    description = CDataField(
+        "Description", doc="CDATA description text from the module Description element."
+    )
+    catalog_number = str_attr(
+        "CatalogNumber", doc="Catalog number string for this module."
+    )
+    vendor = str_attr("Vendor", doc="Vendor identifier as exported by Studio 5000.")
+    product_type = str_attr("ProductType", doc="Product type code string.")
+    product_code = str_attr("ProductCode", doc="Product code string.")
+    major = str_attr("Major", doc="Major revision string.")
+    minor = str_attr("Minor", doc="Minor revision string.")
+    parent_module = str_attr(
+        "ParentModule", doc="Parent module name for nested modules, when present."
+    )
+    parent_mod_port_id = str_attr(
+        "ParentModPortId",
+        doc="Parent module port id used for nested module attachments.",
+    )
+    inhibited = bool_attr(
+        "Inhibited", default=False, doc="Whether the module is inhibited."
+    )
+    major_fault = bool_attr(
+        "MajorFault",
+        default=False,
+        doc="Whether the module currently reports a major fault.",
+    )
+    safety_enabled = bool_attr(
+        "SafetyEnabled", doc="Whether safety mode is enabled, if the attribute exists."
+    )
+    auto_diags_enabled = bool_attr(
+        "AutoDiagsEnabled",
+        doc="Whether auto diagnostics are enabled, if the attribute exists.",
+    )
+
     def __init__(self, element: ET.Element, type_registry: TypeRegistry) -> None:
         super().__init__(element)
         self._type_registry = type_registry
-
-    @property
-    def name(self) -> str:
-        """Module name from the ``Name`` attribute."""
-        return self._get("Name")
-
-    @property
-    def description(self) -> str:
-        """CDATA description text from the module ``Description`` element."""
-        return self._get_description()
-
-    @property
-    def catalog_number(self) -> str:
-        """Catalog number string for this module."""
-        return self._get("CatalogNumber")
-
-    @property
-    def vendor(self) -> str:
-        """Vendor identifier as exported by Studio 5000."""
-        return self._get("Vendor")
-
-    @property
-    def product_type(self) -> str:
-        """Product type code string."""
-        return self._get("ProductType")
-
-    @property
-    def product_code(self) -> str:
-        """Product code string."""
-        return self._get("ProductCode")
-
-    @property
-    def major(self) -> str:
-        """Major revision string."""
-        return self._get("Major")
-
-    @property
-    def minor(self) -> str:
-        """Minor revision string."""
-        return self._get("Minor")
-
-    @property
-    def parent_module(self) -> str:
-        """Parent module name for nested modules, when present."""
-        return self._get("ParentModule")
-
-    @property
-    def parent_mod_port_id(self) -> str:
-        """Parent module port id used for nested module attachments."""
-        return self._get("ParentModPortId")
-
-    @property
-    def inhibited(self) -> bool:
-        """Whether the module is inhibited."""
-        return _parse_bool(self._get("Inhibited"))
-
-    @property
-    def major_fault(self) -> bool:
-        """Whether the module currently reports a major fault."""
-        return _parse_bool(self._get("MajorFault"))
-
-    @property
-    def safety_enabled(self) -> bool | None:
-        """Whether safety mode is enabled, if the attribute exists.
-
-        Returns:
-            True or False when specified; None when not present.
-        """
-        raw = self._get("SafetyEnabled")
-        if raw == "":
-            return None
-        return _parse_bool(raw)
-
-    @property
-    def auto_diags_enabled(self) -> bool | None:
-        """Whether auto diagnostics are enabled, if the attribute exists.
-
-        Returns:
-            True or False when specified; None when not present.
-        """
-        raw = self._get("AutoDiagsEnabled")
-        if raw == "":
-            return None
-        return _parse_bool(raw)
 
     @property
     def data_exchange_id(self) -> str | None:
@@ -727,20 +497,6 @@ class Module(BaseElement):
         if el is None:
             return None
         return ET.tostring(el, encoding="unicode")
-
-    @property
-    def extra_attributes(self) -> dict[str, str]:
-        """XML attributes not covered by explicit properties."""
-        return {
-            k: v
-            for k, v in self._element.attrib.items()
-            if k not in _MODULE_KNOWN_XML_KEYS
-        }
-
-    @property
-    def attributes(self) -> dict[str, str]:
-        """All XML attributes on this ``<Module>`` element."""
-        return dict(self._element.attrib)
 
     def __repr__(self) -> str:
         """Return a concise debug representation for this module."""

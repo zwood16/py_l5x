@@ -13,68 +13,32 @@ from collections.abc import Iterator, Mapping
 from typing import TYPE_CHECKING
 from xml.etree import ElementTree as ET
 
-from py_l5x.parsers.base import BaseCollection, BaseElement
+from py_l5x.parsers.base import (
+    BaseCollection,
+    BaseElement,
+    CDataField,
+    bool_attr,
+    float_attr,
+    int_attr,
+    str_attr,
+)
 
 if TYPE_CHECKING:
     from py_l5x.parsers.program import Program
     from py_l5x.parsers.tag import TypeRegistry
 
-_TASK_KNOWN_XML_KEYS: frozenset[str] = frozenset(
-    {
-        "Name",
-        "Type",
-        "Rate",
-        "Priority",
-        "Watchdog",
-        "DisableUpdateOutputs",
-        "InhibitTask",
-        "Class",
-    }
-)
-"""Known XML attribute names on ``<Task>`` elements."""
-
 
 class EventInfo(BaseElement):
     """A single ``<EventInfo>`` child of an EVENT ``<Task>``.
-
-    Attributes:
-        event_trigger: Value of the ``EventTrigger`` attribute.
-        enable_timeout: Whether ``EnableTimeout`` is ``"true"``.
 
     Args:
         element: The ``<EventInfo>`` element from a parsed L5X tree.
     """
 
-    @property
-    def event_trigger(self) -> str:
-        """Event trigger source.
-
-        Returns:
-            The value of the ``EventTrigger`` XML attribute.
-        """
-        return self._get("EventTrigger")
-
-    @property
-    def enable_timeout(self) -> bool:
-        """Whether enable timeout is configured.
-
-        Returns:
-            ``True`` if ``EnableTimeout`` is ``"true"``, ``False`` otherwise.
-        """
-        return self._get("EnableTimeout") == "true"
-
-    @property
-    def extra_attributes(self) -> dict[str, str]:
-        """XML attributes not covered by explicit properties.
-
-        Returns:
-            Dictionary mapping attribute names to their string values.
-        """
-        return {
-            k: v
-            for k, v in self._element.attrib.items()
-            if k not in {"EventTrigger", "EnableTimeout"}
-        }
+    event_trigger = str_attr("EventTrigger", doc="Event trigger source.")
+    enable_timeout = bool_attr(
+        "EnableTimeout", default=False, doc="Whether enable timeout is configured."
+    )
 
     def __repr__(self) -> str:
         """Return a concise representation.
@@ -203,6 +167,25 @@ class Task(BaseElement):
         type_registry: Used to resolve scheduled programs' tags' value tree members.
     """
 
+    name = str_attr("Name", doc="Task name.")
+    description = CDataField("Description", doc="Task description text.")
+    type_ = str_attr(
+        "Type",
+        doc='Task type (e.g. "CONTINUOUS", "PERIODIC", "EVENT").',
+    )
+    rate = float_attr("Rate", doc="Task period in milliseconds.")
+    priority = int_attr("Priority", doc="Task priority level.")
+    watchdog = int_attr("Watchdog", doc="Watchdog timeout value.")
+    disable_update_outputs = bool_attr(
+        "DisableUpdateOutputs",
+        default=False,
+        doc="Whether output updates are disabled for this task.",
+    )
+    inhibit_task = bool_attr(
+        "InhibitTask", default=False, doc="Whether the task is inhibited."
+    )
+    class_ = str_attr("Class", doc='Task class: "Standard" or "Safety".')
+
     def __init__(
         self,
         element: ET.Element,
@@ -221,100 +204,6 @@ class Task(BaseElement):
         super().__init__(element)
         self._controller_element = controller_element
         self._type_registry = type_registry
-
-    @property
-    def name(self) -> str:
-        """Task name.
-
-        Returns:
-            The task name string.
-        """
-        return self._get("Name")
-
-    @property
-    def description(self) -> str:
-        """Task description text.
-
-        Returns:
-            The description text string, or ``""`` if no description is present.
-        """
-        return self._get_description()
-
-    @property
-    def type_(self) -> str:
-        """Task type.
-
-        Returns:
-            The value of the ``Type`` XML attribute (e.g. ``"CONTINUOUS"``,
-            ``"PERIODIC"``, ``"EVENT"``).
-        """
-        return self._get("Type")
-
-    @property
-    def rate(self) -> float | None:
-        """Task period in milliseconds.
-
-        Returns:
-            The rate as a ``float``, or ``None`` if the ``Rate`` attribute
-            is not present.
-        """
-        rate_str = self._get("Rate")
-        if rate_str:
-            return float(rate_str)
-        return None
-
-    @property
-    def priority(self) -> int | None:
-        """Task priority level.
-
-        Returns:
-            The priority as an ``int``, or ``None`` if the ``Priority``
-            attribute is not present.
-        """
-        priority_str = self._get("Priority")
-        if priority_str:
-            return int(priority_str)
-        return None
-
-    @property
-    def watchdog(self) -> int | None:
-        """Watchdog timeout value.
-
-        Returns:
-            The watchdog value as an ``int``, or ``None`` if the ``Watchdog``
-            attribute is not present.
-        """
-        watchdog_str = self._get("Watchdog")
-        if watchdog_str:
-            return int(watchdog_str)
-        return None
-
-    @property
-    def disable_update_outputs(self) -> bool:
-        """Whether output updates are disabled for this task.
-
-        Returns:
-            ``True`` if ``DisableUpdateOutputs`` is ``"true"``, ``False`` otherwise.
-        """
-        return self._get("DisableUpdateOutputs") == "true"
-
-    @property
-    def inhibit_task(self) -> bool:
-        """Whether the task is inhibited.
-
-        Returns:
-            ``True`` if ``InhibitTask`` is ``"true"``, ``False`` otherwise.
-        """
-        return self._get("InhibitTask") == "true"
-
-    @property
-    def class_(self) -> str:
-        """Task class: ``"Standard"`` or ``"Safety"``.
-
-        Returns:
-            The value of the ``Class`` XML attribute.
-        """
-        return self._get("Class")
 
     @property
     def is_safety(self) -> bool:
@@ -367,19 +256,6 @@ class Task(BaseElement):
         return _ScheduledPrograms(
             self._element, self._controller_element, self._type_registry
         )
-
-    @property
-    def extra_attributes(self) -> dict[str, str]:
-        """XML attributes not covered by explicit properties.
-
-        Returns:
-            Dictionary mapping attribute names to their string values.
-        """
-        return {
-            k: v
-            for k, v in self._element.attrib.items()
-            if k not in _TASK_KNOWN_XML_KEYS
-        }
 
     def __repr__(self) -> str:
         """Return a concise representation including the task name.

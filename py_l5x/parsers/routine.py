@@ -15,15 +15,14 @@ from __future__ import annotations
 import re
 from xml.etree import ElementTree as ET
 
-from py_l5x.parsers.base import BaseCollection, BaseElement
+from py_l5x.parsers.base import (
+    BaseCollection,
+    BaseElement,
+    CDataField,
+    int_attr,
+    str_attr,
+)
 from py_l5x.parsers.utils import CDATA_TAG
-
-_ROUTINE_KNOWN_XML_KEYS: frozenset[str] = frozenset({"Name", "Type", "Use"})
-"""Known XML attribute names on ``<Routine>`` elements."""
-_RUNG_KNOWN_XML_KEYS: frozenset[str] = frozenset({"Number", "Type", "Use"})
-"""Known XML attribute names on ``<Rung>`` elements."""
-_ST_LINE_KNOWN_XML_KEYS: frozenset[str] = frozenset({"Number"})
-"""Known XML attribute names on ``<Line>`` (ST) elements."""
 
 _ST_COMMENT_RE = re.compile(
     r"'(?:[^']|'')*'"
@@ -37,76 +36,19 @@ _ST_COMMENT_RE = re.compile(
 class Rung(BaseElement):
     """A single ladder rung in ``<RLLContent>``.
 
-    Attributes:
-        number: Rung number.
-        type_: Rung type (typically ``"N"``).
-        comment: Rung comment text, if present.
-        text: Rung neutral text logic.
-
     Args:
         element: The ``<Rung>`` XML element to wrap.
     """
 
-    @property
-    def number(self) -> int:
-        """Rung number.
-
-        Returns:
-            The rung number as an integer, defaulting to 0.
-        """
-        return int(self._get("Number", "0"))
-
-    @property
-    def type_(self) -> str:
-        """Rung type (typically ``"N"``).
-
-        Returns:
-            The rung type string.
-        """
-        return self._get("Type")
-
-    @property
-    def comment(self) -> str:
-        """Rung comment text, if present.
-
-        Returns:
-            The comment text string, or empty string if none.
-        """
-        return self._get_cdata_child("Comment")
-
-    @property
-    def text(self) -> str:
-        """Rung neutral text logic.
-
-        Returns:
-            The rung's neutral text content.
-        """
-        return self._get_cdata_child("Text")
-
-    @property
-    def extra_attributes(self) -> dict[str, str]:
-        """XML attributes not covered by explicit properties.
-
-        Returns:
-            Dictionary mapping attribute names to their string values.
-        """
-        return {
-            k: v
-            for k, v in self._element.attrib.items()
-            if k not in _RUNG_KNOWN_XML_KEYS
-        }
-
-    @property
-    def use(self) -> str:
-        """Export target role for this rung.
-
-        ``"Target"`` when this rung is the exported target in a component
-        export; empty string otherwise.
-
-        Returns:
-            The value of the ``Use`` XML attribute, or ``""`` if absent.
-        """
-        return self._get("Use")
+    number = int_attr("Number", default=0, doc="Rung number.")
+    type_ = str_attr("Type", doc='Rung type (typically "N").')
+    comment = CDataField("Comment", doc="Rung comment text, if present.")
+    text = CDataField("Text", doc="Rung neutral text logic.")
+    use = str_attr(
+        "Use",
+        doc='Export target role for this rung. "Target" when this rung is '
+        "the exported target in a component export.",
+    )
 
     def __repr__(self) -> str:
         """Return a concise rung representation.
@@ -120,22 +62,11 @@ class Rung(BaseElement):
 class StLine(BaseElement):
     """A single structured-text ``<Line>`` entry.
 
-    Attributes:
-        number: Line number.
-        text: Raw line text from CDATA or direct content.
-
     Args:
         element: The ``<Line>`` XML element to wrap.
     """
 
-    @property
-    def number(self) -> int:
-        """Line number.
-
-        Returns:
-            The line number as an integer, defaulting to 0.
-        """
-        return int(self._get("Number", "0"))
+    number = int_attr("Number", default=0, doc="Line number.")
 
     @property
     def text(self) -> str:
@@ -155,19 +86,6 @@ class StLine(BaseElement):
             return self._element.text.strip("\r\n")
         return ""
 
-    @property
-    def extra_attributes(self) -> dict[str, str]:
-        """XML attributes not covered by explicit properties.
-
-        Returns:
-            Dictionary mapping attribute names to their string values.
-        """
-        return {
-            k: v
-            for k, v in self._element.attrib.items()
-            if k not in _ST_LINE_KNOWN_XML_KEYS
-        }
-
     def __repr__(self) -> str:
         """Return a concise ST line representation.
 
@@ -181,9 +99,6 @@ class Routine(BaseElement):
     """A single ``<Routine>`` with parsed ladder/ST logic text.
 
     Attributes:
-        name: Routine name.
-        type_: Routine language/type (e.g. ``"RLL"`` or ``"ST"``).
-        description: Routine description text.
         rungs: All ladder rungs in this routine (empty for non-RLL).
         st_lines: All ST lines in this routine (empty for non-ST).
         st_code: Structured Text routine body as a newline-joined string.
@@ -192,44 +107,14 @@ class Routine(BaseElement):
         element: The ``<Routine>`` XML element to wrap.
     """
 
-    @property
-    def name(self) -> str:
-        """Routine name.
-
-        Returns:
-            The routine name string.
-        """
-        return self._get("Name")
-
-    @property
-    def use(self) -> str:
-        """Export target role for this routine.
-
-        ``"Target"`` when this routine is the exported target in a component
-        export; empty string otherwise.
-
-        Returns:
-            The value of the ``Use`` XML attribute, or ``""`` if absent.
-        """
-        return self._get("Use")
-
-    @property
-    def type_(self) -> str:
-        """Routine language/type (e.g. ``"RLL"`` or ``"ST"``).
-
-        Returns:
-            The routine type string.
-        """
-        return self._get("Type")
-
-    @property
-    def description(self) -> str:
-        """Routine description text.
-
-        Returns:
-            The description text string.
-        """
-        return self._get_description()
+    name = str_attr("Name", doc="Routine name.")
+    use = str_attr(
+        "Use",
+        doc='Export target role for this routine. "Target" when this '
+        "routine is the exported target in a component export.",
+    )
+    type_ = str_attr("Type", doc='Routine language/type (e.g. "RLL" or "ST").')
+    description = CDataField("Description", doc="Routine description text.")
 
     @property
     def rungs(self) -> list[Rung]:
@@ -350,19 +235,6 @@ class Routine(BaseElement):
             if body:
                 comments.append(body)
         return comments
-
-    @property
-    def extra_attributes(self) -> dict[str, str]:
-        """XML attributes not covered by explicit properties.
-
-        Returns:
-            Dictionary mapping attribute names to their string values.
-        """
-        return {
-            k: v
-            for k, v in self._element.attrib.items()
-            if k not in _ROUTINE_KNOWN_XML_KEYS
-        }
 
     def __repr__(self) -> str:
         """Return a concise representation including name and type.
