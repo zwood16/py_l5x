@@ -33,7 +33,16 @@ from collections.abc import Mapping, Sequence
 from typing import Literal
 from xml.etree import ElementTree as ET
 
-from py_l5x.parsers.base import BaseCollection, BaseElement, XmlAttrMixin
+from py_l5x.parsers.base import (
+    BaseCollection,
+    BaseElement,
+    CDataField,
+    XmlAttrMixin,
+    bool_attr,
+    float_attr,
+    int_attr,
+    str_attr,
+)
 from py_l5x.parsers.datatype import (
     AddOnDataTypeCollection,
     AddOnParameter,
@@ -594,6 +603,142 @@ def _build_node(
     )
 
 
+# ----------------------------------------------------------------------
+# Tag facets
+# ----------------------------------------------------------------------
+
+
+class ProduceInfo(BaseElement):
+    """``<ProduceInfo>``, present on ``Produced`` tags.
+
+    Args:
+        element: The ``<ProduceInfo>`` element from a parsed L5X tree.
+    """
+
+    produce_count = int_attr(
+        "ProduceCount", doc="Number of consumers this tag is configured to serve."
+    )
+    programmatically_send_event_trigger = bool_attr(
+        "ProgrammaticallySendEventTrigger",
+        default=False,
+        doc="Whether event triggers can be sent programmatically.",
+    )
+    unicast_permitted = bool_attr(
+        "UnicastPermitted",
+        default=False,
+        doc="Whether unicast consumer connections are permitted.",
+    )
+    minimum_rpi = float_attr(
+        "MinimumRPI", doc="Minimum allowed Requested Packet Interval, in ms."
+    )
+    maximum_rpi = float_attr(
+        "MaximumRPI", doc="Maximum allowed Requested Packet Interval, in ms."
+    )
+    default_rpi = float_attr(
+        "DefaultRPI", doc="Default Requested Packet Interval, in ms."
+    )
+
+    def __repr__(self) -> str:
+        return f"ProduceInfo(produce_count={self.produce_count!r})"
+
+
+class ConsumeInfo(BaseElement):
+    """``<ConsumeInfo>``, present on ``Consumed`` tags.
+
+    Args:
+        element: The ``<ConsumeInfo>`` element from a parsed L5X tree.
+    """
+
+    producer = str_attr("Producer", doc="Name of the producing controller.")
+    remote_tag = str_attr(
+        "RemoteTag", doc="Name of the produced tag on the remote controller."
+    )
+    remote_instance = int_attr(
+        "RemoteInstance", doc="CIP instance id of the remote produced tag."
+    )
+    rpi = int_attr("RPI", doc="Requested Packet Interval, in ms.")
+    unicast = bool_attr(
+        "Unicast", doc="Whether this connection is configured for unicast traffic."
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"ConsumeInfo(producer={self.producer!r}, remote_tag={self.remote_tag!r})"
+        )
+
+
+class TagExtendedProperties:
+    """Studio 5000 "Extended Properties" set directly on a ``<Tag>`` element.
+
+    Bundles the ``Min``/``Max``/``EngineeringUnit``/``State0``/``State1``/
+    ``ExternalLogging`` values that Logix allows to be set on the tag itself
+    -- separate from the per-member/per-bit operand overrides used for
+    nested UDT/AOI members (see :class:`_TagOverrides`). Obtained via
+    :attr:`Tag.extended_properties`, which is ``None`` when none of these
+    are set.
+
+    Args:
+        tag: The owning :class:`Tag` instance.
+    """
+
+    def __init__(self, tag: Tag) -> None:
+        """Bind this view to its owning tag.
+
+        Args:
+            tag: The owning :class:`Tag` instance.
+        """
+        self._tag = tag
+
+    @property
+    def min(self) -> int | float | str | None:
+        """The tag's own minimum value, if set directly on ``<Tag>``."""
+        value = self._tag._element.get("Min")
+        return None if value is None else convert_numeric(value, self._tag.data_type)
+
+    @property
+    def max(self) -> int | float | str | None:
+        """The tag's own maximum value, if set directly on ``<Tag>``."""
+        value = self._tag._element.get("Max")
+        return None if value is None else convert_numeric(value, self._tag.data_type)
+
+    @property
+    def engineering_unit(self) -> str:
+        """The tag's own engineering unit, if set directly on ``<Tag>``."""
+        return self._tag._root_metadata("EngineeringUnits", "EngineeringUnit") or ""
+
+    @property
+    def state0(self) -> str:
+        """The tag's own zero-state text, if set directly on ``<Tag>``."""
+        return self._tag._root_metadata("State0s", "State0") or ""
+
+    @property
+    def state1(self) -> str:
+        """The tag's own one-state text, if set directly on ``<Tag>``."""
+        return self._tag._root_metadata("State1s", "State1") or ""
+
+    @property
+    def external_logging(self) -> bool | None:
+        """Whether external logging is enabled, if set directly on ``<Tag>``."""
+        value = self._tag._element.get("ExternalLogging")
+        return None if value is None else value == "true"
+
+    def __repr__(self) -> str:
+        """Return a multi-line representation of the populated metadata."""
+        lines = ["TagExtendedProperties"]
+        props = [
+            ("Min", self.min),
+            ("Max", self.max),
+            ("EngineeringUnit", self.engineering_unit),
+            ("State0", self.state0),
+            ("State1", self.state1),
+            ("ExternalLogging", self.external_logging),
+        ]
+        for label, val in props:
+            if val is not None and val != "":
+                lines.append(f"  {label}: {val!r}")
+        return "\n".join(lines)
+
+
 class Tag(BaseElement):
     """A single ``<Tag>`` element (controller- or program-scoped).
 
@@ -614,33 +759,54 @@ class Tag(BaseElement):
         self._overrides = _TagOverrides(element)
 
     # ------------------------------------------------------------------
-    # Identity
+    # Identity (core -- always meaningful, regardless of tag kind)
     # ------------------------------------------------------------------
 
-    @property
-    def name(self) -> str:
-        """Tag name."""
-        return self._get("Name")
+    name = str_attr("Name", doc="Tag name.")
+    tag_type = str_attr(
+        "TagType", doc='Tag kind: "Base", "Alias", "Produced", or "Consumed".'
+    )
+    data_type = str_attr("DataType", doc="The tag's data type name.")
+    radix = str_attr("Radix", doc="Display radix, for atomic tags.")
+    constant = bool_attr(
+        "Constant", default=False, doc="Whether the tag is a constant."
+    )
+    external_access = str_attr(
+        "ExternalAccess", doc='External access level (e.g. "Read/Write").'
+    )
+    usage = str_attr(
+        "Usage",
+        doc='Program-scoped parameter usage ("Input"/"Output"/"Public").',
+    )
+    class_ = str_attr(
+        "Class",
+        doc='Tag class: "Standard" or "Safety". Safety-class tags live in a '
+        "safety-partitioned program/task and are subject to the "
+        "controller's SafetyInfo restrictions.",
+    )
+    opc_ua_access = str_attr(
+        "OpcUaAccess", doc='OPC UA exposure level for this tag (e.g. "None").'
+    )
+    description = CDataField(
+        "Description", attr_fallback="Description", doc="Tag description text."
+    )
+
+    #: Attributes backed by a plain @property/facet rather than a declared
+    #: XmlField/CDataField -- still "known", so excluded from
+    #: extra_attributes (Min/Max/ExternalLogging are surfaced via
+    #: :attr:`extended_properties`, AliasFor via :attr:`alias_for`).
+    _DYNAMIC_KEYS: frozenset[str] = frozenset(
+        {"Min", "Max", "ExternalLogging", "AliasFor"}
+    )
 
     @property
-    def tag_type(self) -> str:
-        """Tag kind: ``"Base"``, ``"Alias"``, ``"Produced"``, or ``"Consumed"``."""
-        return self._get("TagType")
+    def extra_attributes(self) -> dict[str, str]:
+        """XML attributes not covered by declared fields or dynamic properties.
 
-    @property
-    def class_(self) -> str:
-        """Tag class: ``"Standard"`` or ``"Safety"``.
-
-        Safety-class tags live in a safety-partitioned program/task and are
-        subject to the controller's ``SafetyInfo`` restrictions (see
-        :attr:`py_l5x.parsers.controller.ControllerInfo.safety_info`).
-
-        Returns:
-            The value of the ``Class`` XML attribute, or ``""`` if absent
-            (Rockwell omits it for ordinary ``"Standard"`` tags in some
-            exports).
+        See :attr:`_DYNAMIC_KEYS`.
         """
-        return self._get("Class")
+        extras = super().extra_attributes
+        return {k: v for k, v in extras.items() if k not in self._DYNAMIC_KEYS}
 
     @property
     def is_safety(self) -> bool:
@@ -652,135 +818,137 @@ class Tag(BaseElement):
         return self.class_ == "Safety"
 
     @property
-    def opc_ua_access(self) -> str:
-        """OPC UA exposure level for this tag (e.g. ``"None"``).
+    def alias_for(self) -> str | None:
+        """The referenced tag/member path, for ``Alias`` tags.
 
         Returns:
-            The value of the ``OpcUaAccess`` XML attribute, or ``""`` if
-            absent.
+            The ``AliasFor`` XML attribute value, or ``None`` for non-Alias
+            tags (this facet is not applicable to them).
         """
-        return self._get("OpcUaAccess")
-
-    @property
-    def data_type(self) -> str:
-        """The tag's data type name."""
-        return self._get("DataType")
-
-    @property
-    def radix(self) -> str:
-        """Display radix, for atomic tags."""
-        return self._get("Radix")
-
-    @property
-    def constant(self) -> bool:
-        """Whether the tag is a constant."""
-        return self._get("Constant") == "true"
-
-    @property
-    def external_access(self) -> str:
-        """External access level (e.g. ``"Read/Write"``)."""
-        return self._get("ExternalAccess")
-
-    @property
-    def usage(self) -> str:
-        """Program-scoped parameter usage (``"Input"``/``"Output"``/``"Public"``)."""
-        return self._get("Usage")
-
-    @property
-    def description(self) -> str:
-        """Tag description text."""
-        return self._get_description()
+        return self._element.get("AliasFor")
 
     # ------------------------------------------------------------------
-    # Root-level metadata (the tag's own min/max/engineering unit/state
-    # text/external logging, separate from the operand override maps used
-    # for nested members -- see :class:`_TagOverrides`)
+    # Root-level metadata shortcuts -- mirror :class:`TagNode`'s flat
+    # min/max/engineering_unit/state0/state1/external_logging surface so
+    # drilling into a tag's value tree doesn't feel like a different API
+    # from the tag itself. Each is ``None``/``""``-safe when
+    # :attr:`extended_properties` is ``None`` (nothing set directly on this
+    # ``<Tag>``). :attr:`extended_properties` remains available too, for an
+    # at-a-glance "is anything set at all" check and for :meth:`describe`.
     # ------------------------------------------------------------------
 
     @property
     def min(self) -> int | float | str | None:
-        """The tag's own minimum value, if set directly on ``<Tag>``."""
-        value = self._element.get("Min")
-        return None if value is None else convert_numeric(value, self.data_type)
+        """Shortcut for ``self.extended_properties.min``.
+
+        Returns:
+            ``None`` if :attr:`extended_properties` is ``None``.
+        """
+        ext = self.extended_properties
+        return ext.min if ext is not None else None
 
     @property
     def max(self) -> int | float | str | None:
-        """The tag's own maximum value, if set directly on ``<Tag>``."""
-        value = self._element.get("Max")
-        return None if value is None else convert_numeric(value, self.data_type)
-
-    def _root_metadata(self, container_tag: str, child_tag: str) -> str | None:
-        """Return CDATA text for a container child with no ``Operand`` attribute.
-
-        ``EngineeringUnits``/``State0s``/``State1s``/``ExternalLoggings``
-        containers on a ``<Tag>`` element can hold both the tag's own
-        (un-qualified) metadata entry and per-member/per-bit entries
-        qualified by an ``Operand`` attribute (see :class:`_TagOverrides`,
-        which handles the latter). This returns only the former.
-
-        Args:
-            container_tag: The plural wrapper element name (e.g.
-                ``"EngineeringUnits"``).
-            child_tag: The child element name to read CDATA text from (e.g.
-                ``"EngineeringUnit"``).
+        """Shortcut for ``self.extended_properties.max``.
 
         Returns:
-            The text content, stripped of surrounding whitespace, or
-            ``None`` if no un-qualified entry is present.
+            ``None`` if :attr:`extended_properties` is ``None``.
         """
-        container = self._element.find(container_tag)
-        if container is None:
-            return None
-        for child in container.findall(child_tag):
-            if child.get("Operand"):
-                continue
-            cdata_el = child.find(CDATA_TAG)
-            if cdata_el is not None and cdata_el.text:
-                return cdata_el.text.strip()
-            return child.text.strip() if child.text else ""
-        return None
+        ext = self.extended_properties
+        return ext.max if ext is not None else None
 
     @property
     def engineering_unit(self) -> str:
-        """The tag's own engineering unit, if set directly on ``<Tag>``."""
-        return self._root_metadata("EngineeringUnits", "EngineeringUnit") or ""
+        """Shortcut for ``self.extended_properties.engineering_unit``.
+
+        Returns:
+            ``""`` if :attr:`extended_properties` is ``None``.
+        """
+        ext = self.extended_properties
+        return ext.engineering_unit if ext is not None else ""
 
     @property
     def state0(self) -> str:
-        """The tag's own zero-state text, if set directly on ``<Tag>``."""
-        return self._root_metadata("State0s", "State0") or ""
+        """Shortcut for ``self.extended_properties.state0``.
+
+        Returns:
+            ``""`` if :attr:`extended_properties` is ``None``.
+        """
+        ext = self.extended_properties
+        return ext.state0 if ext is not None else ""
 
     @property
     def state1(self) -> str:
-        """The tag's own one-state text, if set directly on ``<Tag>``."""
-        return self._root_metadata("State1s", "State1") or ""
+        """Shortcut for ``self.extended_properties.state1``.
+
+        Returns:
+            ``""`` if :attr:`extended_properties` is ``None``.
+        """
+        ext = self.extended_properties
+        return ext.state1 if ext is not None else ""
 
     @property
     def external_logging(self) -> bool | None:
-        """Whether external logging is enabled, if set directly on ``<Tag>``."""
-        value = self._element.get("ExternalLogging")
-        return None if value is None else value == "true"
+        """Shortcut for ``self.extended_properties.external_logging``.
+
+        Returns:
+            ``None`` if :attr:`extended_properties` is ``None``.
+        """
+        ext = self.extended_properties
+        return ext.external_logging if ext is not None else None
 
     # ------------------------------------------------------------------
-    # Special tag kinds
+    # Facets -- optional, context-dependent groups. ``None`` means "not
+    # applicable to this tag"; check the facet rather than ``tag_type``.
     # ------------------------------------------------------------------
 
     @property
-    def alias_for(self) -> str:
-        """The referenced tag/member path, for ``Alias`` tags."""
-        return self._get("AliasFor")
+    def extended_properties(self) -> TagExtendedProperties | None:
+        """Studio 5000 "Extended Properties" set directly on this ``<Tag>``.
+
+        Bundles :attr:`TagExtendedProperties.min`/``max``/
+        ``engineering_unit``/``state0``/``state1``/``external_logging`` --
+        separate from the per-member/per-bit operand overrides used for
+        nested UDT/AOI members (see :class:`_TagOverrides`). Named to match
+        the "Extended Properties" tab/label Studio 5000 uses for this same
+        data in its Tag Properties dialog.
+
+        Returns:
+            A :class:`TagExtendedProperties` view if any of those are set
+            directly on ``<Tag>``, ``None`` otherwise.
+        """
+        if (
+            self._element.get("Min") is None
+            and self._element.get("Max") is None
+            and self._element.get("ExternalLogging") is None
+            and self._root_metadata("EngineeringUnits", "EngineeringUnit") is None
+            and self._root_metadata("State0s", "State0") is None
+            and self._root_metadata("State1s", "State1") is None
+        ):
+            return None
+        return TagExtendedProperties(self)
 
     @property
-    def consume_info(self) -> dict[str, str] | None:
-        """``ConsumeInfo`` attributes, for ``Consumed`` tags."""
-        el = self._element.find("ConsumeInfo")
-        return dict(el.attrib) if el is not None else None
+    def produced(self) -> ProduceInfo | None:
+        """``ProduceInfo`` details, for ``Produced`` tags.
 
-    @property
-    def produce_info(self) -> dict[str, str] | None:
-        """``ProduceInfo`` attributes, for ``Produced`` tags."""
+        Returns:
+            A :class:`ProduceInfo` instance if this tag has a
+            ``<ProduceInfo>`` child, ``None`` otherwise.
+        """
         el = self._element.find("ProduceInfo")
-        return dict(el.attrib) if el is not None else None
+        return ProduceInfo(el) if el is not None else None
+
+    @property
+    def consumed(self) -> ConsumeInfo | None:
+        """``ConsumeInfo`` details, for ``Consumed`` tags.
+
+        Returns:
+            A :class:`ConsumeInfo` instance if this tag has a
+            ``<ConsumeInfo>`` child, ``None`` otherwise.
+        """
+        el = self._element.find("ConsumeInfo")
+        return ConsumeInfo(el) if el is not None else None
 
     @property
     def message_parameters(self) -> MessageParameters | None:
@@ -870,6 +1038,41 @@ class Tag(BaseElement):
         return None
 
     # ------------------------------------------------------------------
+    # Root-level metadata internals (backing :attr:`hmi`)
+    # ------------------------------------------------------------------
+
+    def _root_metadata(self, container_tag: str, child_tag: str) -> str | None:
+        """Return CDATA text for a container child with no ``Operand`` attribute.
+
+        ``EngineeringUnits``/``State0s``/``State1s``/``ExternalLoggings``
+        containers on a ``<Tag>`` element can hold both the tag's own
+        (un-qualified) metadata entry and per-member/per-bit entries
+        qualified by an ``Operand`` attribute (see :class:`_TagOverrides`,
+        which handles the latter). This returns only the former.
+
+        Args:
+            container_tag: The plural wrapper element name (e.g.
+                ``"EngineeringUnits"``).
+            child_tag: The child element name to read CDATA text from (e.g.
+                ``"EngineeringUnit"``).
+
+        Returns:
+            The text content, stripped of surrounding whitespace, or
+            ``None`` if no un-qualified entry is present.
+        """
+        container = self._element.find(container_tag)
+        if container is None:
+            return None
+        for child in container.findall(child_tag):
+            if child.get("Operand"):
+                continue
+            cdata_el = child.find(CDATA_TAG)
+            if cdata_el is not None and cdata_el.text:
+                return cdata_el.text.strip()
+            return child.text.strip() if child.text else ""
+        return None
+
+    # ------------------------------------------------------------------
     # Value tree
     # ------------------------------------------------------------------
 
@@ -944,6 +1147,34 @@ class Tag(BaseElement):
     def __repr__(self) -> str:
         """Return a concise representation including the tag name and type."""
         return f"Tag({self.name!r}, {self.data_type!r})"
+
+    def describe(self) -> str:
+        """Extend :meth:`BaseElement.describe` to include populated facets.
+
+        ``extended_properties``/``produced``/``consumed``/
+        ``message_parameters``/``motion_group_parameters``/
+        ``axis_parameters`` are plain properties (not declared fields), so
+        the base implementation can't see them -- this appends each one's
+        own repr when present.
+
+        Returns:
+            A formatted multi-line string suitable for interactive/debug use.
+        """
+        lines = [super().describe()]
+        facets = (
+            ("extended_properties", self.extended_properties),
+            ("produced", self.produced),
+            ("consumed", self.consumed),
+            ("message_parameters", self.message_parameters),
+            ("motion_group_parameters", self.motion_group_parameters),
+            ("axis_parameters", self.axis_parameters),
+        )
+        for label, facet in facets:
+            if facet is None:
+                continue
+            lines.append(f"  {label}:")
+            lines.extend(f"    {line}" for line in repr(facet).splitlines())
+        return "\n".join(lines)
 
 
 class TagsCollection(BaseCollection[Tag]):

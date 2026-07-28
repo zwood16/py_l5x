@@ -154,29 +154,65 @@ class TestRootTagMetadata:
     """Tests for metadata set directly on the ``<Tag>`` element itself."""
 
     def test_engineering_unit(self, main_program_tags: TagsCollection) -> None:
-        """a_real_with_properties's tag-level EngineeringUnits is exposed."""
-        assert main_program_tags["a_real_with_properties"].engineering_unit == "mm"
+        """a_real_with_properties's tag-level EngineeringUnits is exposed via
+        extended_properties."""
+        ext = main_program_tags["a_real_with_properties"].extended_properties
+        assert ext is not None
+        assert ext.engineering_unit == "mm"
 
     def test_engineering_unit_absent(self, main_program_tags: TagsCollection) -> None:
-        """a_dint has no EngineeringUnits container at all."""
-        assert main_program_tags["a_dint"].engineering_unit == ""
+        """a_dint has no EngineeringUnits container, so extended_properties is None."""
+        assert main_program_tags["a_dint"].extended_properties is None
 
     def test_state0_and_state1(self, main_program_tags: TagsCollection) -> None:
-        """a_bool_with_properties's tag-level State0s/State1s are exposed."""
-        assert main_program_tags["a_bool_with_properties"].state0 == "Off"
-        assert main_program_tags["a_bool_with_properties"].state1 == "On"
+        """a_bool_with_properties's tag-level State0s/State1s are exposed via
+        extended_properties."""
+        ext = main_program_tags["a_bool_with_properties"].extended_properties
+        assert ext is not None
+        assert ext.state0 == "Off"
+        assert ext.state1 == "On"
 
     def test_external_logging(self, main_program_tags: TagsCollection) -> None:
-        """a_bool_with_properties's tag-level ExternalLogging is exposed."""
-        assert main_program_tags["a_bool_with_properties"].external_logging is True
+        """a_bool_with_properties's tag-level ExternalLogging is exposed via
+        extended_properties."""
+        ext = main_program_tags["a_bool_with_properties"].extended_properties
+        assert ext is not None
+        assert ext.external_logging is True
 
     def test_external_logging_false(self, main_program_tags: TagsCollection) -> None:
-        """a_real_with_properties's tag-level ExternalLogging is exposed."""
-        assert main_program_tags["a_real_with_properties"].external_logging is False
+        """a_real_with_properties's tag-level ExternalLogging is exposed via
+        extended_properties."""
+        ext = main_program_tags["a_real_with_properties"].extended_properties
+        assert ext is not None
+        assert ext.external_logging is False
 
     def test_external_logging_absent(self, main_program_tags: TagsCollection) -> None:
-        """a_dint has no ExternalLoggings container at all."""
-        assert main_program_tags["a_dint"].external_logging is None
+        """a_dint has no ExternalLoggings container, so extended_properties is None."""
+        assert main_program_tags["a_dint"].extended_properties is None
+
+    def test_flat_shortcuts_match_extended_properties(
+        self, main_program_tags: TagsCollection
+    ) -> None:
+        """Tag.engineering_unit/state0/state1/external_logging/min/max mirror
+        the same-named TagNode properties for interface consistency."""
+        tag = main_program_tags["a_bool_with_properties"]
+        assert tag.engineering_unit == tag.extended_properties.engineering_unit
+        assert tag.state0 == tag.extended_properties.state0
+        assert tag.state1 == tag.extended_properties.state1
+        assert tag.external_logging == tag.extended_properties.external_logging
+
+    def test_flat_shortcuts_safe_when_no_extended_properties(
+        self, main_program_tags: TagsCollection
+    ) -> None:
+        """Flat shortcuts are None/""-safe when extended_properties is None."""
+        tag = main_program_tags["a_dint"]
+        assert tag.extended_properties is None
+        assert tag.min is None
+        assert tag.max is None
+        assert tag.engineering_unit == ""
+        assert tag.state0 == ""
+        assert tag.state1 == ""
+        assert tag.external_logging is None
 
     def test_root_scalar_data_has_no_metadata(
         self, main_program_tags: TagsCollection
@@ -542,23 +578,24 @@ class TestSpecialtyTagData:
         }
 
     def test_consumed_tag_value_and_info(self, controller_tags: TagsCollection) -> None:
-        """Consumed tags parse their atomic value and expose ConsumeInfo."""
+        """Consumed tags parse their atomic value and expose a ConsumeInfo facet."""
         tag = controller_tags["consumed_tag"]
         assert tag.value == 0
-        assert tag.consume_info == {
-            "Producer": "AnotherPLC",
-            "RemoteTag": "fake_other_tag",
-            "RemoteInstance": "0",
-            "RPI": "20",
-            "Unicast": "true",
-        }
+        consumed = tag.consumed
+        assert consumed is not None
+        assert consumed.producer == "AnotherPLC"
+        assert consumed.remote_tag == "fake_other_tag"
+        assert consumed.remote_instance == 0
+        assert consumed.rpi == 20
+        assert consumed.unicast is True
 
     def test_produced_tag_value_and_info(self, controller_tags: TagsCollection) -> None:
-        """Produced tags parse their atomic value and expose ProduceInfo."""
+        """Produced tags parse their atomic value and expose a ProduceInfo facet."""
         tag = controller_tags["produced_tag"]
         assert tag.value == 0
-        assert tag.produce_info is not None
-        assert tag.produce_info["ProduceCount"] == "1"
+        produced = tag.produced
+        assert produced is not None
+        assert produced.produce_count == 1
 
 
 # ---------------------------------------------------------------------------
