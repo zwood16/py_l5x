@@ -118,6 +118,7 @@ class AOILocalTag(BaseElement):
         return node.elements if node is not None else []
 
     def __repr__(self) -> str:
+        """Return a concise representation including the tag name and type."""
         return f"AOILocalTag({self.name!r}, {self.data_type!r})"
 
 
@@ -227,6 +228,7 @@ class AOIDefinition(BaseElement):
         return text
 
     def __repr__(self) -> str:
+        """Return a concise representation including the AOI name."""
         return f"AddOnInstructionDefinition({self.name!r})"
 
 

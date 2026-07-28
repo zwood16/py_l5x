@@ -12,7 +12,13 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping
 from xml.etree import ElementTree as ET
 
-from py_l5x.parsers.base import BaseElement, bool_attr, int_attr, str_attr
+from py_l5x.parsers.base import (
+    BaseElement,
+    CDataField,
+    bool_attr,
+    int_attr,
+    str_attr,
+)
 
 
 def _parse_int(value: str | None) -> int | None:
@@ -55,16 +61,10 @@ class SafetyInfo(BaseElement):
         "partition is locked.",
     )
     safety_level = str_attr("SafetyLevel", doc='Safety level string (e.g. "SIL3/PLe").')
-
-    @property
-    def safety_tag_map(self) -> str:
-        """Raw text mapping standard tags to safety-side counterparts.
-
-        Returns:
-            The stripped text content of ``<SafetyTagMap>``, or ``""`` if
-            absent.
-        """
-        return self._get_cdata_child("SafetyTagMap")
+    safety_tag_map = CDataField(
+        "SafetyTagMap",
+        doc="Raw text mapping standard tags to safety-side counterparts.",
+    )
 
     def __repr__(self) -> str:
         """Return a concise representation including the safety level."""

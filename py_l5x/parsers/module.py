@@ -459,11 +459,11 @@ class Module(BaseElement):
         super().__init__(element)
         self._type_registry = type_registry
 
-    @property
-    def data_exchange_id(self) -> str | None:
-        """Optional data exchange id for data-sharing features."""
-        raw = self._get("DataExchangeId")
-        return raw if raw else None
+    data_exchange_id = str_attr(
+        "DataExchangeId",
+        default=None,
+        doc="Optional data exchange id for data-sharing features.",
+    )
 
     @property
     def ekey_state(self) -> str:

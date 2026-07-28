@@ -520,16 +520,11 @@ class TagNode(XmlAttrMixin):
 
     @property
     def external_logging(self) -> bool | None:
-        """Whether external logging is enabled, from an override or type def.
-
-        Note:
-            ``AddOnParameter`` does not currently expose ``external_logging``,
-            so ``getattr`` is used defensively for that member-def type.
-        """
+        """Whether external logging is enabled, from an override or type def."""
         override = self._override("external_logging")
         if override is not None:
             return override == "true"
-        return getattr(self._member_def, "external_logging", None)
+        return self._member_def.external_logging if self._member_def else None
 
     def __repr__(self) -> str:
         """Return a detailed representation of the node and its properties."""
@@ -1038,7 +1033,7 @@ class Tag(BaseElement):
         return None
 
     # ------------------------------------------------------------------
-    # Root-level metadata internals (backing :attr:`hmi`)
+    # Root-level metadata internals (backing :attr:`extended_properties`)
     # ------------------------------------------------------------------
 
     def _root_metadata(self, container_tag: str, child_tag: str) -> str | None:

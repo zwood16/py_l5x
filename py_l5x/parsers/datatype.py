@@ -21,6 +21,7 @@ from py_l5x.parsers.base import (
     BaseElement,
     CDataField,
     bool_attr,
+    int_attr,
     str_attr,
 )
 from py_l5x.parsers.utils import CDATA_TAG, convert_numeric
@@ -40,7 +41,7 @@ class DataTypeMember(BaseElement):
     #: Attributes backed by plain @property (not an XmlField descriptor)
     #: because their conversion depends on data_type at read time -- still
     #: "known" and excluded from extra_attributes.
-    _DYNAMIC_KEYS: frozenset[str] = frozenset({"Dimension", "Min", "Max"})
+    _DYNAMIC_KEYS: frozenset[str] = frozenset({"Min", "Max"})
 
     # ------------------------------------------------------------------
     # Identity
@@ -69,18 +70,11 @@ class DataTypeMember(BaseElement):
         "meaningful when is_bit_member is True.",
     )
 
-    @property
-    def bit_number(self) -> int | None:
-        """Bit position within the host member.
-
-        Only meaningful when :attr:`is_bit_member` is ``True``.
-
-        Returns:
-            The ``BitNumber`` XML attribute as an ``int``, or ``None`` if
-            the attribute is absent.
-        """
-        value = self._get("BitNumber", "")
-        return int(value) if value else None
+    bit_number = int_attr(
+        "BitNumber",
+        doc="Bit position within the host member. Only meaningful when "
+        ":attr:`is_bit_member` is ``True``.",
+    )
 
     @property
     def is_bit_member(self) -> bool:
@@ -95,15 +89,12 @@ class DataTypeMember(BaseElement):
     # Shape / limits
     # ------------------------------------------------------------------
 
-    @property
-    def dimension(self) -> int:
-        """Array dimension.
-
-        Returns:
-            ``0`` for an atomic (non-array) member, otherwise the array
-            length.
-        """
-        return int(self._get("Dimension", "0"))
+    dimension = int_attr(
+        "Dimension",
+        default=0,
+        doc="Array dimension. 0 for an atomic (non-array) member, otherwise "
+        "the array length.",
+    )
 
     @property
     def is_array(self) -> bool:
@@ -166,9 +157,9 @@ class DataTypeMember(BaseElement):
     def extra_attributes(self) -> dict[str, str]:
         """XML attributes not covered by declared fields or dynamic properties.
 
-        See :attr:`_DYNAMIC_KEYS` for the ``Dimension``/``Min``/``Max``
-        properties whose conversion depends on :attr:`data_type` and so
-        aren't plain :class:`~py_l5x.parsers.base.XmlField` descriptors.
+        See :attr:`_DYNAMIC_KEYS` for the ``Min``/``Max`` properties whose
+        conversion depends on :attr:`data_type` and so aren't plain
+        :class:`~py_l5x.parsers.base.XmlField` descriptors.
         """
         extras = super().extra_attributes
         return {k: v for k, v in extras.items() if k not in self._DYNAMIC_KEYS}
@@ -401,6 +392,10 @@ class AddOnParameter(BaseElement):
         "ExternalAccess",
         doc='External access level (e.g. "Read/Write", "Read Only").',
     )
+    external_logging = bool_attr(
+        "ExternalLogging",
+        doc="Whether external logging is enabled for this parameter.",
+    )
     description = CDataField("Description", doc="Parameter description text.")
 
     @property
@@ -505,6 +500,11 @@ class AddOnParameter(BaseElement):
         return {k: v for k, v in extras.items() if k not in self._DYNAMIC_KEYS}
 
     def __repr__(self) -> str:
+        """Return a multi-line string representation of the parameter.
+
+        Returns:
+            A formatted string suitable for display in debug output.
+        """
         lines = [
             f"Parameter Name:   {self.name}",
             f"Data Type:        {self.data_type}",
