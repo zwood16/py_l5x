@@ -14,7 +14,7 @@ from py_l5x.parsers.datatype import (
     DataTypesCollection,
 )
 from py_l5x.parsers.routine import Routine
-from py_l5x.parsers.tag import TagNode, TypeRegistry
+from py_l5x.parsers.tag import StructNode, TypeRegistry
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 EXAMPLE_L5X = FIXTURES_DIR / "example.L5X"
@@ -121,8 +121,7 @@ class TestAoiLocalTags:
         """Structured local tags expose member drill-down."""
         debounce = aoi_definitions["Debounce"]
         timer = debounce.local_tags["debounceOnTimer"]
-        assert isinstance(timer.data, TagNode)
-        assert timer.data.kind == "structure"
+        assert isinstance(timer.data, StructNode)
         assert timer.members["PRE"].value == 0
         assert timer.members["DN"].value == 0
 

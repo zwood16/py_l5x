@@ -10,7 +10,16 @@ import pytest
 from py_l5x.parsers.datatype import AddOnDataTypeCollection, DataTypesCollection
 from py_l5x.parsers.program import Program, ProgramsCollection
 from py_l5x.parsers.specialty_tags import AxisParameters, MotionGroupParameters
-from py_l5x.parsers.tag import Tag, TagNode, TagsCollection, TypeRegistry
+from py_l5x.parsers.tag import (
+    ArrayNode,
+    IntegerNode,
+    StringNode,
+    StructNode,
+    Tag,
+    TagNode,
+    TagsCollection,
+    TypeRegistry,
+)
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 EXAMPLE_L5X = FIXTURES_DIR / "example.L5X"
@@ -117,8 +126,7 @@ class TestAtomicTags:
     def test_a_dint_value(self, main_program_tags: TagsCollection) -> None:
         """a_dint value is an int."""
         node = main_program_tags["a_dint"].data
-        assert isinstance(node, TagNode)
-        assert node.kind == "scalar"
+        assert isinstance(node, IntegerNode)
         assert node.value == 0
         assert main_program_tags["a_dint"].value == 0
 
@@ -239,8 +247,7 @@ class TestStringTags:
     def test_a_string_value(self, main_program_tags: TagsCollection) -> None:
         """a_string (STRING type) resolves to an empty string."""
         node = main_program_tags["a_string"].data
-        assert isinstance(node, TagNode)
-        assert node.kind == "scalar"
+        assert isinstance(node, StringNode)
         assert node.value == ""
 
     def test_a_custom_string_value(self, main_program_tags: TagsCollection) -> None:
@@ -259,8 +266,7 @@ class TestNestedUdtDrillDown:
     def test_root_is_structure(self, main_program_tags: TagsCollection) -> None:
         """a_udt_instance's value root is a structure-kind TagNode."""
         node = main_program_tags["a_udt_instance"].data
-        assert isinstance(node, TagNode)
-        assert node.kind == "structure"
+        assert isinstance(node, StructNode)
 
     def test_nested_udt_member(self, main_program_tags: TagsCollection) -> None:
         """Drilling into a nested UDT member (a_nested_UDT.Dint) works."""
@@ -271,8 +277,7 @@ class TestNestedUdtDrillDown:
         """Drilling into an array-of-atomics member (an_array[0]) works."""
         udt = main_program_tags["a_udt_instance"].data
         array_node = udt.members["an_array"]
-        assert isinstance(array_node, TagNode)
-        assert array_node.kind == "array"
+        assert isinstance(array_node, ArrayNode)
         assert array_node.elements[0].value == 0.0
         assert len(array_node.elements) == 4
 
@@ -290,10 +295,8 @@ class TestArrayOfStructures:
     def test_element_is_structure(self, controller_tags: TagsCollection) -> None:
         """Each array element is a structure-kind TagNode."""
         alarms = controller_tags["ALLOWABLE_ALARMS"].data
-        assert isinstance(alarms, TagNode)
-        assert alarms.kind == "array"
-        assert isinstance(alarms.elements[1], TagNode)
-        assert alarms.elements[1].kind == "structure"
+        assert isinstance(alarms, ArrayNode)
+        assert isinstance(alarms.elements[1], StringNode)
 
     def test_element_data_value(self, controller_tags: TagsCollection) -> None:
         """Element 1's DATA member matches the expected alarm code."""

@@ -8,6 +8,7 @@ import pytest
 
 from py_l5x import load
 from py_l5x.parsers.project import Project
+from py_l5x.parsers.tag import StructNode
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 EXAMPLE_L5X = FIXTURES_DIR / "example.L5X"
@@ -156,7 +157,7 @@ class TestTypeRegistry:
         """Tags using UDT types can drill into members."""
         # Find a tag that uses a UDT type and verify member access works
         for tag in project.tags.values():
-            if tag.data is not None and tag.data.kind == "structure":
+            if tag.data is not None and isinstance(tag.data, StructNode):
                 # Should be able to iterate members without error
                 members = list(tag.data.members)
                 assert isinstance(members, list)

@@ -18,7 +18,7 @@ from py_l5x.parsers.module import (
     OutputTag,
     Port,
 )
-from py_l5x.parsers.tag import TagNode, TypeRegistry
+from py_l5x.parsers.tag import ArrayNode, StructNode, TypeRegistry
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 EXAMPLE_L5X = FIXTURES_DIR / "example.L5X"
@@ -150,8 +150,7 @@ class TestTestInputModule:
         assert config.config_size == 64
 
         data = config.data
-        assert isinstance(data, TagNode)
-        assert data.kind == "structure"
+        assert isinstance(data, StructNode)
         assert data.members["Pt00"].members["InputOffOnFilter"].value == 13
         assert data.members["Pt15"].members["InputOnOffFilter"].value == 13
 
@@ -199,10 +198,11 @@ class TestEthernetAndValveBankModules:
         config = comms.config_tag
         assert isinstance(config, ConfigTag)
         data = config.data
-        assert isinstance(data, TagNode)
-        assert data.kind == "array"
+        assert isinstance(data, ArrayNode)
         assert len(data.elements) == 400
-        assert data.elements[0].value == "16#00"
+        assert data.elements[0].value == 0
+        assert data.elements[0].raw_value == "16#00"
+        assert data.elements[0].radix == "Hex"
 
         standard = comms.connections["Standard"]
         assert standard.unicast is True
@@ -242,4 +242,4 @@ class TestEthernetAndValveBankModules:
         output_tag = conn.output_tag
         assert isinstance(output_tag, OutputTag)
         assert len(output_tag.elements) == 4
-        assert output_tag.elements[3].value == "0"
+        assert output_tag.elements[3].value == 0

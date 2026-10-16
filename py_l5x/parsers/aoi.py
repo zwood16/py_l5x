@@ -25,8 +25,13 @@ from py_l5x.parsers.base import (
 )
 from py_l5x.parsers.datatype import AddOnParameters
 from py_l5x.parsers.routine import RoutinesCollection
-from py_l5x.parsers.tag import TagNode, TypeRegistry, _build_node, _TagOverrides
-from py_l5x.parsers.utils import CDATA_TAG
+from py_l5x.parsers.tag import (
+    TagNode,
+    TypeRegistry,
+    _build_node,
+    _build_string_root,
+    _TagOverrides,
+)
 
 
 class AOILocalTag(BaseElement):
@@ -73,14 +78,8 @@ class AOILocalTag(BaseElement):
 
         string_data = self._element.find("DefaultData[@Format='String']")
         if string_data is not None:
-            cdata_el = string_data.find(CDATA_TAG)
-            text = (
-                cdata_el.text
-                if cdata_el is not None and cdata_el.text
-                else (string_data.text or "")
-            )
-            return TagNode(
-                string_data, None, self._overrides, "", raw_text=text, from_cdata=True
+            return _build_string_root(
+                string_data, self.data_type, self._overrides, self._type_registry
             )
 
         return None

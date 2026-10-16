@@ -26,7 +26,14 @@ from py_l5x.parsers.base import (
     int_attr,
     str_attr,
 )
-from py_l5x.parsers.tag import TagNode, TypeRegistry, _build_node, _TagOverrides
+from py_l5x.parsers.tag import (
+    ArrayNode,
+    StructNode,
+    TagNode,
+    TypeRegistry,
+    _build_node,
+    _TagOverrides,
+)
 
 
 def _parse_int(value: str) -> int | None:
@@ -178,13 +185,13 @@ class ModuleDataTag(BaseElement):
     def value(self) -> int | float | str | bool | None:
         """Shortcut for scalar roots: ``self.data.value``."""
         node = self.data
-        return node.value if node is not None else None
+        return getattr(node, "value", None) if node is not None else None
 
     @property
     def members(self) -> Mapping[str, TagNode]:
         """Shortcut for structured roots: ``self.data.members``."""
         node = self.data
-        return node.members if node is not None else {}
+        return getattr(node, "members", {}) if node is not None else {}
 
     @property
     def elements(self) -> Sequence[TagNode]:
@@ -197,11 +204,11 @@ class ModuleDataTag(BaseElement):
         node = self.data
         if node is None:
             return []
-        if node.kind == "array":
+        if isinstance(node, ArrayNode):
             return node.elements
-        if node.kind == "structure" and "Data" in node.members:
+        if isinstance(node, StructNode) and "Data" in node.members:
             data_member = node.members["Data"]
-            if data_member.kind == "array":
+            if isinstance(data_member, ArrayNode):
                 return data_member.elements
         return []
 
@@ -231,9 +238,9 @@ class ConfigTag(ModuleDataTag):
         node = super().data
         if node is None:
             return None
-        if node.kind == "structure" and "Data" in node.members:
+        if isinstance(node, StructNode) and "Data" in node.members:
             data_member = node.members["Data"]
-            if data_member.kind == "array":
+            if isinstance(data_member, ArrayNode):
                 return data_member
         return node
 

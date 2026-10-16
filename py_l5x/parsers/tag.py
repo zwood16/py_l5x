@@ -17,22 +17,52 @@ Tag/member instances can also override that metadata per "operand" path (e.g.
 DINT tag) via ``<Comments>``, ``<Maxes>``, ``<Mins>``, ``<EngineeringUnits>``,
 ``<State0s>``, ``<State1s>``, and ``<ExternalLoggings>`` containers on the
 ``<Tag>`` element. :class:`_TagOverrides` collects these once per tag and
-:class:`TagNode` resolves them with priority over the type-definition
-metadata.
+:class:`TagNode` and its subclasses resolve them with priority over the
+type-definition metadata.
 
-Every node in a tag's value tree -- scalar, structure, or array -- is a
-:class:`TagNode`. Its ``kind`` attribute says which of ``.value``
-(scalars), ``.members`` (structures), or ``.elements`` (arrays) is
-meaningful, so autocomplete never degrades while drilling down through
-nested UDTs/AOIs/arrays.
+Value-tree nodes are organized in a typed hierarchy:
+
+- :class:`TagNode`: Base class for all nodes. Exposes:
+  ``data_type``, ``external_access``, ``operand_path``, ``element``,
+  ``description``, ``engineering_unit``, ``external_logging``, ``__repr__``.
+
+- :class:`AtomicNode`: Scalar with value/raw_value/radix. Used as fallback
+  when DataType is not in ATOMIC_TYPES.
+
+- :class:`BoolNode`: 1-bit bool value; adds ``state0`` and ``state1``.
+
+- :class:`IntegerNode`: Integer value; adds ``bit_width``, ``signed``,
+  ``min``, ``max``, ``bit(n)``, and ``bits``.
+
+- :class:`FloatNode`: Float value; adds ``min`` and ``max``.
+
+- :class:`TimeNode`: String time literal (e.g. ``"T#0us"``); adds ``unit``.
+
+- :class:`DateTimeNode`: String datetime literal; adds ``unit``.
+
+- :class:`StringNode`: Quote-stripped string value; adds ``value``, ``len``,
+  ``max_length``, and a ``members`` mapping with ``"LEN"`` and ``"DATA"``.
+
+- :class:`StructNode`: Structure members; exposes ``members`` mapping.
+
+- :class:`ArrayNode`: Array elements; exposes ``dimensions``, a flat
+  document-order ``elements`` sequence, ``__len__``, ``__iter__``, and
+  ``__getitem__`` taking a flat position or a Logix subscript tuple
+  (``arr[0, 1]``). Atomic elements inherit the array's DataType/Radix.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from typing import Literal
+from collections.abc import Iterator, Mapping, Sequence
+from typing import overload
 from xml.etree import ElementTree as ET
 
+from py_l5x.parsers.atomic_types import (
+    ATOMIC_TYPES,
+    atomic_info,
+    parse_float_literal,
+    parse_integer_literal,
+)
 from py_l5x.parsers.base import (
     BaseCollection,
     BaseElement,
@@ -112,6 +142,39 @@ class TypeRegistry:
             return self._data_types[type_name].visible_members
         if type_name in self._aoi_types:
             return self._aoi_types[type_name].datatype_members
+        return None
+
+    def is_string_type(self, type_name: str) -> bool:
+        """Check if a data type is a STRING-family type.
+
+        Args:
+            type_name: The data type name to check.
+
+        Returns:
+            ``True`` if the type is a STRING-family (built-in "STRING" or
+            a UDT with family="StringFamily"), ``False`` otherwise.
+        """
+        if type_name == "STRING":
+            return True
+        if type_name in self._data_types:
+            return self._data_types[type_name].is_string
+        return False
+
+    def string_max_length(self, type_name: str) -> int | None:
+        """Get the maximum length for a STRING-family data type.
+
+        Args:
+            type_name: The data type name to check.
+
+        Returns:
+            The max length for a STRING-family type (82 for built-in
+            "STRING", or the UDT's DATA member dimension), or ``None`` if
+            the type is not STRING-family or the dimension is not found.
+        """
+        if type_name == "STRING":
+            return 82
+        if type_name in self._data_types:
+            return self._data_types[type_name].max_length
         return None
 
 
@@ -200,32 +263,14 @@ def _parse_string_literal(text: str) -> str:
 
 
 class _StructureMembers(Mapping):
-    """Lazily-resolved ``name -> TagNode`` mapping for a structure node.
+    """Lazily-resolved ``name -> TagNode`` mapping for a structure node."""
 
-    Args:
-        node: The owning structure :class:`TagNode`.
-    """
-
-    def __init__(self, node: TagNode) -> None:
-        """Bind this view to its owning structure node.
-
-        Args:
-            node: The owning structure :class:`TagNode`.
-        """
+    def __init__(self, node: StructNode) -> None:
+        """Bind this view to its owning structure node."""
         self._node = node
 
     def __getitem__(self, name: str) -> TagNode:
-        """Retrieve a member by name.
-
-        Args:
-            name: The member's ``Name`` attribute.
-
-        Returns:
-            The member's :class:`TagNode`.
-
-        Raises:
-            KeyError: If no member with the given name is found.
-        """
+        """Retrieve a member by name."""
         node = self._node
         member_defs = (
             node._type_registry.resolve_members(node.data_type)
@@ -261,61 +306,84 @@ class _StructureMembers(Mapping):
 
 
 class _ArrayElements(Sequence):
-    """Lazily-resolved ``index -> TagNode`` sequence for an array node.
+    """Lazily-resolved flat ``position -> TagNode`` sequence for an array.
+
+    Positional (``int``) access is in document order, so it works the same
+    for single- and multi-dimensional arrays and supports negative indexes.
+    Lookup by Logix subscript (``[i]``/``[i,j,...]``) is via :meth:`by_index`.
 
     Args:
-        node: The owning array :class:`TagNode`.
+        node: The owning :class:`ArrayNode`.
     """
 
-    def __init__(self, node: TagNode) -> None:
-        """Bind this view to its owning array node.
-
-        Args:
-            node: The owning array :class:`TagNode`.
-        """
+    def __init__(self, node: ArrayNode) -> None:
+        """Bind this view to its owning array node."""
         self._node = node
 
     @staticmethod
-    def _index_of(element: ET.Element) -> int:
-        """Parse an ``<Element Index="[n]">``'s bracketed index as an int."""
-        return int(element.get("Index", "").strip("[]"))
+    def _parse_index(index_str: str) -> tuple[int, ...]:
+        """Parse an ``Index="[n]"``/``Index="[n,m,...]"`` attribute to a tuple."""
+        return tuple(int(part) for part in index_str.strip("[]").split(","))
 
     def _els(self) -> list[ET.Element]:
         """Return all ``<Element>`` children in document order."""
         return self._node._element.findall("Element")
 
-    def __getitem__(self, index: int) -> TagNode:
-        """Retrieve an element by its zero-based index.
+    def _build(self, element: ET.Element) -> TagNode:
+        """Build the node for one ``<Element>``, inheriting array type/radix."""
+        node = self._node
+        subscript = ",".join(
+            str(i) for i in self._parse_index(element.get("Index", ""))
+        )
+        path = f"{node._operand_path}[{subscript}]"
+        child = element.find("Structure")
+        return _build_node(
+            child if child is not None else element,
+            node._member_def,
+            node._overrides,
+            path,
+            node._type_registry,
+            data_type=node._element.get("DataType") or None,
+            radix=node._element.get("Radix") or None,
+        )
 
-        Args:
-            index: The array index.
-
-        Returns:
-            A structure-kind :class:`TagNode` for struct-typed elements, or
-            a scalar-kind :class:`TagNode` for atomic elements.
+    @overload
+    def __getitem__(self, index: int) -> TagNode: ...
+    @overload
+    def __getitem__(self, index: slice) -> list[TagNode]: ...
+    def __getitem__(self, index: int | slice) -> TagNode | list[TagNode]:
+        """Retrieve an element (or slice of elements) by flat position.
 
         Raises:
-            IndexError: If no element with the given index is found.
+            IndexError: If *index* is out of range.
         """
-        node = self._node
+        els = self._els()
+        if isinstance(index, slice):
+            return [self._build(el) for el in els[index]]
+        return self._build(els[index])
+
+    def by_index(self, index: tuple[int, ...]) -> TagNode:
+        """Retrieve an element by its Logix subscript.
+
+        Args:
+            index: The subscript, one int per dimension (e.g. ``(0, 1)``).
+
+        Raises:
+            IndexError: If no element has that subscript.
+        """
         for element in self._els():
-            if self._index_of(element) == index:
-                path = f"{node._operand_path}[{index}]"
-                struct_child = element.find("Structure")
-                if struct_child is not None:
-                    return TagNode(
-                        struct_child,
-                        node._member_def,
-                        node._overrides,
-                        path,
-                        node._type_registry,
-                    )
-                return TagNode(element, node._member_def, node._overrides, path)
+            if self._parse_index(element.get("Index", "")) == index:
+                return self._build(element)
         raise IndexError(index)
 
     def __len__(self) -> int:
         """Return the number of elements."""
         return len(self._els())
+
+    def __iter__(self) -> Iterator[TagNode]:
+        """Iterate over elements in document order."""
+        for element in self._els():
+            yield self._build(element)
 
     def __repr__(self) -> str:
         """Return a string representation showing the element count."""
@@ -323,38 +391,11 @@ class _ArrayElements(Sequence):
 
 
 class TagNode(XmlAttrMixin):
-    """A single node in a tag's value tree: scalar, structure, or array.
-
-    Every node -- whether the tag's root value or any nested member/element
-    reached by drilling down -- is a ``TagNode``. Its :attr:`kind` says which
-    of :attr:`value` (scalars), :attr:`members` (structures), or
-    :attr:`elements` (arrays) is meaningful; the other two are ``None``/empty.
-    Metadata (:attr:`description`, :attr:`min`, :attr:`max`, etc.) is
-    available on every node regardless of kind.
-
-    Args:
-        element: The XML element this node wraps (``None`` for a bit node,
-            which is synthetic).
-        member_def: The resolved UDT member or AOI parameter definition for
-            this node, if any.
-        overrides: The owning tag's collected operand overrides.
-        operand_path: This node's operand path (e.g. ``".A_NESTED_UDT.DINT"``),
-            used to look up *overrides*.
-        type_registry: Used to resolve structure/array children's own member
-            definitions. ``None`` for scalar/bit nodes.
-        raw_text: Pre-extracted text to use instead of the element's
-            ``Value`` attribute (used for CDATA-based string members).
-        from_cdata: If ``True``, *raw_text* came from quoted CDATA text (e.g.
-            a STRING ``DATA`` member) and should be quote-stripped rather
-            than passed through :func:`convert_numeric`.
-        is_bit: If ``True``, this is a synthetic bit node (see :meth:`bit`).
-        bit_value: The precomputed boolean value for a bit node.
+    """Base class for all value-tree nodes: scalars, structures, arrays.
+    
+    This is the public surface only with minimal methods that apply to all nodes.
+    Subclasses add type-specific behavior and properties.
     """
-
-    kind: Literal["scalar", "structure", "array"]
-    value: int | float | str | bool | None
-    members: Mapping[str, TagNode]
-    elements: Sequence[TagNode]
 
     def __init__(
         self,
@@ -364,104 +405,49 @@ class TagNode(XmlAttrMixin):
         operand_path: str,
         type_registry: TypeRegistry | None = None,
         *,
+        data_type: str | None = None,
+        radix: str | None = None,
         raw_text: str | None = None,
-        from_cdata: bool = False,
-        is_bit: bool = False,
-        bit_value: bool | None = None,
     ) -> None:
-        """Initialise a value-tree node and resolve its kind/value/children.
-
+        """Initialize a TagNode.
+        
         Args:
-            element: The XML element this node wraps, or ``None`` for a bit
-                node.
-            member_def: The resolved member/parameter definition, or
-                ``None``.
+            element: The XML element this node wraps (None for synthetic nodes).
+            member_def: The resolved member/parameter definition, or None.
             overrides: The owning tag's collected operand overrides.
-            operand_path: This node's operand path.
+            operand_path: This node's operand path for override lookup.
             type_registry: Used to resolve structure/array children.
-            raw_text: Pre-extracted text overriding the ``Value`` attribute.
-            from_cdata: Whether *raw_text* is quoted CDATA string content.
-            is_bit: Whether this is a synthetic bit node.
-            bit_value: The precomputed boolean value for a bit node.
+            data_type: Overridden data type (for special cases).
+            radix: Overridden radix (for special cases).
+            raw_text: Pre-extracted text (for CDATA-based members).
         """
         self._element = element
         self._member_def = member_def
         self._overrides = overrides
         self._operand_path = operand_path
         self._type_registry = type_registry
+        self._data_type_override = data_type
+        self._radix_override = radix
         self._raw_text = raw_text
-        self._from_cdata = from_cdata
-        self._is_bit = is_bit
 
-        self.members = {}
-        self.elements = []
+    @property
+    def element(self) -> ET.Element | None:
+        """The wrapped XML element (None for synthetic nodes like bits)."""
+        return self._element
 
-        if is_bit:
-            self.kind = "scalar"
-            self.value = bit_value
-        elif element is not None and element.tag in ("Structure", "StructureMember"):
-            self.kind = "structure"
-            self.value = None
-            self.members = _StructureMembers(self)
-        elif element is not None and element.tag in ("Array", "ArrayMember"):
-            self.kind = "array"
-            self.value = None
-            self.elements = _ArrayElements(self)
-        else:
-            self.kind = "scalar"
-            self.value = self._compute_scalar_value()
-
-    def _compute_scalar_value(self) -> int | float | str | bool | None:
-        """Resolve this scalar node's value, converted per its data type."""
-        text = self._raw_text
-        if text is None and self._element is not None:
-            text = self._element.get("Value")
-        if text is None:
-            return None
-        if self._from_cdata:
-            return _parse_string_literal(text)
-        return convert_numeric(text, self.data_type)
-
-    def bit(self, bit_number: int) -> TagNode:
-        """Access a single bit of this scalar for override-only metadata.
-
-        This does not require the underlying UDT/AOI to define per-bit
-        members -- it exists so plain atomic tags with bit-addressed
-        ``Comments``/``EngineeringUnits``/``State0s``/``State1s`` overrides
-        (e.g. ``a_commented_dint``) can still expose that metadata, and
-        (when this scalar's value is an ``int``) the bit's boolean value.
-
-        Args:
-            bit_number: The zero-based bit position.
-
-        Returns:
-            A scalar-kind :class:`TagNode` bound to this bit.
-        """
-        path = f"{self._operand_path}.{bit_number}"
-        value = None
-        if isinstance(self.value, int):
-            value = bool((self.value >> bit_number) & 1)
-        return TagNode(None, None, self._overrides, path, is_bit=True, bit_value=value)
-
-    def _override(self, key: str) -> str | None:
-        """Return the override value for *key* at this node's operand path."""
-        return self._overrides.get(self._operand_path).get(key)
+    @property
+    def operand_path(self) -> str:
+        """This node's operand path (for override lookup)."""
+        return self._operand_path
 
     @property
     def data_type(self) -> str:
-        """This node's data type name (always ``"BOOL"`` for a bit node)."""
-        if self._is_bit:
-            return "BOOL"
+        """This node's data type name."""
+        if self._data_type_override is not None:
+            return self._data_type_override
         if self._element is not None and self._element.get("DataType"):
             return self._element.get("DataType", "")
         return self._member_def.data_type if self._member_def else ""
-
-    @property
-    def radix(self) -> str:
-        """This node's display radix, if any."""
-        if self._element is not None and self._element.get("Radix"):
-            return self._element.get("Radix", "")
-        return self._member_def.radix if self._member_def else ""
 
     @property
     def external_access(self) -> str:
@@ -470,90 +456,557 @@ class TagNode(XmlAttrMixin):
             return self._element.get("ExternalAccess", "")
         return self._member_def.external_access if self._member_def else ""
 
+    def _meta_override(self, key: str) -> str | None:
+        """Return override for a metadata key at this node's operand path."""
+        return self._overrides.get(self._operand_path).get(key)
+
+    def _meta_default(self, key: str) -> str | None:
+        """Return default metadata value from member_def."""
+        if self._member_def is None:
+            return None
+        # Map key names to member def attributes
+        if key == "comment":
+            return self._member_def.description
+        return getattr(self._member_def, key, None)
+
     @property
     def description(self) -> str:
-        """This node's description, from an override or its type definition."""
-        override = self._override("comment")
+        """This node's description, from override or type definition."""
+        override = self._meta_override("comment")
         if override is not None:
             return override
-        return self._member_def.description if self._member_def else ""
-
-    @property
-    def min(self) -> int | float | str | None:
-        """This node's minimum value, from an override or its type definition."""
-        override = self._override("min")
-        if override is not None:
-            return convert_numeric(override, self.data_type)
-        return self._member_def.min if self._member_def else None
-
-    @property
-    def max(self) -> int | float | str | None:
-        """This node's maximum value, from an override or its type definition."""
-        override = self._override("max")
-        if override is not None:
-            return convert_numeric(override, self.data_type)
-        return self._member_def.max if self._member_def else None
+        default = self._meta_default("comment")
+        return default if default else ""
 
     @property
     def engineering_unit(self) -> str:
-        """This node's engineering unit, from an override or type definition."""
-        override = self._override("engineering_unit")
+        """This node's engineering unit, from override or type definition."""
+        override = self._meta_override("engineering_unit")
         if override is not None:
             return override
-        return self._member_def.engineering_unit if self._member_def else ""
-
-    @property
-    def state0(self) -> str:
-        """This node's zero-state text, from an override or type definition."""
-        override = self._override("state0")
-        if override is not None:
-            return override
-        return self._member_def.state0 if self._member_def else ""
-
-    @property
-    def state1(self) -> str:
-        """This node's one-state text, from an override or type definition."""
-        override = self._override("state1")
-        if override is not None:
-            return override
-        return self._member_def.state1 if self._member_def else ""
+        default = self._meta_default("engineering_unit")
+        return default if default else ""
 
     @property
     def external_logging(self) -> bool | None:
-        """Whether external logging is enabled, from an override or type def."""
-        override = self._override("external_logging")
+        """Whether external logging is enabled, from override or type def."""
+        override = self._meta_override("external_logging")
         if override is not None:
             return override == "true"
-        return self._member_def.external_logging if self._member_def else None
+        default = self._meta_default("external_logging")
+        if default is not None:
+            return default
+        return None
+
+    #: Shape-specific attributes shown by :meth:`__repr__`, in order, when the
+    #: concrete class has them.
+    _REPR_SHAPE: tuple[str, ...] = (
+        "value",
+        "len",
+        "max_length",
+        "unit",
+        "dimensions",
+        "radix",
+        "external_access",
+    )
+    #: Metadata attributes shown by :meth:`__repr__` when non-empty.
+    _REPR_META: tuple[str, ...] = (
+        "description",
+        "min",
+        "max",
+        "engineering_unit",
+        "state0",
+        "state1",
+        "external_logging",
+    )
 
     def __repr__(self) -> str:
-        """Return a detailed representation of the node and its properties."""
-        lines = [f"TagNode({self.kind})"]
-
-        props = [
-            ("Value", self.value),
-            ("DataType", self.data_type),
-            ("Radix", self.radix),
-            ("ExternalAccess", self.external_access),
-            ("Description", self.description),
-            ("Min", self.min),
-            ("Max", self.max),
-            ("EngineeringUnit", self.engineering_unit),
-            ("State0", self.state0),
-            ("State1", self.state1),
-            ("ExternalLogging", self.external_logging),
-        ]
-
-        for label, val in props:
-            if val is not None and val != "":
-                lines.append(f"  {label}: {val!r}")
-
-        if self.kind == "structure":
-            lines.append(f"  Members: {list(self.members.keys())}")
-        elif self.kind == "array":
-            lines.append(f"  Elements: len={len(self.elements)}")
-
+        """Return a multi-line summary: class, type, path, and set fields."""
+        header = f"{type(self).__name__}({self.data_type!r}"
+        if self._operand_path:
+            header += f", path={self._operand_path!r}"
+        lines = [header + ")"]
+        for attr in self._REPR_SHAPE + self._REPR_META:
+            if not hasattr(self, attr):
+                continue
+            val = getattr(self, attr)
+            if val is None or val == "" or val == ():
+                continue
+            lines.append(f"  {attr}: {val!r}")
+        if isinstance(self, (StructNode, StringNode)):
+            lines.append(f"  members: {list(self.members)}")
+        elif isinstance(self, ArrayNode):
+            lines.append(f"  elements: len={len(self)}")
         return "\n".join(lines)
+
+
+class AtomicNode(TagNode):
+    """A scalar node with a value (integer, float, bool, string, or fallback)."""
+
+    def __init__(
+        self,
+        element: ET.Element | None,
+        member_def: MemberDef | None,
+        overrides: _TagOverrides,
+        operand_path: str,
+        type_registry: TypeRegistry | None = None,
+        *,
+        data_type: str | None = None,
+        radix: str | None = None,
+        raw_text: str | None = None,
+    ) -> None:
+        """Initialize an AtomicNode."""
+        super().__init__(
+            element, member_def, overrides, operand_path, type_registry,
+            data_type=data_type, radix=radix, raw_text=raw_text
+        )
+        self._radix_override = radix
+
+    @property
+    def raw_value(self) -> str | None:
+        """The untouched text value."""
+        if self._raw_text is not None:
+            return self._raw_text
+        if self._element is not None:
+            return self._element.get("Value")
+        return None
+
+    @property
+    def radix(self) -> str | None:
+        """This node's display radix, if any."""
+        if self._radix_override is not None:
+            return self._radix_override
+        if self._element is not None and self._element.get("Radix"):
+            return self._element.get("Radix", "")
+        return self._member_def.radix if self._member_def else None
+
+    @property
+    def value(self) -> int | float | str | bool | None:
+        """This node's computed value."""
+        text = self.raw_value
+        if text is None:
+            return None
+        return convert_numeric(text, self.data_type)
+
+
+class BoolNode(AtomicNode):
+    """A BOOL (1-bit) atomic node."""
+
+    @property
+    def value(self) -> bool | str | None:
+        """The boolean value.
+
+        Returns:
+            ``True``/``False``, ``None`` if no value text was exported, or
+            the raw text if it isn't a valid BOOL literal.
+        """
+        text = self.raw_value
+        if text is None:
+            return None
+        try:
+            return bool(parse_integer_literal(text, ATOMIC_TYPES["BOOL"]))
+        except ValueError:
+            return text
+
+    @property
+    def state0(self) -> str:
+        """Zero-state text, from override or type definition."""
+        override = self._meta_override("state0")
+        if override is not None:
+            return override
+        default = self._meta_default("state0")
+        return default if default else ""
+
+    @property
+    def state1(self) -> str:
+        """One-state text, from override or type definition."""
+        override = self._meta_override("state1")
+        if override is not None:
+            return override
+        default = self._meta_default("state1")
+        return default if default else ""
+
+
+class IntegerNode(AtomicNode):
+    """An integer atomic node (SINT, INT, DINT, LINT, USINT, UINT, UDINT, ULINT)."""
+
+    @property
+    def value(self) -> int | str | None:
+        """The integer value (decimal, ``16#``/``8#``/``2#``, or ASCII literal).
+
+        Returns:
+            The parsed ``int``, ``None`` if no value text was exported, or
+            the raw text if it can't be parsed/doesn't fit the type.
+        """
+        text = self.raw_value
+        if text is None:
+            return None
+        try:
+            return parse_integer_literal(text, ATOMIC_TYPES[self.data_type.upper()])
+        except (ValueError, KeyError):
+            return text
+
+    @property
+    def bit_width(self) -> int:
+        """The bit width of this integer type."""
+        info = atomic_info(self.data_type)
+        return info.bit_width if info else 0
+
+    @property
+    def signed(self) -> bool:
+        """Whether this integer type is signed."""
+        info = atomic_info(self.data_type)
+        return info.signed if info else False
+
+    @property
+    def min(self) -> int | None:
+        """Minimum value, from override, member def, or ATOMIC_TYPES."""
+        override = self._meta_override("min")
+        if override is not None:
+            try:
+                return int(convert_numeric(override, self.data_type))
+            except (ValueError, TypeError):
+                return None
+        if self._member_def and self._member_def.min is not None:
+            return self._member_def.min
+        info = atomic_info(self.data_type)
+        return info.min if info else None
+
+    @property
+    def max(self) -> int | None:
+        """Maximum value, from override, member def, or ATOMIC_TYPES."""
+        override = self._meta_override("max")
+        if override is not None:
+            try:
+                return int(convert_numeric(override, self.data_type))
+            except (ValueError, TypeError):
+                return None
+        if self._member_def and self._member_def.max is not None:
+            return self._member_def.max
+        info = atomic_info(self.data_type)
+        return info.max if info else None
+
+    def bit(self, n: int) -> BoolNode:
+        """Access bit *n* as a :class:`BoolNode`.
+
+        Exposes per-bit operand metadata (e.g. a ``.1`` comment) and, when
+        :attr:`value` is an ``int``, the bit's value.
+
+        Args:
+            n: Zero-based bit position.
+
+        Raises:
+            IndexError: If *n* is outside ``0 <= n < bit_width``.
+        """
+        if not 0 <= n < self.bit_width:
+            raise IndexError(f"bit {n} out of range for {self.data_type}")
+        value = self.value
+        raw = str((value >> n) & 1) if isinstance(value, int) else None
+        return BoolNode(
+            None,
+            None,
+            self._overrides,
+            f"{self._operand_path}.{n}",
+            data_type="BOOL",
+            raw_text=raw,
+        )
+
+    @property
+    def bits(self) -> list[BoolNode]:
+        """All bits of this integer as a list of BoolNodes."""
+        return [self.bit(i) for i in range(self.bit_width)]
+
+
+class FloatNode(AtomicNode):
+    """A floating-point atomic node (REAL, LREAL)."""
+
+    @property
+    def value(self) -> float | str | None:
+        """The float value (``1.#QNAN``/``1.#INF`` specials supported).
+
+        Returns:
+            The parsed ``float``, ``None`` if no value text was exported, or
+            the raw text if it can't be parsed.
+        """
+        text = self.raw_value
+        if text is None:
+            return None
+        try:
+            return parse_float_literal(text)
+        except ValueError:
+            return text
+
+    @property
+    def min(self) -> float | None:
+        """Minimum value, from override or member def."""
+        override = self._meta_override("min")
+        if override is not None:
+            try:
+                return float(convert_numeric(override, self.data_type))
+            except (ValueError, TypeError):
+                return None
+        if self._member_def and self._member_def.min is not None:
+            return self._member_def.min
+        return None
+
+    @property
+    def max(self) -> float | None:
+        """Maximum value, from override or member def."""
+        override = self._meta_override("max")
+        if override is not None:
+            try:
+                return float(convert_numeric(override, self.data_type))
+            except (ValueError, TypeError):
+                return None
+        if self._member_def and self._member_def.max is not None:
+            return self._member_def.max
+        return None
+
+
+class TimeNode(AtomicNode):
+    """A TIME/TIME32/LTIME atomic node with a time literal string."""
+
+    @property
+    def value(self) -> str | None:
+        """The time literal (e.g. 'T#0us')."""
+        return self.raw_value
+
+    @property
+    def unit(self) -> str | None:
+        """The time unit (us or ns)."""
+        info = atomic_info(self.data_type)
+        return info.unit if info else None
+
+
+class DateTimeNode(AtomicNode):
+    """A DT/LDT atomic node with a datetime literal string."""
+
+    @property
+    def value(self) -> str | None:
+        """The datetime literal (e.g. 'DT#1970-01-01-00:00:00.000_000Z')."""
+        return self.raw_value
+
+    @property
+    def unit(self) -> str | None:
+        """The datetime unit (us or ns)."""
+        info = atomic_info(self.data_type)
+        return info.unit if info else None
+
+
+class StringNode(TagNode):
+    """A STRING-family node: text ``value``, ``len``, and LEN/DATA members.
+
+    Wraps either a decorated ``Structure``/``StructureMember`` whose children
+    are the real ``LEN``/``DATA`` members (nested strings and string array
+    elements), or a root ``<Data Format="String" Length="n">`` element whose
+    text is CDATA and whose ``LEN``/``DATA`` members are synthesised.
+    """
+
+    def _child(self, name: str) -> ET.Element | None:
+        """Return the real ``LEN``/``DATA`` child element, if decorated."""
+        if self._element is None or self._element.tag not in (
+            "Structure",
+            "StructureMember",
+        ):
+            return None
+        for child in self._element:
+            if child.get("Name") == name:
+                return child
+        return None
+
+    def _raw_data_text(self) -> str:
+        """Return the quoted CDATA text from DATA (decorated) or the root."""
+        if self._raw_text is not None:
+            return self._raw_text
+        source = self._child("DATA")
+        if source is None:
+            source = self._element
+        if source is None:
+            return ""
+        cdata_el = source.find(CDATA_TAG)
+        if cdata_el is not None and cdata_el.text:
+            return cdata_el.text
+        return source.text or ""
+
+    @property
+    def value(self) -> str:
+        """The string text, with Logix's surrounding single quotes removed."""
+        return _parse_string_literal(self._raw_data_text())
+
+    @property
+    def len(self) -> int:
+        """The string's current length (the ``LEN`` member / ``Length`` attr)."""
+        len_el = self._child("LEN")
+        if len_el is not None:
+            raw = len_el.get("Value")
+        elif self._element is not None:
+            raw = self._element.get("Length")
+        else:
+            raw = None
+        if raw is not None:
+            try:
+                return parse_integer_literal(raw, ATOMIC_TYPES["DINT"])
+            except ValueError:
+                pass
+        return len(self.value)
+
+    @property
+    def max_length(self) -> int | None:
+        """Maximum character capacity: 82 for ``STRING``, else the UDT's."""
+        if self._type_registry is not None:
+            return self._type_registry.string_max_length(self.data_type)
+        return 82 if self.data_type == "STRING" else None
+
+    @property
+    def members(self) -> Mapping[str, TagNode]:
+        """``{"LEN": IntegerNode, "DATA": AtomicNode}``."""
+        return {"LEN": self._len_member(), "DATA": self._data_member()}
+
+    def _len_member(self) -> TagNode:
+        """Build the LEN member node (real child or synthetic DINT)."""
+        path = f"{self._operand_path}.LEN"
+        len_el = self._child("LEN")
+        if len_el is not None:
+            return _build_node(
+                len_el, None, self._overrides, path, self._type_registry
+            )
+        return IntegerNode(
+            None,
+            None,
+            self._overrides,
+            path,
+            data_type="DINT",
+            raw_text=str(self.len),
+        )
+
+    def _data_member(self) -> TagNode:
+        """Build the DATA member node; its value is the unquoted text."""
+        data_el = self._child("DATA")
+        data_type = data_el.get("DataType") if data_el is not None else None
+        return AtomicNode(
+            data_el,
+            None,
+            self._overrides,
+            f"{self._operand_path}.DATA",
+            data_type=data_type or self.data_type,
+            raw_text=self.value,
+        )
+
+
+def _build_string_root(
+    data_el: ET.Element,
+    data_type: str,
+    overrides: _TagOverrides,
+    type_registry: TypeRegistry | None,
+) -> StringNode:
+    """Build the root :class:`StringNode` for ``<Data Format="String">``.
+
+    Args:
+        data_el: The ``Data``/``DefaultData`` element with ``Format="String"``.
+        data_type: The owning tag's ``DataType`` (the element has none).
+        overrides: The owning tag's collected operand overrides.
+        type_registry: Used to resolve the string type's max length.
+
+    Returns:
+        The root string node.
+    """
+    return StringNode(
+        data_el, None, overrides, "", type_registry, data_type=data_type
+    )
+
+class StructNode(TagNode):
+    """A structure node exposing a members mapping."""
+
+    def __init__(
+        self,
+        element: ET.Element,
+        member_def: MemberDef | None,
+        overrides: _TagOverrides,
+        operand_path: str,
+        type_registry: TypeRegistry | None = None,
+    ) -> None:
+        """Initialize a StructNode."""
+        super().__init__(
+            element, member_def, overrides, operand_path, type_registry
+        )
+        self._members_cache = None
+
+    @property
+    def members(self) -> Mapping[str, TagNode]:
+        """Members mapping (lazy)."""
+        if self._members_cache is None:
+            self._members_cache = _StructureMembers(self)
+        return self._members_cache
+
+
+class ArrayNode(TagNode):
+    """An array node exposing dimensions and elements sequence."""
+
+    def __init__(
+        self,
+        element: ET.Element,
+        member_def: MemberDef | None,
+        overrides: _TagOverrides,
+        operand_path: str,
+        type_registry: TypeRegistry | None = None,
+    ) -> None:
+        """Initialize an ArrayNode."""
+        super().__init__(
+            element, member_def, overrides, operand_path, type_registry
+        )
+        self._elements_cache = None
+
+    @property
+    def dimensions(self) -> tuple[int, ...]:
+        """The array dimensions as a tuple of ints."""
+        if self._element is None:
+            return ()
+        dims_str = self._element.get("Dimensions", "")
+        if not dims_str:
+            return ()
+        try:
+            return tuple(int(x.strip()) for x in dims_str.split(","))
+        except ValueError:
+            return ()
+
+    @property
+    def elements(self) -> Sequence[TagNode]:
+        """Elements sequence (lazy)."""
+        if self._elements_cache is None:
+            self._elements_cache = _ArrayElements(self)
+        return self._elements_cache
+
+    def __len__(self) -> int:
+        """Number of elements."""
+        return len(self.elements)
+
+    def __iter__(self):
+        """Iterate over elements."""
+        return iter(self.elements)
+
+    def __getitem__(self, index: int | tuple[int, ...]) -> TagNode:
+        """Index into the array.
+
+        Args:
+            index: A flat document-order position (``int``, negatives
+                allowed; equal to the Logix subscript for 1-D arrays) or a
+                Logix subscript tuple such as ``(0, 1)`` for multi-dim arrays.
+
+        Raises:
+            IndexError: If the position/subscript doesn't exist.
+        """
+        if isinstance(index, tuple):
+            return self.elements.by_index(index)
+        return self.elements[index]
+
+
+_ATOMIC_NODE_CLASSES: dict[str, type[AtomicNode]] = {
+    "bool": BoolNode,
+    "integer": IntegerNode,
+    "float": FloatNode,
+    "time": TimeNode,
+    "datetime": DateTimeNode,
+}
 
 
 def _build_node(
@@ -561,41 +1014,94 @@ def _build_node(
     member_def: MemberDef | None,
     overrides: _TagOverrides,
     operand_path: str,
-    type_registry: TypeRegistry | None,
+    type_registry: TypeRegistry | None = None,
+    *,
+    data_type: str | None = None,
+    radix: str | None = None,
 ) -> TagNode:
-    """Dispatch any value-tree element (root or nested) to a :class:`TagNode`.
+    """Build the appropriate node subclass for an element.
 
-    Handles both the root element names (``DataValue``/``Structure``/
-    ``Array``) and the nested member names (``DataValueMember``/
-    ``StructureMember``/``ArrayMember``) identically.
+    Dispatches to ArrayNode, StructNode, StringNode, or various AtomicNode
+    subclasses based on element tag and data type.
 
     Args:
         element: The element to build a node for.
         member_def: The resolved member/parameter definition, if any.
         overrides: The owning tag's collected operand overrides.
         operand_path: This node's operand path.
-        type_registry: Used by structure/array nodes to resolve their own
-            children's member definitions.
-
-    Returns:
-        A structure-, array-, or scalar-kind :class:`TagNode` as appropriate.
+        type_registry: Used to resolve structure/array children.
+        data_type: Data type to use for a scalar whose element carries no
+            ``DataType`` attribute (array ``<Element>`` children inherit the
+            parent array's type this way).
+        radix: Radix to use for such a scalar, likewise inherited.
     """
+    # Arrays
     if element.tag in ("Array", "ArrayMember"):
-        return TagNode(element, member_def, overrides, operand_path, type_registry)
+        return ArrayNode(element, member_def, overrides, operand_path, type_registry)
+    
+    # Structures and potential StringNodes
     if element.tag in ("Structure", "StructureMember"):
-        return TagNode(element, member_def, overrides, operand_path, type_registry)
-    # DataValue/DataValueMember: scalar, either a "Value" attribute or CDATA
-    # text (the latter for STRING-family DATA members).
+        data_type = element.get("DataType", member_def.data_type if member_def else "")
+        
+        # Check if it's a STRING-family type
+        if (
+            (type_registry and type_registry.is_string_type(data_type))
+            or data_type == "STRING"
+        ):
+            # Treat as StringNode instead
+            return StringNode(
+                element, member_def, overrides, operand_path, type_registry
+            )
+
+        # Check for LEN+DATA structure (synthetic STRING representation)
+        children_names = {
+            child.get("Name") for child in element if child.get("Name")
+        }
+        if children_names == {"LEN", "DATA"}:
+            return StringNode(
+                element, member_def, overrides, operand_path, type_registry
+            )
+        
+        return StructNode(element, member_def, overrides, operand_path, type_registry)
+    
+    # Scalars (DataValue/DataValueMember/array Element)
+    if data_type is None:
+        data_type = element.get("DataType") or (
+            member_def.data_type if member_def else ""
+        )
+    info = atomic_info(data_type) if data_type else None
+
     if element.get("Value") is not None:
-        return TagNode(element, member_def, overrides, operand_path)
+        node_cls = (
+            _ATOMIC_NODE_CLASSES.get(info.family, AtomicNode) if info else AtomicNode
+        )
+        return node_cls(
+            element,
+            member_def,
+            overrides,
+            operand_path,
+            type_registry,
+            data_type=data_type,
+            radix=radix,
+        )
+    
+    # Scalar with CDATA text and no Value (e.g. a STRING's DATA member)
     cdata_el = element.find(CDATA_TAG)
     if cdata_el is not None and cdata_el.text:
         text = cdata_el.text
     else:
         text = element.text or ""
-    return TagNode(
-        element, member_def, overrides, operand_path, raw_text=text, from_cdata=True
+    return AtomicNode(
+        element,
+        member_def,
+        overrides,
+        operand_path,
+        type_registry,
+        data_type=data_type,
+        radix=radix,
+        raw_text=_parse_string_literal(text),
     )
+
 
 
 # ----------------------------------------------------------------------
@@ -1095,14 +1601,8 @@ class Tag(BaseElement):
             return _build_node(child, None, self._overrides, "", self._type_registry)
         string_data = self._element.find("Data[@Format='String']")
         if string_data is not None:
-            cdata_el = string_data.find(CDATA_TAG)
-            text = (
-                cdata_el.text
-                if cdata_el is not None and cdata_el.text
-                else (string_data.text or "")
-            )
-            return TagNode(
-                string_data, None, self._overrides, "", raw_text=text, from_cdata=True
+            return _build_string_root(
+                string_data, self.data_type, self._overrides, self._type_registry
             )
         return None
 
@@ -1115,7 +1615,7 @@ class Tag(BaseElement):
             value data or its root node is a structure/array.
         """
         node = self.data
-        return node.value if node is not None else None
+        return getattr(node, "value", None) if node is not None else None
 
     @property
     def members(self) -> Mapping[str, TagNode]:

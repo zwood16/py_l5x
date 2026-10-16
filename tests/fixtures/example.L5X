@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<RSLogix5000Content SchemaRevision="1.0" SoftwareRevision="37.00" TargetName="Example_PLC" TargetType="Controller" ContainsContext="false" ExportDate="Wed Jul 15 12:48:16 2026" ExportOptions="NoRawData L5KData DecoratedData ForceProtectedEncoding AllProjDocTrans">
-<Controller Use="Target" Name="Example_PLC" ProcessorType="5069-L310ERMS3" MajorRev="37" MinorRev="11" ProjectCreationDate="Tue Jun 30 10:14:37 2026" LastModifiedDate="Wed Jul 15 12:44:06 2026" SFCExecutionControl="CurrentActive" SFCRestartPosition="MostRecent" SFCLastScan="DontScan" ProjectSN="16#0000_0000"
+<RSLogix5000Content SchemaRevision="1.0" SoftwareRevision="37.00" TargetName="Example_PLC" TargetType="Controller" ContainsContext="false" ExportDate="Fri Oct 16 10:43:45 2026" ExportOptions="NoRawData L5KData DecoratedData ForceProtectedEncoding AllProjDocTrans">
+<Controller Use="Target" Name="Example_PLC" ProcessorType="5069-L310ERMS3" MajorRev="37" MinorRev="11" ProjectCreationDate="Tue Jun 30 10:14:37 2026" LastModifiedDate="Fri Oct 16 10:43:34 2026" SFCExecutionControl="CurrentActive" SFCRestartPosition="MostRecent" SFCLastScan="DontScan" ProjectSN="16#0000_0000"
  MatchProjectToController="false" CanUseRPIFromProducer="false" InhibitAutomaticFirmwareUpdate="0" PassThroughConfiguration="EnabledWithAppend" DownloadProjectDocumentationAndExtendedProperties="true" DownloadProjectCustomProperties="true" ReportMinorOverflow="false" EtherNetIPMode="A1/A2: Dual-IP" AutoDiagsEnabled="true" WebServerEnabled="false" DataExchangeId="{09B2637D-051F-4EFE-989A-EAD35A27AB93}"
 >
 <RedundancyInfo Enabled="false" KeepTestEditsOnSwitchOver="false"/>
@@ -1868,8 +1868,8 @@
 <public><ConfigID>100</ConfigID><CatNum>5069-L306ER</CatNum></public>
 </ExtendedProperties>
 </Module>
-<Module Name="ValveBank" CatalogNumber="EX600-SEN7/8" Vendor="7" ProductType="12" ProductCode="258" Major="1" Minor="1" ParentModule="Local" ParentModPortId="3" Inhibited="false" MajorFault="false"
- SafetyEnabled="false" DataExchangeId="{729A7EBB-63FE-4A99-8DED-96008DFD2B05}">
+<Module Name="ValveBank" Vendor="7" ProductType="12" ProductCode="258" Major="1" Minor="1" ParentModule="Local" ParentModPortId="3" Inhibited="false" MajorFault="false" SafetyEnabled="false"
+ DataExchangeId="{729A7EBB-63FE-4A99-8DED-96008DFD2B05}">
 <EKey State="CompatibleModule"/>
 <Ports>
 <Port Id="2" Address="192.168.1.5" Type="Ethernet" Upstream="true"/>
@@ -4596,6 +4596,65 @@ Step 7000: Robot program stopped. Waiting for start command]]>
 <DataValue DataType="USINT" Radix="Decimal" Value="0"/>
 </Data>
 </Tag>
+<Tag Name="a_2d_array" TagType="Base" DataType="SINT" Dimensions="2 3" Radix="Decimal" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Comments>
+<Comment Operand="[0,0]">
+<![CDATA[element comment]]>
+</Comment>
+<Comment Operand="[0,0].0">
+<![CDATA[element bit comment]]>
+</Comment>
+<Comment Operand="[0,1].1">
+<![CDATA[different element bit comment]]>
+</Comment>
+</Comments>
+<Data Format="L5K">
+<![CDATA[[0,0,0,0,0,0]]]>
+</Data>
+<Data Format="Decorated">
+<Array DataType="SINT" Dimensions="2,3" Radix="Decimal">
+<Element Index="[0,0]" Value="0"/>
+<Element Index="[0,1]" Value="0"/>
+<Element Index="[0,2]" Value="0"/>
+<Element Index="[1,0]" Value="0"/>
+<Element Index="[1,1]" Value="0"/>
+<Element Index="[1,2]" Value="0"/>
+</Array>
+</Data>
+</Tag>
+<Tag Name="a_3d_array" TagType="Base" DataType="SINT" Dimensions="2 3 4" Radix="Decimal" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]]]>
+</Data>
+<Data Format="Decorated">
+<Array DataType="SINT" Dimensions="2,3,4" Radix="Decimal">
+<Element Index="[0,0,0]" Value="0"/>
+<Element Index="[0,0,1]" Value="0"/>
+<Element Index="[0,0,2]" Value="0"/>
+<Element Index="[0,0,3]" Value="0"/>
+<Element Index="[0,1,0]" Value="0"/>
+<Element Index="[0,1,1]" Value="0"/>
+<Element Index="[0,1,2]" Value="0"/>
+<Element Index="[0,1,3]" Value="0"/>
+<Element Index="[0,2,0]" Value="0"/>
+<Element Index="[0,2,1]" Value="0"/>
+<Element Index="[0,2,2]" Value="0"/>
+<Element Index="[0,2,3]" Value="0"/>
+<Element Index="[1,0,0]" Value="0"/>
+<Element Index="[1,0,1]" Value="0"/>
+<Element Index="[1,0,2]" Value="0"/>
+<Element Index="[1,0,3]" Value="0"/>
+<Element Index="[1,1,0]" Value="0"/>
+<Element Index="[1,1,1]" Value="0"/>
+<Element Index="[1,1,2]" Value="0"/>
+<Element Index="[1,1,3]" Value="0"/>
+<Element Index="[1,2,0]" Value="0"/>
+<Element Index="[1,2,1]" Value="0"/>
+<Element Index="[1,2,2]" Value="0"/>
+<Element Index="[1,2,3]" Value="0"/>
+</Array>
+</Data>
+</Tag>
 <Tag Name="a_bool" TagType="Base" DataType="BOOL" Radix="Decimal" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
 <Data Format="L5K">
 <![CDATA[0]]>
@@ -4686,6 +4745,17 @@ Step 7000: Robot program stopped. Waiting for start command]]>
 </Data>
 <Data Format="Decorated">
 <DataValue DataType="DINT" Radix="Decimal" Value="0"/>
+</Data>
+</Tag>
+<Tag Name="A_CONSTANT" TagType="Base" DataType="DINT" Radix="Decimal" Constant="true" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Description>
+<![CDATA[the answer to life the universe and everything]]>
+</Description>
+<Data Format="L5K">
+<![CDATA[42]]>
+</Data>
+<Data Format="Decorated">
+<DataValue DataType="DINT" Radix="Decimal" Value="42"/>
 </Data>
 </Tag>
 <Tag Name="a_counter" TagType="Base" DataType="COUNTER" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">

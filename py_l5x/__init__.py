@@ -16,29 +16,47 @@ from py_l5x.parsers.program import Program
 from py_l5x.parsers.project import Project
 from py_l5x.parsers.routine import Routine
 from py_l5x.parsers.tag import (
+    ArrayNode,
+    AtomicNode,
+    BoolNode,
     ConsumeInfo,
+    DateTimeNode,
+    FloatNode,
+    IntegerNode,
     ProduceInfo,
+    StringNode,
+    StructNode,
     Tag,
     TagExtendedProperties,
     TagNode,
+    TimeNode,
 )
 from py_l5x.parsers.task import Task
 
 __all__ = [
     "AOIDefinition",
     "AddOnParameter",
+    "ArrayNode",
+    "AtomicNode",
+    "BoolNode",
     "ConsumeInfo",
     "ControllerInfo",
     "DataType",
     "DataTypeMember",
+    "DateTimeNode",
+    "FloatNode",
+    "IntegerNode",
     "Module",
     "ProduceInfo",
     "Program",
     "Project",
     "Routine",
+    "StringNode",
+    "StructNode",
     "Tag",
     "TagExtendedProperties",
     "TagNode",
     "Task",
+    "TimeNode",
     "load",
 ]
