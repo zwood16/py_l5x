@@ -5,7 +5,11 @@ This module provides rich AOI inspection surfaces similar to program parsing:
 - ``AddOnInstructionDefinition`` for one AOI definition element.
 - ``AddOnInstructionDefinitionsCollection`` for AOI lookup by name.
 - ``AOILocalTag`` and ``AOILocalTagsCollection`` for AOI ``LocalTags`` with
-  value drill-down (scalar/structure/array) reusing the tag-node model.
+  value drill-down (scalar/structure/array) reusing the tag-node model. Local
+  tags are dynamically typed via ``_aoi_local_tag_class`` to subclass both
+  ``AOILocalTag`` and the appropriate node class (e.g., ``StructNode``,
+  ``IntegerNode``), allowing direct access to node properties like ``.members``,
+  ``.value``, ``.elements`` without a ``.data`` indirection.
 
 AOI routines reuse :class:`py_l5x.parsers.routine.RoutinesCollection`.
 AOI parameters reuse :class:`py_l5x.parsers.datatype.AddOnParameters`.
@@ -13,7 +17,7 @@ AOI parameters reuse :class:`py_l5x.parsers.datatype.AddOnParameters`.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+import functools
 from xml.etree import ElementTree as ET
 
 from py_l5x.parsers.base import (
@@ -28,14 +32,17 @@ from py_l5x.parsers.routine import RoutinesCollection
 from py_l5x.parsers.tag import (
     TagNode,
     TypeRegistry,
-    _build_node,
-    _build_string_root,
     _TagOverrides,
+    _describe_value_lines,
+    _find_value_root,
 )
 
 
 class AOILocalTag(BaseElement):
-    """A single ``<LocalTag>`` under an AOI definition.
+    """A single ``<LocalTag>`` under an AOI definition (identity base).
+
+    An identity base providing name, data_type, constant, external_access,
+    description, and metadata hooks. Subclasses add value-tree node functionality.
 
     Args:
         element: The XML ``<LocalTag>`` element.
@@ -44,7 +51,6 @@ class AOILocalTag(BaseElement):
 
     name = str_attr("Name", doc="Local tag name.")
     data_type = str_attr("DataType", doc="The local tag's data type name.")
-    radix = str_attr("Radix", doc="Display radix, for atomic local tags.")
     constant = bool_attr(
         "Constant", default=False, doc="Whether the local tag is constant."
     )
@@ -54,71 +60,116 @@ class AOILocalTag(BaseElement):
     )
     description = CDataField("Description", doc="Local tag description text.")
 
+    #: Attributes backed by a plain @property rather than a declared field
+    #: (Radix, Dimensions are on value nodes, not the local tag element itself)
+    _DYNAMIC_KEYS: frozenset[str] = frozenset({"Radix", "Dimensions", "Min", "Max", "ExternalLogging"})
+
     def __init__(self, element: ET.Element, type_registry: TypeRegistry) -> None:
         super().__init__(element)
         self._type_registry = type_registry
         self._overrides = _TagOverrides(element)
 
     @property
-    def data(self) -> TagNode | None:
-        """The local tag's value-tree root node.
-
-        AOI local tags store values under ``DefaultData`` instead of ``Data``.
-
-        Returns:
-            The root :class:`TagNode` for the tag value tree, or None if no
-            data is available.
-        """
-        decorated = self._element.find("DefaultData[@Format='Decorated']")
-        if decorated is not None:
-            child = next(iter(decorated), None)
-            if child is None:
-                return None
-            return _build_node(child, None, self._overrides, "", self._type_registry)
-
-        string_data = self._element.find("DefaultData[@Format='String']")
-        if string_data is not None:
-            return _build_string_root(
-                string_data, self.data_type, self._overrides, self._type_registry
-            )
-
-        return None
+    def extra_attributes(self) -> dict[str, str]:
+        """XML attributes not covered by declared fields or dynamic properties."""
+        extras = super().extra_attributes
+        return {k: v for k, v in extras.items() if k not in self._DYNAMIC_KEYS}
 
     @property
-    def value(self) -> int | float | str | bool | None:
-        """Shortcut for ``self.data.value``.
-
-        Returns:
-            The scalar value of the tag, or None if the tag has no data.
-        """
-        node = self.data
-        return node.value if node is not None else None
-
-    @property
-    def members(self) -> Mapping[str, TagNode]:
-        """Shortcut for ``self.data.members``.
-
-        Returns:
-            A mapping of member names to :class:`TagNode` instances, or an
-            empty dict if the tag has no data.
-        """
-        node = self.data
-        return node.members if node is not None else {}
-
-    @property
-    def elements(self) -> Sequence[TagNode]:
-        """Shortcut for ``self.data.elements``.
-
-        Returns:
-            A sequence of :class:`TagNode` instances, or an empty list if the
-            tag has no data.
-        """
-        node = self.data
-        return node.elements if node is not None else []
+    def element(self) -> ET.Element:
+        """The wrapped ``<LocalTag>`` XML element."""
+        return self._element
 
     def __repr__(self) -> str:
-        """Return a concise representation including the tag name and type."""
-        return f"AOILocalTag({self.name!r}, {self.data_type!r})"
+        """Return a concise representation including the local tag name and type."""
+        return f"{type(self).__name__}({self.name!r}, {self.data_type!r})"
+
+    def describe(self) -> str:
+        """Extend :meth:`BaseElement.describe` to include value/member/element metadata.
+
+        Includes identity info from super(), then value, members, and elements lines
+        if applicable (for value-tree typed local tags).
+        """
+        lines = [super().describe()]
+        lines.extend(_describe_value_lines(self))
+        return "\n".join(lines)
+
+
+class _AOILocalValueTag(AOILocalTag):
+    """Base for AOI local tags that are also their root value node (private).
+
+    Tags that carry a value tree (scalars, structures, arrays) inherit from both
+    AOILocalTag and a node class. This base class initializes both parent classes.
+    """
+
+    def __init__(
+        self, element: ET.Element, type_registry: TypeRegistry, value_element: ET.Element
+    ) -> None:
+        """Initialize an AOI local tag with a value node.
+
+        Args:
+            element: The ``<LocalTag>`` element.
+            type_registry: Used to resolve value tree members.
+            value_element: The ``DefaultData[@Format='Decorated']`` child element, or the
+                ``DefaultData[@Format='String']`` element for STRING-family local tags.
+        """
+        # Initialize AOILocalTag first (for MRO)
+        AOILocalTag.__init__(self, element, type_registry)
+        # Call the concrete node class's __init__ via super(BaseElement, self).
+        # This resolves to the first TagNode subclass in the MRO after BaseElement,
+        # allowing StructNode/ArrayNode to initialize their caches correctly.
+        super(BaseElement, self).__init__(
+            value_element, None, self._overrides, "", type_registry
+        )
+
+
+@functools.cache
+def _aoi_local_tag_class(node_cls: type[TagNode]) -> type[_AOILocalValueTag]:
+    """Factory for typed AOI local tag classes, cached by node class.
+
+    Returns a dynamically-created class combining _AOILocalValueTag with the
+    specified node class. Caching ensures that multiple local tags with the same
+    underlying node type use the same class object (so type() comparisons work).
+
+    Args:
+        node_cls: The TagNode subclass (e.g., BoolNode, StructNode).
+
+    Returns:
+        A new _AOILocalValueTag subclass combining the given node class.
+    """
+    return type(
+        f"AOILocal{node_cls.__name__.removesuffix('Node')}Tag",
+        (_AOILocalValueTag, node_cls),
+        {
+            "__module__": __name__,
+            "__doc__": f"An AOI local tag whose value is a :class:`{node_cls.__name__}`.",
+        },
+    )
+
+
+def _make_aoi_local_tag(element: ET.Element, type_registry: TypeRegistry) -> AOILocalTag:
+    """Factory function to create the appropriate AOI local tag subclass.
+
+    Dispatches to a plain AOILocalTag if no value data is found, or to a
+    typed local tag class (_AOILocalValueTag + node class) if value data exists.
+
+    Args:
+        element: The ``<LocalTag>`` element.
+        type_registry: Used to resolve value tree members.
+
+    Returns:
+        An instance of the appropriate AOI local tag subclass.
+    """
+    # Find value root (String or Decorated with child) using DefaultData
+    root = _find_value_root(element, "DefaultData", type_registry)
+    if root is None:
+        # No value data
+        return AOILocalTag(element, type_registry)
+
+    # Value data found
+    node_cls, value_el = root
+    tag_cls = _aoi_local_tag_class(node_cls)
+    return tag_cls(element, type_registry, value_el)
 
 
 class AOILocalTagsCollection(BaseCollection[AOILocalTag]):
@@ -134,7 +185,7 @@ class AOILocalTagsCollection(BaseCollection[AOILocalTag]):
         super().__init__(
             aoi_element,
             "LocalTags/LocalTag",
-            AOILocalTag,
+            _make_aoi_local_tag,
             item_args=(type_registry,),
         )
 

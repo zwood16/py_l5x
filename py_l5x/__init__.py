@@ -8,7 +8,7 @@ Usage:
 """
 
 from py_l5x.parse import load
-from py_l5x.parsers.aoi import AOIDefinition
+from py_l5x.parsers.aoi import AOIDefinition, AOILocalTag
 from py_l5x.parsers.controller import ControllerInfo
 from py_l5x.parsers.datatype import AddOnParameter, DataType, DataTypeMember
 from py_l5x.parsers.module import Module
@@ -16,47 +16,74 @@ from py_l5x.parsers.program import Program
 from py_l5x.parsers.project import Project
 from py_l5x.parsers.routine import Routine
 from py_l5x.parsers.tag import (
+    AliasTag,
     ArrayNode,
+    ArrayTag,
     AtomicNode,
+    AtomicTag,
+    AxisTag,
     BoolNode,
+    BoolTag,
     ConsumeInfo,
     DateTimeNode,
+    DateTimeTag,
     FloatNode,
+    FloatTag,
     IntegerNode,
+    IntegerTag,
+    MessageTag,
+    MotionGroupTag,
     ProduceInfo,
     StringNode,
+    StringTag,
     StructNode,
+    StructTag,
     Tag,
-    TagExtendedProperties,
     TagNode,
     TimeNode,
+    TimeTag,
+    UnknownTag,
 )
 from py_l5x.parsers.task import Task
 
 __all__ = [
     "AOIDefinition",
+    "AOILocalTag",
     "AddOnParameter",
+    "AliasTag",
     "ArrayNode",
+    "ArrayTag",
     "AtomicNode",
+    "AtomicTag",
+    "AxisTag",
     "BoolNode",
+    "BoolTag",
     "ConsumeInfo",
     "ControllerInfo",
     "DataType",
     "DataTypeMember",
     "DateTimeNode",
+    "DateTimeTag",
     "FloatNode",
+    "FloatTag",
     "IntegerNode",
+    "IntegerTag",
+    "MessageTag",
     "Module",
+    "MotionGroupTag",
     "ProduceInfo",
     "Program",
     "Project",
     "Routine",
     "StringNode",
+    "StringTag",
     "StructNode",
+    "StructTag",
     "Tag",
-    "TagExtendedProperties",
     "TagNode",
     "Task",
     "TimeNode",
+    "TimeTag",
+    "UnknownTag",
     "load",
 ]

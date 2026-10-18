@@ -3,8 +3,9 @@
 Logix Designer exports each tag's runtime value as a ``Data`` child in one of
 three formats: ``Decorated`` (a ``<DataValue>``, ``<Structure>``, or ``<Array>``
 tree mirroring the tag's data type shape), ``String`` (used only for top-level
-STRING-family tags, which have no ``Decorated`` section at all), or ``Message``
-(``MESSAGE`` type tags, out of scope for value parsing here).
+STRING-family tags, which have no ``Decorated`` section at all), or specialty
+parameter blocks (``MESSAGE``, ``MotionGroup``, ``Axis``, etc., out of scope
+for standard value parsing here).
 
 This module walks the ``Decorated``/``String`` shape directly rather than
 re-deriving it from the ``<DataType>``/AOI ``<Parameter>`` definitions, since
@@ -20,11 +21,50 @@ DINT tag) via ``<Comments>``, ``<Maxes>``, ``<Mins>``, ``<EngineeringUnits>``,
 :class:`TagNode` and its subclasses resolve them with priority over the
 type-definition metadata.
 
-Value-tree nodes are organized in a typed hierarchy:
+**Typed Tag classes and root-metadata behavior**
+
+:class:`Tag` subclasses returned by :class:`TagsCollection` are dispatched via
+:func:`_make_tag` based on the tag's data type and value structure:
+
+- ``BoolTag``: BOOL scalar; has ``state0``, ``state1``, ``value``.
+- ``IntegerTag``: INT/DINT/SINT/etc. scalar; has ``value``, ``min``, ``max``,
+  ``radix``, ``signed``, ``bit_width``, and ``bit(n)``/``bits`` accessors.
+- ``FloatTag``: REAL/LREAL scalar; has ``value``, ``min``, ``max``.
+- ``TimeTag``: TIME/LTIME scalar (v37+); has ``value`` (string like ``"T#1ms"``),
+  ``unit`` (``"ms"`` or ``"us"``).
+- ``DateTimeTag``: DT/LDT scalar (v37+); has ``value`` (string datetime), ``unit``.
+- ``StringTag``: STRING-family scalar; subclasses ``StringNode``, has ``value``,
+  ``len``, ``max_length``, and ``members`` dict with ``"LEN"`` and ``"DATA"``.
+- ``StructTag``: UDT or built-in structure instance; subclasses ``StructNode``,
+  has ``members`` dict of child nodes.
+- ``ArrayTag``: Array instance; subclasses ``ArrayNode``, has ``elements``,
+  ``dimensions``, ``__len__``, ``__iter__``, subscript access.
+- ``AtomicTag``: Unknown atomic type fallback; has ``value`` and ``raw_value``.
+- ``AliasTag``: Alias; has ``alias_for`` path, no value/members/elements.
+- ``MessageTag``: MESSAGE type; has ``message_parameters``, no value/members/elements.
+- ``MotionGroupTag``: MOTION_GROUP type; has ``motion_group_parameters``.
+- ``AxisTag``: AXIS_CIP_DRIVE type; has ``axis_parameters``.
+- ``UnknownTag``: Unrecognized specialty type; has ``special_data_format``,
+  ``special_data_attributes``, no value/members/elements.
+
+Tags ARE their root value nodes — they directly subclass the corresponding
+node class (e.g., ``IntegerTag`` subclasses both ``Tag`` and ``IntegerNode``),
+so node accessors work directly on the tag without a ``.data`` property.
+
+Root-level metadata (``description``, ``engineering_unit``, ``min``, ``max``,
+``state0``, ``state1``, ``external_access``, ``external_logging``) comes from
+the ``<Tag>`` element itself on value tags, combined with type-definition
+defaults via :class:`_TagOverrides`. See :meth:`Tag.describe` for a
+human-readable summary.
+
+**Node hierarchy**
+
+Value-tree nodes (members, array elements, bits) are organized in a typed hierarchy:
 
 - :class:`TagNode`: Base class for all nodes. Exposes:
-  ``data_type``, ``external_access``, ``operand_path``, ``element``,
-  ``description``, ``engineering_unit``, ``external_logging``, ``__repr__``.
+  ``data_type``, ``external_access``, ``operand_path``, ``value_element``
+  (the raw value XML), ``element`` (the root ``<Tag>``), ``description``,
+  ``engineering_unit``, ``external_logging``, ``__repr__``.
 
 - :class:`AtomicNode`: Scalar with value/raw_value/radix. Used as fallback
   when DataType is not in ATOMIC_TYPES.
@@ -262,6 +302,38 @@ def _parse_string_literal(text: str) -> str:
     return text
 
 
+def _find_value_root(
+    element: ET.Element, data_tag: str, type_registry: TypeRegistry | None
+) -> tuple[type[TagNode], ET.Element] | None:
+    """Find and classify a value root element (String or Decorated format).
+
+    Checks for ``{data_tag}[@Format='String']`` (root string types) and
+    ``{data_tag}[@Format='Decorated']`` with a child element (structure/array/scalar).
+
+    Args:
+        element: The tag/local-tag element to scan for data.
+        data_tag: The data element tag name ("Data" for tags, "DefaultData" for AOI locals).
+        type_registry: Used to check if a structure is a STRING type.
+
+    Returns:
+        A tuple of (node_class, value_element) if found, or None.
+    """
+    # Check for String format
+    string_el = element.find(f"{data_tag}[@Format='String']")
+    if string_el is not None:
+        return (StringNode, string_el)
+
+    # Check for Decorated format with a child
+    decorated = element.find(f"{data_tag}[@Format='Decorated']")
+    if decorated is not None:
+        child = next(iter(decorated), None)
+        if child is not None:
+            node_cls, _ = _classify_node(child, None, type_registry, element.get("DataType"))
+            return (node_cls, child)
+
+    return None
+
+
 class _StructureMembers(Mapping):
     """Lazily-resolved ``name -> TagNode`` mapping for a structure node."""
 
@@ -277,7 +349,7 @@ class _StructureMembers(Mapping):
             if node._type_registry
             else None
         ) or {}
-        for child in node._element:
+        for child in node._value_element:
             if child.get("Name") == name:
                 path = f"{node._operand_path}.{name.upper()}"
                 return _build_node(
@@ -291,14 +363,14 @@ class _StructureMembers(Mapping):
 
     def __iter__(self):
         """Iterate over member names in document order."""
-        for child in self._node._element:
+        for child in self._node._value_element:
             name = child.get("Name")
             if name:
                 yield name
 
     def __len__(self) -> int:
         """Return the number of members."""
-        return sum(1 for child in self._node._element if child.get("Name"))
+        return sum(1 for child in self._node._value_element if child.get("Name"))
 
     def __repr__(self) -> str:
         """Return a string representation listing member names."""
@@ -327,7 +399,7 @@ class _ArrayElements(Sequence):
 
     def _els(self) -> list[ET.Element]:
         """Return all ``<Element>`` children in document order."""
-        return self._node._element.findall("Element")
+        return self._node._value_element.findall("Element")
 
     def _build(self, element: ET.Element) -> TagNode:
         """Build the node for one ``<Element>``, inheriting array type/radix."""
@@ -343,8 +415,8 @@ class _ArrayElements(Sequence):
             node._overrides,
             path,
             node._type_registry,
-            data_type=node._element.get("DataType") or None,
-            radix=node._element.get("Radix") or None,
+            data_type=node._value_element.get("DataType") or None,
+            radix=node._value_element.get("Radix") or None,
         )
 
     @overload
@@ -421,7 +493,7 @@ class TagNode(XmlAttrMixin):
             radix: Overridden radix (for special cases).
             raw_text: Pre-extracted text (for CDATA-based members).
         """
-        self._element = element
+        self._value_element = element
         self._member_def = member_def
         self._overrides = overrides
         self._operand_path = operand_path
@@ -431,9 +503,9 @@ class TagNode(XmlAttrMixin):
         self._raw_text = raw_text
 
     @property
-    def element(self) -> ET.Element | None:
+    def value_element(self) -> ET.Element | None:
         """The wrapped XML element (None for synthetic nodes like bits)."""
-        return self._element
+        return self._value_element
 
     @property
     def operand_path(self) -> str:
@@ -445,15 +517,15 @@ class TagNode(XmlAttrMixin):
         """This node's data type name."""
         if self._data_type_override is not None:
             return self._data_type_override
-        if self._element is not None and self._element.get("DataType"):
-            return self._element.get("DataType", "")
+        if self._value_element is not None and self._value_element.get("DataType"):
+            return self._value_element.get("DataType", "")
         return self._member_def.data_type if self._member_def else ""
 
     @property
     def external_access(self) -> str:
         """This node's external access level, if any."""
-        if self._element is not None and self._element.get("ExternalAccess"):
-            return self._element.get("ExternalAccess", "")
+        if self._value_element is not None and self._value_element.get("ExternalAccess"):
+            return self._value_element.get("ExternalAccess", "")
         return self._member_def.external_access if self._member_def else ""
 
     def _meta_override(self, key: str) -> str | None:
@@ -567,8 +639,8 @@ class AtomicNode(TagNode):
         """The untouched text value."""
         if self._raw_text is not None:
             return self._raw_text
-        if self._element is not None:
-            return self._element.get("Value")
+        if self._value_element is not None:
+            return self._value_element.get("Value")
         return None
 
     @property
@@ -576,8 +648,8 @@ class AtomicNode(TagNode):
         """This node's display radix, if any."""
         if self._radix_override is not None:
             return self._radix_override
-        if self._element is not None and self._element.get("Radix"):
-            return self._element.get("Radix", "")
+        if self._value_element is not None and self._value_element.get("Radix"):
+            return self._value_element.get("Radix", "")
         return self._member_def.radix if self._member_def else None
 
     @property
@@ -804,12 +876,12 @@ class StringNode(TagNode):
 
     def _child(self, name: str) -> ET.Element | None:
         """Return the real ``LEN``/``DATA`` child element, if decorated."""
-        if self._element is None or self._element.tag not in (
+        if self._value_element is None or self._value_element.tag not in (
             "Structure",
             "StructureMember",
         ):
             return None
-        for child in self._element:
+        for child in self._value_element:
             if child.get("Name") == name:
                 return child
         return None
@@ -820,7 +892,7 @@ class StringNode(TagNode):
             return self._raw_text
         source = self._child("DATA")
         if source is None:
-            source = self._element
+            source = self._value_element
         if source is None:
             return ""
         cdata_el = source.find(CDATA_TAG)
@@ -839,8 +911,8 @@ class StringNode(TagNode):
         len_el = self._child("LEN")
         if len_el is not None:
             raw = len_el.get("Value")
-        elif self._element is not None:
-            raw = self._element.get("Length")
+        elif self._value_element is not None:
+            raw = self._value_element.get("Length")
         else:
             raw = None
         if raw is not None:
@@ -892,28 +964,6 @@ class StringNode(TagNode):
             raw_text=self.value,
         )
 
-
-def _build_string_root(
-    data_el: ET.Element,
-    data_type: str,
-    overrides: _TagOverrides,
-    type_registry: TypeRegistry | None,
-) -> StringNode:
-    """Build the root :class:`StringNode` for ``<Data Format="String">``.
-
-    Args:
-        data_el: The ``Data``/``DefaultData`` element with ``Format="String"``.
-        data_type: The owning tag's ``DataType`` (the element has none).
-        overrides: The owning tag's collected operand overrides.
-        type_registry: Used to resolve the string type's max length.
-
-    Returns:
-        The root string node.
-    """
-    return StringNode(
-        data_el, None, overrides, "", type_registry, data_type=data_type
-    )
-
 class StructNode(TagNode):
     """A structure node exposing a members mapping."""
 
@@ -954,14 +1004,14 @@ class ArrayNode(TagNode):
         super().__init__(
             element, member_def, overrides, operand_path, type_registry
         )
-        self._elements_cache = None
+        self._value_elements_cache = None
 
     @property
     def dimensions(self) -> tuple[int, ...]:
         """The array dimensions as a tuple of ints."""
-        if self._element is None:
+        if self._value_element is None:
             return ()
-        dims_str = self._element.get("Dimensions", "")
+        dims_str = self._value_element.get("Dimensions", "")
         if not dims_str:
             return ()
         try:
@@ -972,9 +1022,9 @@ class ArrayNode(TagNode):
     @property
     def elements(self) -> Sequence[TagNode]:
         """Elements sequence (lazy)."""
-        if self._elements_cache is None:
-            self._elements_cache = _ArrayElements(self)
-        return self._elements_cache
+        if self._value_elements_cache is None:
+            self._value_elements_cache = _ArrayElements(self)
+        return self._value_elements_cache
 
     def __len__(self) -> int:
         """Number of elements."""
@@ -1035,53 +1085,33 @@ def _build_node(
             parent array's type this way).
         radix: Radix to use for such a scalar, likewise inherited.
     """
+    # Use _classify_node to determine the node class
+    node_cls, resolved_dt = _classify_node(element, member_def, type_registry, data_type)
+    
     # Arrays
-    if element.tag in ("Array", "ArrayMember"):
+    if node_cls is ArrayNode:
         return ArrayNode(element, member_def, overrides, operand_path, type_registry)
     
-    # Structures and potential StringNodes
-    if element.tag in ("Structure", "StructureMember"):
-        data_type = element.get("DataType", member_def.data_type if member_def else "")
-        
-        # Check if it's a STRING-family type
-        if (
-            (type_registry and type_registry.is_string_type(data_type))
-            or data_type == "STRING"
-        ):
-            # Treat as StringNode instead
-            return StringNode(
-                element, member_def, overrides, operand_path, type_registry
-            )
-
-        # Check for LEN+DATA structure (synthetic STRING representation)
-        children_names = {
-            child.get("Name") for child in element if child.get("Name")
-        }
-        if children_names == {"LEN", "DATA"}:
-            return StringNode(
-                element, member_def, overrides, operand_path, type_registry
-            )
-        
+    # Structures
+    if node_cls is StructNode:
         return StructNode(element, member_def, overrides, operand_path, type_registry)
     
-    # Scalars (DataValue/DataValueMember/array Element)
-    if data_type is None:
-        data_type = element.get("DataType") or (
-            member_def.data_type if member_def else ""
+    # StringNodes
+    if node_cls is StringNode:
+        return StringNode(
+            element, member_def, overrides, operand_path, type_registry
         )
-    info = atomic_info(data_type) if data_type else None
-
+    
+    # Scalars (AtomicNode and subclasses)
+    # If Value attribute is present, use the typed node class
     if element.get("Value") is not None:
-        node_cls = (
-            _ATOMIC_NODE_CLASSES.get(info.family, AtomicNode) if info else AtomicNode
-        )
         return node_cls(
             element,
             member_def,
             overrides,
             operand_path,
             type_registry,
-            data_type=data_type,
+            data_type=resolved_dt,
             radix=radix,
         )
     
@@ -1097,7 +1127,7 @@ def _build_node(
         overrides,
         operand_path,
         type_registry,
-        data_type=data_type,
+        data_type=resolved_dt,
         radix=radix,
         raw_text=_parse_string_literal(text),
     )
@@ -1168,80 +1198,117 @@ class ConsumeInfo(BaseElement):
         )
 
 
-class TagExtendedProperties:
-    """Studio 5000 "Extended Properties" set directly on a ``<Tag>`` element.
+def _describe_value_lines(obj: object) -> list[str]:
+    """Extract value/members/elements description lines for a tag-like object.
 
-    Bundles the ``Min``/``Max``/``EngineeringUnit``/``State0``/``State1``/
-    ``ExternalLogging`` values that Logix allows to be set on the tag itself
-    -- separate from the per-member/per-bit operand overrides used for
-    nested UDT/AOI members (see :class:`_TagOverrides`). Obtained via
-    :attr:`Tag.extended_properties`, which is ``None`` when none of these
-    are set.
+    Produces lines for metadata attributes (value, len, max_length, unit, etc.)
+    and summary lines for members/elements if present.
 
     Args:
-        tag: The owning :class:`Tag` instance.
+        obj: A tag or tag-like object (e.g., Tag, AOILocalTag subclass).
+
+    Returns:
+        A list of formatted description lines (without leading indentation).
+    """
+    lines = []
+
+    # Add any metadata attributes that have values
+    for name in (
+        "value", "len", "max_length", "unit", "dimensions", "radix",
+        "min", "max", "engineering_unit", "state0", "state1",
+        "external_logging", "alias_for", "special_data_format"
+    ):
+        if hasattr(obj, name):
+            val = getattr(obj, name, None)
+            if val is not None and val != "" and val != ():
+                lines.append(f"  {name}: {val!r}")
+
+    # Members list for struct/string tags
+    if hasattr(obj, "members"):
+        members = obj.members
+        if members:
+            lines.append(f"  members: {list(members.keys())}")
+
+    # Element count for arrays
+    if hasattr(obj, "elements"):
+        elements = obj.elements
+        if elements:
+            lines.append(f"  elements: {len(elements)} items")
+
+    return lines
+
+
+class _RootMetadataMixin:
+    """Mixin for metadata read from identity elements (tag-level Min/Max/etc).
+
+    Reads metadata set directly on an identity element: Min/Max/ExternalLogging
+    attributes and un-operanded EngineeringUnits/State0s/State1s entries.
+    
+    Requires ``self._element`` to be defined (the XML element).
     """
 
-    def __init__(self, tag: Tag) -> None:
-        """Bind this view to its owning tag.
+    def _meta_override(self, key: str) -> str | None:
+        """Return override for a metadata key at the identity element's level.
+
+        For tag-level metadata (min, max, engineering_unit, state0, state1,
+        external_logging), this returns the value set directly on the element.
+        """
+        if key == "min":
+            return self._element.get("Min")
+        if key == "max":
+            return self._element.get("Max")
+        if key == "external_logging":
+            return self._element.get("ExternalLogging")
+        if key in ("engineering_unit", "state0", "state1"):
+            container_map = {
+                "engineering_unit": ("EngineeringUnits", "EngineeringUnit"),
+                "state0": ("State0s", "State0"),
+                "state1": ("State1s", "State1"),
+            }
+            container, child = container_map[key]
+            return self._root_metadata(container, child)
+        return None
+
+    def _meta_default(self, key: str) -> str | None:
+        """Return default metadata for a key (always None at element level)."""
+        return None
+
+    def _root_metadata(self, container_tag: str, child_tag: str) -> str | None:
+        """Return CDATA text for a container child with no ``Operand`` attribute.
+
+        ``EngineeringUnits``/``State0s``/``State1s``/``ExternalLoggings``
+        containers on an element can hold both the element's own (un-qualified)
+        metadata entry and per-member/per-bit entries qualified by an
+        ``Operand`` attribute. This returns only the former.
 
         Args:
-            tag: The owning :class:`Tag` instance.
+            container_tag: The plural wrapper element name (e.g.
+                ``"EngineeringUnits"``).
+            child_tag: The child element name to read CDATA text from (e.g.
+                ``"EngineeringUnit"``).
+
+        Returns:
+            The text content, stripped of surrounding whitespace, or
+            ``None`` if no un-qualified entry is present.
         """
-        self._tag = tag
-
-    @property
-    def min(self) -> int | float | str | None:
-        """The tag's own minimum value, if set directly on ``<Tag>``."""
-        value = self._tag._element.get("Min")
-        return None if value is None else convert_numeric(value, self._tag.data_type)
-
-    @property
-    def max(self) -> int | float | str | None:
-        """The tag's own maximum value, if set directly on ``<Tag>``."""
-        value = self._tag._element.get("Max")
-        return None if value is None else convert_numeric(value, self._tag.data_type)
-
-    @property
-    def engineering_unit(self) -> str:
-        """The tag's own engineering unit, if set directly on ``<Tag>``."""
-        return self._tag._root_metadata("EngineeringUnits", "EngineeringUnit") or ""
-
-    @property
-    def state0(self) -> str:
-        """The tag's own zero-state text, if set directly on ``<Tag>``."""
-        return self._tag._root_metadata("State0s", "State0") or ""
-
-    @property
-    def state1(self) -> str:
-        """The tag's own one-state text, if set directly on ``<Tag>``."""
-        return self._tag._root_metadata("State1s", "State1") or ""
-
-    @property
-    def external_logging(self) -> bool | None:
-        """Whether external logging is enabled, if set directly on ``<Tag>``."""
-        value = self._tag._element.get("ExternalLogging")
-        return None if value is None else value == "true"
-
-    def __repr__(self) -> str:
-        """Return a multi-line representation of the populated metadata."""
-        lines = ["TagExtendedProperties"]
-        props = [
-            ("Min", self.min),
-            ("Max", self.max),
-            ("EngineeringUnit", self.engineering_unit),
-            ("State0", self.state0),
-            ("State1", self.state1),
-            ("ExternalLogging", self.external_logging),
-        ]
-        for label, val in props:
-            if val is not None and val != "":
-                lines.append(f"  {label}: {val!r}")
-        return "\n".join(lines)
+        container = self._element.find(container_tag)
+        if container is None:
+            return None
+        for child in container.findall(child_tag):
+            if child.get("Operand"):
+                continue
+            cdata_el = child.find(CDATA_TAG)
+            if cdata_el is not None and cdata_el.text:
+                return cdata_el.text.strip()
+            return child.text.strip() if child.text else ""
+        return None
 
 
-class Tag(BaseElement):
+class Tag(_RootMetadataMixin, BaseElement):
     """A single ``<Tag>`` element (controller- or program-scoped).
+    
+    Base class for all tag types. Provides identity metadata, facets, and
+    metadata hooks. Subclasses add value-tree node functionality.
 
     Args:
         element: The ``<Tag>`` element from a parsed L5X tree.
@@ -1268,7 +1335,6 @@ class Tag(BaseElement):
         "TagType", doc='Tag kind: "Base", "Alias", "Produced", or "Consumed".'
     )
     data_type = str_attr("DataType", doc="The tag's data type name.")
-    radix = str_attr("Radix", doc="Display radix, for atomic tags.")
     constant = bool_attr(
         "Constant", default=False, doc="Whether the tag is a constant."
     )
@@ -1293,206 +1359,166 @@ class Tag(BaseElement):
     )
 
     #: Attributes backed by a plain @property/facet rather than a declared
-    #: XmlField/CDataField -- still "known", so excluded from
-    #: extra_attributes (Min/Max/ExternalLogging are surfaced via
-    #: :attr:`extended_properties`, AliasFor via :attr:`alias_for`).
+    #: XmlField/CDataField -- still "known", so excluded from extra_attributes.
+    #: "Radix" and "Dimensions" are surfaced by the value-node radix/dimensions
+    #: properties and should not be exposed as extra attributes.
     _DYNAMIC_KEYS: frozenset[str] = frozenset(
-        {"Min", "Max", "ExternalLogging", "AliasFor"}
+        {"Min", "Max", "ExternalLogging", "AliasFor", "Radix", "Dimensions"}
     )
 
     @property
     def extra_attributes(self) -> dict[str, str]:
-        """XML attributes not covered by declared fields or dynamic properties.
-
-        See :attr:`_DYNAMIC_KEYS`.
-        """
+        """XML attributes not covered by declared fields or dynamic properties."""
         extras = super().extra_attributes
         return {k: v for k, v in extras.items() if k not in self._DYNAMIC_KEYS}
 
     @property
-    def is_safety(self) -> bool:
-        """Whether this is a safety-class tag.
+    def element(self) -> ET.Element:
+        """The wrapped ``<Tag>`` XML element."""
+        return self._element
 
-        Returns:
-            ``True`` if :attr:`class_` is ``"Safety"``, ``False`` otherwise.
-        """
+    @property
+    def is_safety(self) -> bool:
+        """Whether this is a safety-class tag."""
         return self.class_ == "Safety"
 
-    @property
-    def alias_for(self) -> str | None:
-        """The referenced tag/member path, for ``Alias`` tags.
-
-        Returns:
-            The ``AliasFor`` XML attribute value, or ``None`` for non-Alias
-            tags (this facet is not applicable to them).
-        """
-        return self._element.get("AliasFor")
-
     # ------------------------------------------------------------------
-    # Root-level metadata shortcuts -- mirror :class:`TagNode`'s flat
-    # min/max/engineering_unit/state0/state1/external_logging surface so
-    # drilling into a tag's value tree doesn't feel like a different API
-    # from the tag itself. Each is ``None``/``""``-safe when
-    # :attr:`extended_properties` is ``None`` (nothing set directly on this
-    # ``<Tag>``). :attr:`extended_properties` remains available too, for an
-    # at-a-glance "is anything set at all" check and for :meth:`describe`.
+    # Facets -- optional, context-dependent groups.
     # ------------------------------------------------------------------
-
-    @property
-    def min(self) -> int | float | str | None:
-        """Shortcut for ``self.extended_properties.min``.
-
-        Returns:
-            ``None`` if :attr:`extended_properties` is ``None``.
-        """
-        ext = self.extended_properties
-        return ext.min if ext is not None else None
-
-    @property
-    def max(self) -> int | float | str | None:
-        """Shortcut for ``self.extended_properties.max``.
-
-        Returns:
-            ``None`` if :attr:`extended_properties` is ``None``.
-        """
-        ext = self.extended_properties
-        return ext.max if ext is not None else None
-
-    @property
-    def engineering_unit(self) -> str:
-        """Shortcut for ``self.extended_properties.engineering_unit``.
-
-        Returns:
-            ``""`` if :attr:`extended_properties` is ``None``.
-        """
-        ext = self.extended_properties
-        return ext.engineering_unit if ext is not None else ""
-
-    @property
-    def state0(self) -> str:
-        """Shortcut for ``self.extended_properties.state0``.
-
-        Returns:
-            ``""`` if :attr:`extended_properties` is ``None``.
-        """
-        ext = self.extended_properties
-        return ext.state0 if ext is not None else ""
-
-    @property
-    def state1(self) -> str:
-        """Shortcut for ``self.extended_properties.state1``.
-
-        Returns:
-            ``""`` if :attr:`extended_properties` is ``None``.
-        """
-        ext = self.extended_properties
-        return ext.state1 if ext is not None else ""
-
-    @property
-    def external_logging(self) -> bool | None:
-        """Shortcut for ``self.extended_properties.external_logging``.
-
-        Returns:
-            ``None`` if :attr:`extended_properties` is ``None``.
-        """
-        ext = self.extended_properties
-        return ext.external_logging if ext is not None else None
-
-    # ------------------------------------------------------------------
-    # Facets -- optional, context-dependent groups. ``None`` means "not
-    # applicable to this tag"; check the facet rather than ``tag_type``.
-    # ------------------------------------------------------------------
-
-    @property
-    def extended_properties(self) -> TagExtendedProperties | None:
-        """Studio 5000 "Extended Properties" set directly on this ``<Tag>``.
-
-        Bundles :attr:`TagExtendedProperties.min`/``max``/
-        ``engineering_unit``/``state0``/``state1``/``external_logging`` --
-        separate from the per-member/per-bit operand overrides used for
-        nested UDT/AOI members (see :class:`_TagOverrides`). Named to match
-        the "Extended Properties" tab/label Studio 5000 uses for this same
-        data in its Tag Properties dialog.
-
-        Returns:
-            A :class:`TagExtendedProperties` view if any of those are set
-            directly on ``<Tag>``, ``None`` otherwise.
-        """
-        if (
-            self._element.get("Min") is None
-            and self._element.get("Max") is None
-            and self._element.get("ExternalLogging") is None
-            and self._root_metadata("EngineeringUnits", "EngineeringUnit") is None
-            and self._root_metadata("State0s", "State0") is None
-            and self._root_metadata("State1s", "State1") is None
-        ):
-            return None
-        return TagExtendedProperties(self)
 
     @property
     def produced(self) -> ProduceInfo | None:
-        """``ProduceInfo`` details, for ``Produced`` tags.
-
-        Returns:
-            A :class:`ProduceInfo` instance if this tag has a
-            ``<ProduceInfo>`` child, ``None`` otherwise.
-        """
+        """``ProduceInfo`` details, for ``Produced`` tags."""
         el = self._element.find("ProduceInfo")
         return ProduceInfo(el) if el is not None else None
 
     @property
     def consumed(self) -> ConsumeInfo | None:
-        """``ConsumeInfo`` details, for ``Consumed`` tags.
-
-        Returns:
-            A :class:`ConsumeInfo` instance if this tag has a
-            ``<ConsumeInfo>`` child, ``None`` otherwise.
-        """
+        """``ConsumeInfo`` details, for ``Consumed`` tags."""
         el = self._element.find("ConsumeInfo")
         return ConsumeInfo(el) if el is not None else None
 
-    @property
-    def message_parameters(self) -> MessageParameters | None:
-        """``MessageParameters``, for ``MESSAGE`` type tags.
+    def __repr__(self) -> str:
+        """Return a concise representation including the tag name and type."""
+        return f"{type(self).__name__}({self.name!r}, {self.data_type!r})"
 
-        Returns:
-            A :class:`~py_l5x.parsers.specialty_tags.MessageParameters`
-            instance if this tag has a ``<Data Format="Message">`` section,
-            ``None`` otherwise.
+    def describe(self) -> str:
+        """Extend :meth:`BaseElement.describe` to include metadata and facets.
+        
+        Includes identity info from super(), then for each metadata attribute
+        that exists on this tag with a non-None/non-empty value, adds a line.
+        For struct/array tags, also includes member/element summaries.
         """
-        el = self._element.find("Data[@Format='Message']/MessageParameters")
-        return MessageParameters(el) if el is not None else None
+        lines = [super().describe()]
+        
+        # Add value/members/elements lines
+        lines.extend(_describe_value_lines(self))
+        
+        # Add facets
+        facets = (
+            ("produced", self.produced),
+            ("consumed", self.consumed),
+        )
+        for label, facet in facets:
+            if facet is None:
+                continue
+            lines.append(f"  {label}:")
+            lines.extend(f"    {line}" for line in repr(facet).splitlines())
+        
+        return "\n".join(lines)
+
+
+class _ValueTag(Tag):
+    """Base for tags that are also their root value node (private, not exported).
+    
+    Tags that carry a value tree (scalars, structures, arrays) inherit from both
+    Tag and a node class. This base class initializes both parent classes.
+    """
+
+    def __init__(
+        self, element: ET.Element, type_registry: TypeRegistry, value_element: ET.Element
+    ) -> None:
+        """Initialize a tag with a value node.
+
+        Args:
+            element: The ``<Tag>`` element.
+            type_registry: Used to resolve value tree members.
+            value_element: The ``Data[@Format='Decorated']`` child element, or the
+                ``Data[@Format='String']`` element for STRING tags.
+        """
+        # Initialize Tag first (for MRO)
+        Tag.__init__(self, element, type_registry)
+        # Call the concrete node class's __init__ via super(BaseElement, self).
+        # This resolves to the first TagNode subclass in the MRO after BaseElement,
+        # allowing StructNode/ArrayNode to initialize their caches correctly.
+        super(BaseElement, self).__init__(
+            value_element, None, self._overrides, "", type_registry
+        )
+
+
+class BoolTag(_ValueTag, BoolNode):
+    """A ``<Tag>`` whose value is a BOOL (1-bit) atomic type."""
+
+
+class IntegerTag(_ValueTag, IntegerNode):
+    """A ``<Tag>`` whose value is an integer atomic type (SINT, INT, DINT, etc.)."""
+
+
+class FloatTag(_ValueTag, FloatNode):
+    """A ``<Tag>`` whose value is a floating-point atomic type (REAL, LREAL)."""
+
+
+class TimeTag(_ValueTag, TimeNode):
+    """A ``<Tag>`` whose value is a TIME/TIME32/LTIME literal."""
+
+
+class DateTimeTag(_ValueTag, DateTimeNode):
+    """A ``<Tag>`` whose value is a DT/LDT datetime literal."""
+
+
+class AtomicTag(_ValueTag, AtomicNode):
+    """A ``<Tag>`` whose value is an atomic type not covered by specific subclasses."""
+
+
+class StringTag(_ValueTag, StringNode):
+    """A ``<Tag>`` whose value is a STRING or STRING-family type."""
+
+
+class StructTag(_ValueTag, StructNode):
+    """A ``<Tag>`` whose value is a UDT or AOI instance (structure)."""
+
+
+class ArrayTag(_ValueTag, ArrayNode):
+    """A ``<Tag>`` whose value is an array."""
+
+
+class AliasTag(Tag):
+    """A ``<Tag>`` that aliases another tag or member (no value data).
+    
+    Alias tags reference another tag/member via the ``AliasFor`` attribute
+    and carry no value data themselves.
+    """
 
     @property
-    def motion_group_parameters(self) -> MotionGroupParameters | None:
-        """``MotionGroupParameters``, for ``MOTION_GROUP`` type tags.
+    def alias_for(self) -> str | None:
+        """The referenced tag/member path."""
+        return self._element.get("AliasFor")
 
-        A ``MOTION_GROUP`` tag represents a group of coordinated servo axes
-        (at least one is required when any ``AXIS_CIP_DRIVE`` tag is
-        present).
 
-        Returns:
-            A :class:`~py_l5x.parsers.specialty_tags.MotionGroupParameters`
-            instance if this tag has a ``<Data Format="MotionGroup">``
-            section, ``None`` otherwise.
-        """
-        el = self._element.find("Data[@Format='MotionGroup']/MotionGroupParameters")
-        return MotionGroupParameters(el) if el is not None else None
+class _SpecialDataTag(Tag):
+    """Base class for tags with non-value ``Data`` formats.
 
-    @property
-    def axis_parameters(self) -> AxisParameters | None:
-        """``AxisParameters``, for ``AXIS_CIP_DRIVE`` (and other Axis-family,
-        e.g. ``AXIS_CIP_DRIVE_SAFETY``) type tags.
+    Tags whose data type has no standard value-tree export (e.g.
+    ``MESSAGE``, ``MOTION_GROUP``, ``AXIS_CIP_DRIVE``, or any future/
+    unrecognised type Logix exports this way) use a single ``<Data
+    Format="...">`` element wrapping one parameter child instead of the
+    usual ``Decorated``/``String`` pair. The legacy ``L5K`` mirror is
+    ignored (see :data:`_VALUE_DATA_FORMATS`).
 
-        Represents a single EtherNet/IP servo axis.
-
-        Returns:
-            An :class:`~py_l5x.parsers.specialty_tags.AxisParameters`
-            instance if this tag has a ``<Data Format="Axis">`` section,
-            ``None`` otherwise.
-        """
-        el = self._element.find("Data[@Format='Axis']/AxisParameters")
-        return AxisParameters(el) if el is not None else None
+    This class provides :attr:`special_data_format` and
+    :attr:`special_data_attributes` to access the wrapped data. Known formats
+    have dedicated typed wrappers; this handles the generic case.
+    """
 
     @property
     def special_data_format(self) -> str | None:
@@ -1506,8 +1532,8 @@ class Tag(BaseElement):
         ignored (see :data:`_VALUE_DATA_FORMATS`).
 
         Returns:
-            The ``Format`` attribute value (e.g. ``"Message"``,
-            ``"MotionGroup"``, ``"Axis"``), or ``None`` for ordinary tags.
+            The ``Format`` attribute of the non-value ``<Data>`` element,
+            or ``None`` if this tag has no special data section.
         """
         for data_el in self._element.findall("Data"):
             fmt = data_el.get("Format")
@@ -1529,8 +1555,9 @@ class Tag(BaseElement):
         down to the underlying element via the parser internals.
 
         Returns:
-            A dict of attribute names to values, or ``None`` if this tag
-            has no special (non-value) ``<Data>`` section at all.
+            A mapping of XML attribute names to values on the non-value
+            ``<Data>`` element, or ``None`` if this tag has no special data
+            section.
         """
         for data_el in self._element.findall("Data"):
             fmt = data_el.get("Format")
@@ -1538,139 +1565,194 @@ class Tag(BaseElement):
                 return dict(data_el.attrib)
         return None
 
-    # ------------------------------------------------------------------
-    # Root-level metadata internals (backing :attr:`extended_properties`)
-    # ------------------------------------------------------------------
 
-    def _root_metadata(self, container_tag: str, child_tag: str) -> str | None:
-        """Return CDATA text for a container child with no ``Operand`` attribute.
+class MessageTag(_SpecialDataTag):
+    """A ``<Tag>`` with a MESSAGE data type (specialized parameter data).
 
-        ``EngineeringUnits``/``State0s``/``State1s``/``ExternalLoggings``
-        containers on a ``<Tag>`` element can hold both the tag's own
-        (un-qualified) metadata entry and per-member/per-bit entries
-        qualified by an ``Operand`` attribute (see :class:`_TagOverrides`,
-        which handles the latter). This returns only the former.
-
-        Args:
-            container_tag: The plural wrapper element name (e.g.
-                ``"EngineeringUnits"``).
-            child_tag: The child element name to read CDATA text from (e.g.
-                ``"EngineeringUnit"``).
-
-        Returns:
-            The text content, stripped of surrounding whitespace, or
-            ``None`` if no un-qualified entry is present.
-        """
-        container = self._element.find(container_tag)
-        if container is None:
-            return None
-        for child in container.findall(child_tag):
-            if child.get("Operand"):
-                continue
-            cdata_el = child.find(CDATA_TAG)
-            if cdata_el is not None and cdata_el.text:
-                return cdata_el.text.strip()
-            return child.text.strip() if child.text else ""
-        return None
-
-    # ------------------------------------------------------------------
-    # Value tree
-    # ------------------------------------------------------------------
+    MESSAGE tags carry ``MessageParameters`` instead of standard value data.
+    """
 
     @property
-    def data(self) -> TagNode | None:
-        """The tag's value tree root node.
+    def message_parameters(self) -> MessageParameters | None:
+        """``MessageParameters``, for ``MESSAGE`` type tags.
 
         Returns:
-            ``None`` for ``Alias`` tags and ``MESSAGE``-type tags (no value
-            data is exported for either). Otherwise a scalar-kind
-            :class:`TagNode` for atomic tags (including STRING-family tags,
-            which use the ``Format="String"`` fallback since they have no
-            ``Decorated`` section), or a structure-/array-kind
-            :class:`TagNode` for UDT/AOI-instance or array tags.
+            A :class:`~py_l5x.parsers.specialty_tags.MessageParameters`
+            instance if this tag has a ``<Data Format="Message">`` section,
+            ``None`` otherwise.
         """
-        if self.tag_type == "Alias":
-            return None
-        if self._element.find("Data[@Format='Message']") is not None:
-            return None
-        decorated = self._element.find("Data[@Format='Decorated']")
-        if decorated is not None:
-            child = next(iter(decorated), None)
-            if child is None:
-                return None
-            return _build_node(child, None, self._overrides, "", self._type_registry)
-        string_data = self._element.find("Data[@Format='String']")
-        if string_data is not None:
-            return _build_string_root(
-                string_data, self.data_type, self._overrides, self._type_registry
-            )
-        return None
+        el = self._element.find("Data[@Format='Message']/MessageParameters")
+        return MessageParameters(el) if el is not None else None
+
+
+class AxisTag(_SpecialDataTag):
+    """A ``<Tag>`` with an AXIS_CIP_DRIVE (or similar axis) data type.
+
+    Represents a single EtherNet/IP servo axis.
+    """
 
     @property
-    def value(self) -> int | float | str | bool | None:
-        """Shortcut for ``self.data.value`` -- meaningful for scalar tags only.
+    def axis_parameters(self) -> AxisParameters | None:
+        """``AxisParameters``, for ``AXIS_CIP_DRIVE`` (and other Axis-family,
+        e.g. ``AXIS_CIP_DRIVE_SAFETY``) type tags.
+
+        Represents a single EtherNet/IP servo axis.
 
         Returns:
-            The root node's scalar value, or ``None`` if the tag has no
-            value data or its root node is a structure/array.
+            An :class:`~py_l5x.parsers.specialty_tags.AxisParameters`
+            instance if this tag has a ``<Data Format="Axis">`` section,
+            ``None`` otherwise.
         """
-        node = self.data
-        return getattr(node, "value", None) if node is not None else None
+        el = self._element.find("Data[@Format='Axis']/AxisParameters")
+        return AxisParameters(el) if el is not None else None
+
+
+class MotionGroupTag(_SpecialDataTag):
+    """A ``<Tag>`` with a MOTION_GROUP data type.
+
+    A ``MOTION_GROUP`` tag represents a group of coordinated servo axes
+    (at least one is required when any ``AXIS_CIP_DRIVE`` tag is
+    present).
+    """
 
     @property
-    def members(self) -> Mapping[str, TagNode]:
-        """Shortcut for ``self.data.members`` -- meaningful for structures only.
+    def motion_group_parameters(self) -> MotionGroupParameters | None:
+        """``MotionGroupParameters``, for ``MOTION_GROUP`` type tags.
+
+        A ``MOTION_GROUP`` tag represents a group of coordinated servo axes
+        (at least one is required when any ``AXIS_CIP_DRIVE`` tag is
+        present).
 
         Returns:
-            The root node's member mapping, or an empty dict if the tag has
-            no value data or its root node is not a structure.
+            A :class:`~py_l5x.parsers.specialty_tags.MotionGroupParameters`
+            instance if this tag has a ``<Data Format="MotionGroup">``
+            section, ``None`` otherwise.
         """
-        node = self.data
-        return node.members if node is not None else {}
+        el = self._element.find("Data[@Format='MotionGroup']/MotionGroupParameters")
+        return MotionGroupParameters(el) if el is not None else None
 
-    @property
-    def elements(self) -> Sequence[TagNode]:
-        """Shortcut for ``self.data.elements`` -- meaningful for arrays only.
 
-        Returns:
-            The root node's element sequence, or an empty list if the tag
-            has no value data or its root node is not an array.
-        """
-        node = self.data
-        return node.elements if node is not None else []
+class UnknownTag(_SpecialDataTag):
+    """A ``<Tag>`` with a non-standard data format (future/unrecognized types).
 
-    def __repr__(self) -> str:
-        """Return a concise representation including the tag name and type."""
-        return f"Tag({self.name!r}, {self.data_type!r})"
+    For tags with special ``<Data>`` formats py_l5x doesn't yet recognize,
+    this tag type provides fallback access to the format name and attributes.
+    """
 
-    def describe(self) -> str:
-        """Extend :meth:`BaseElement.describe` to include populated facets.
 
-        ``extended_properties``/``produced``/``consumed``/
-        ``message_parameters``/``motion_group_parameters``/
-        ``axis_parameters`` are plain properties (not declared fields), so
-        the base implementation can't see them -- this appends each one's
-        own repr when present.
+# Mapping from node class to value tag class
+_TAG_CLASSES: dict[type[TagNode], type[_ValueTag]] = {
+    BoolNode: BoolTag,
+    IntegerNode: IntegerTag,
+    FloatNode: FloatTag,
+    TimeNode: TimeTag,
+    DateTimeNode: DateTimeTag,
+    AtomicNode: AtomicTag,
+    StringNode: StringTag,
+    StructNode: StructTag,
+    ArrayNode: ArrayTag,
+}
 
-        Returns:
-            A formatted multi-line string suitable for interactive/debug use.
-        """
-        lines = [super().describe()]
-        facets = (
-            ("extended_properties", self.extended_properties),
-            ("produced", self.produced),
-            ("consumed", self.consumed),
-            ("message_parameters", self.message_parameters),
-            ("motion_group_parameters", self.motion_group_parameters),
-            ("axis_parameters", self.axis_parameters),
+
+def _classify_node(
+    element: ET.Element,
+    member_def: MemberDef | None,
+    type_registry: TypeRegistry | None,
+    data_type: str | None = None,
+) -> tuple[type[TagNode], str]:
+    """Classify an element to determine the node class and resolved data type.
+    
+    Helper used by both _build_node and _make_tag to factor out the dispatch logic.
+    
+    Args:
+        element: The element to classify.
+        member_def: The resolved member definition, if any.
+        type_registry: Used to resolve string types.
+        data_type: Overridden data type.
+    
+    Returns:
+        A tuple of (node_class, resolved_data_type).
+    """
+    # Arrays
+    if element.tag in ("Array", "ArrayMember"):
+        return ArrayNode, element.get("DataType", member_def.data_type if member_def else "")
+    
+    # Structures and potential StringNodes
+    if element.tag in ("Structure", "StructureMember"):
+        dt = element.get("DataType", member_def.data_type if member_def else "")
+        
+        # Check if it's a STRING-family type
+        if (
+            (type_registry and type_registry.is_string_type(dt))
+            or dt == "STRING"
+        ):
+            return StringNode, dt
+        
+        # Check for LEN+DATA structure (synthetic STRING representation)
+        children_names = {
+            child.get("Name") for child in element if child.get("Name")
+        }
+        if children_names == {"LEN", "DATA"}:
+            return StringNode, dt
+        
+        return StructNode, dt
+    
+    # Scalars
+    if data_type is None:
+        data_type = element.get("DataType") or (
+            member_def.data_type if member_def else ""
         )
-        for label, facet in facets:
-            if facet is None:
-                continue
-            lines.append(f"  {label}:")
-            lines.extend(f"    {line}" for line in repr(facet).splitlines())
-        return "\n".join(lines)
+    info = atomic_info(data_type) if data_type else None
+    
+    # Only use family class if Value attribute is present
+    if element.get("Value") is not None:
+        node_cls = (
+            _ATOMIC_NODE_CLASSES.get(info.family, AtomicNode) if info else AtomicNode
+        )
+        return node_cls, data_type
+    
+    return AtomicNode, data_type
 
+
+def _make_tag(element: ET.Element, type_registry: TypeRegistry) -> Tag:
+    """Factory function to create the appropriate Tag subclass.
+    
+    Dispatches to AliasTag, MessageTag, AxisTag, MotionGroupTag, UnknownTag,
+    or a specific value tag class (BoolTag, IntegerTag, etc.) based on the
+    tag's structure and data.
+
+    Args:
+        element: The ``<Tag>`` element.
+        type_registry: Used to resolve value tree members.
+
+    Returns:
+        An instance of the appropriate Tag subclass.
+    """
+    # Alias tags
+    if element.get("TagType") == "Alias":
+        return AliasTag(element, type_registry)
+    
+    # Check for non-value Data formats (Message, Axis, MotionGroup, unknown)
+    for data_el in element.findall("Data"):
+        fmt = data_el.get("Format")
+        if fmt and fmt not in _VALUE_DATA_FORMATS:
+            if fmt == "Message":
+                return MessageTag(element, type_registry)
+            if fmt == "Axis":
+                return AxisTag(element, type_registry)
+            if fmt == "MotionGroup":
+                return MotionGroupTag(element, type_registry)
+            return UnknownTag(element, type_registry)
+    
+    # Find value root (String or Decorated with child)
+    root = _find_value_root(element, "Data", type_registry)
+    if root is not None:
+        node_cls, value_el = root
+        tag_cls = _TAG_CLASSES.get(node_cls, AtomicTag)
+        return tag_cls(element, type_registry, value_el)
+    
+    # No recognized value data
+    return UnknownTag(element, type_registry)
 
 class TagsCollection(BaseCollection[Tag]):
     """A ``Mapping`` over every ``<Tag>`` in a ``<Tags>`` section.
@@ -1693,4 +1775,4 @@ class TagsCollection(BaseCollection[Tag]):
                 collection.
             type_registry: Used to resolve each tag's value tree members.
         """
-        super().__init__(scope_element, "Tags/Tag", Tag, item_args=(type_registry,))
+        super().__init__(scope_element, "Tags/Tag", _make_tag, item_args=(type_registry,))

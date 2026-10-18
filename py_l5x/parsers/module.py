@@ -7,10 +7,13 @@ This module parses ``<Modules>`` in an L5X controller export and exposes:
 - ``PortsView`` / ``Port``: mapping of port id -> port metadata.
 - ``Communications`` / ``Connection``: connection-level I/O metadata.
 - ``ConfigTag`` / ``InputTag`` / ``OutputTag``: tag-like ``<Data>`` wrappers
-  for module communication payloads.
+  for module communication payloads. Unlike controller/program tags, these keep
+  a ``.data`` property pointing to the structured node (typically a
+  ``StructNode`` or ``ArrayNode`` with a single member). Access members via
+  ``.data.members[...]`` or ``.data.elements[...]``.
 
 Tag-like value parsing reuses :class:`py_l5x.parsers.tag.TagNode` so nested
-structures and arrays behave the same way as controller/program tags.
+structures and arrays behave the same way as controller/program tag nodes.
 """
 
 from __future__ import annotations
@@ -180,37 +183,6 @@ class ModuleDataTag(BaseElement):
         if child is None:
             return None
         return _build_node(child, None, self._overrides, "", self._type_registry)
-
-    @property
-    def value(self) -> int | float | str | bool | None:
-        """Shortcut for scalar roots: ``self.data.value``."""
-        node = self.data
-        return getattr(node, "value", None) if node is not None else None
-
-    @property
-    def members(self) -> Mapping[str, TagNode]:
-        """Shortcut for structured roots: ``self.data.members``."""
-        node = self.data
-        return getattr(node, "members", {}) if node is not None else {}
-
-    @property
-    def elements(self) -> Sequence[TagNode]:
-        """Array-element shortcut with ``.Data`` member fallback.
-
-        Many module payloads are ``Structure`` roots whose only meaningful
-        payload is an ``ArrayMember Name=\"Data\"``. Expose that array as a
-        convenience via ``.elements``.
-        """
-        node = self.data
-        if node is None:
-            return []
-        if isinstance(node, ArrayNode):
-            return node.elements
-        if isinstance(node, StructNode) and "Data" in node.members:
-            data_member = node.members["Data"]
-            if isinstance(data_member, ArrayNode):
-                return data_member.elements
-        return []
 
 
 class ConfigTag(ModuleDataTag):

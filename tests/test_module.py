@@ -178,9 +178,10 @@ class TestTestInputModule:
         input_tag = conn.input_tag
         assert isinstance(input_tag, InputTag)
         assert input_tag.external_access == "Read/Write"
-        assert input_tag.value is None
-        assert input_tag.members["RunMode"].value == 0
-        assert input_tag.members["Pt00"].members["Data"].value == 0
+        assert input_tag.data is not None
+        assert isinstance(input_tag.data, StructNode)
+        assert input_tag.data.members["RunMode"].value == 0
+        assert input_tag.data.members["Pt00"].members["Data"].value == 0
 
 
 class TestEthernetAndValveBankModules:
@@ -213,11 +214,19 @@ class TestEthernetAndValveBankModules:
 
         input_tag = standard.input_tag
         assert isinstance(input_tag, InputTag)
-        assert len(input_tag.elements) == 260
+        assert input_tag.data is not None
+        # ShopRobot input is a Structure with a Data member (which is an array)
+        assert isinstance(input_tag.data, StructNode)
+        assert isinstance(input_tag.data.members["Data"], ArrayNode)
+        assert len(input_tag.data.members["Data"].elements) == 260
 
         output_tag = standard.output_tag
         assert isinstance(output_tag, OutputTag)
-        assert len(output_tag.elements) == 52
+        assert output_tag.data is not None
+        # ShopRobot output is a Structure with a Data member (which is an array)
+        assert isinstance(output_tag.data, StructNode)
+        assert isinstance(output_tag.data.members["Data"], ArrayNode)
+        assert len(output_tag.data.members["Data"].elements) == 52
 
     def test_valvebank_connection_and_payload(self, modules: ModulesCollection) -> None:
         """ValveBank parses both InputTag and OutputTag Data arrays."""
@@ -236,10 +245,44 @@ class TestEthernetAndValveBankModules:
 
         input_tag = conn.input_tag
         assert isinstance(input_tag, InputTag)
-        assert input_tag.members["ConnectionFaulted"].value == 0
-        assert len(input_tag.elements) == 4
+        assert input_tag.data is not None
+        assert isinstance(input_tag.data, StructNode)
+        assert input_tag.data.members["ConnectionFaulted"].value == 0
+        assert len(input_tag.data.members["Data"].elements) == 4
 
         output_tag = conn.output_tag
         assert isinstance(output_tag, OutputTag)
-        assert len(output_tag.elements) == 4
-        assert output_tag.elements[3].value == 0
+        assert output_tag.data is not None
+        # ValveBank output is a Structure with a Data member (which is an array)
+        assert isinstance(output_tag.data, StructNode)
+        assert isinstance(output_tag.data.members["Data"], ArrayNode)
+        assert len(output_tag.data.members["Data"].elements) == 4
+        assert output_tag.data.members["Data"].elements[3].value == 0
+
+
+class TestModuleDataTagProperties:
+    """Tests for ModuleDataTag property deletion."""
+
+    def test_module_input_tag_no_value_shortcut(
+        self, modules: ModulesCollection
+    ) -> None:
+        """ModuleDataTag no longer exposes .value shortcut."""
+        mod = modules["Test_Input_Module"]
+        input_tag = mod.communications.connections["InputData"].input_tag
+        assert not hasattr(input_tag, "value")
+
+    def test_module_input_tag_no_members_shortcut(
+        self, modules: ModulesCollection
+    ) -> None:
+        """ModuleDataTag no longer exposes .members shortcut."""
+        mod = modules["Test_Input_Module"]
+        input_tag = mod.communications.connections["InputData"].input_tag
+        assert not hasattr(input_tag, "members")
+
+    def test_module_input_tag_no_elements_shortcut(
+        self, modules: ModulesCollection
+    ) -> None:
+        """ModuleDataTag no longer exposes .elements shortcut."""
+        mod = modules["Test_Input_Module"]
+        input_tag = mod.communications.connections["InputData"].input_tag
+        assert not hasattr(input_tag, "elements")

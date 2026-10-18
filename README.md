@@ -164,9 +164,15 @@ for name, param in aoi.parameters.items():
 
 # Local tags
 for name, local in aoi.local_tags.items():
-    print(f"  {name}: {local.data_type} = {local.value}")
-#   debounceOnTimer: TIMER = None
-#   debounceOffTimer: TIMER = None
+    print(f"  {name}: {local.data_type}")
+    if hasattr(local, 'value'):
+        print(f"    Value: {local.value}")
+    elif hasattr(local, 'members'):
+        print(f"    Members: {list(local.members.keys())}")
+#   debounceOnTimer: TIMER
+#     Members: ['PRE', 'ACC', 'EN', 'CU', 'CD', 'DN', 'OV', 'UN']
+#   debounceOffTimer: TIMER
+#     Members: ['PRE', 'ACC', 'EN', 'CU', 'CD', 'DN', 'OV', 'UN']
 
 # AOI routines (same API as program routines — see below)
 logic = aoi.routines["Logic"]
@@ -208,7 +214,37 @@ if mod.communications:
 
 ## Tags and the value tree
 
-Tags are typed variables that hold data in the controller. Each tag can be a scalar (a single value like an integer or boolean), a structure (an instance of a UDT or AOI), or an array. The **value tree** (`TagNode`) is a hierarchical representation of a tag's data that lets you drill down into members, array elements, and nested structures while carrying full metadata (descriptions, engineering units, min/max, state labels) at every level.
+Tags are typed variables that hold data in the controller. Each tag can be a scalar (a single value like an integer or boolean), a structure (an instance of a UDT or AOI), or an array. Tags ARE their root value node — there is no separate `.data` property. Instead, tags are instances of typed classes (`IntegerTag`, `BoolTag`, `StructTag`, `ArrayTag`, `StringTag`, etc.) that also subclass the appropriate node class, so you access value data directly on the tag.
+
+### Tag types and isinstance-based branching
+
+`TagsCollection` returns one of several typed tag classes from `py_l5x`:
+
+```python
+from py_l5x import (
+    IntegerTag, FloatTag, BoolTag, TimeTag, DateTimeTag, StringTag,
+    StructTag, ArrayTag, AtomicTag, AliasTag, MessageTag, AxisTag,
+    MotionGroupTag, UnknownTag
+)
+
+for name, tag in project.programs["MainProgram"].tags.items():
+    if isinstance(tag, IntegerTag):
+        print(f"{name}: int = {tag.value}")
+    elif isinstance(tag, BoolTag):
+        print(f"{name}: bool = {tag.value} (state0={tag.state0}, state1={tag.state1})")
+    elif isinstance(tag, StructTag):
+        print(f"{name}: struct with members {list(tag.members.keys())}")
+    elif isinstance(tag, ArrayTag):
+        print(f"{name}: array of length {len(tag)}")
+    elif isinstance(tag, AliasTag):
+        print(f"{name}: alias for {tag.alias_for}")
+    elif isinstance(tag, MessageTag):
+        print(f"{name}: MESSAGE tag")
+    else:
+        print(f"{name}: {tag.data_type}")
+```
+
+Scalar/structure/array tags subclass both `Tag` and the corresponding node class (`IntegerNode`, `StructNode`, `ArrayNode`, etc.), so all node accessors work directly on the tag.
 
 ### Accessing tags
 
@@ -218,11 +254,9 @@ for name, tag in project.tags.items():
     print(name, tag.data_type, tag.tag_type)
 # ALLOWABLE_ALARMS robotAlarmCode Base
 # consumed_tag DINT Consumed
+# fromNormal_reset BOOL Base
 # message_data DINT Base
 # message_tag MESSAGE Base
-# produced_tag DINT Produced
-
-tag = project.tags["message_data"]
 
 # Program-local tags
 for name, tag in project.programs["MainProgram"].tags.items():
@@ -230,13 +264,14 @@ for name, tag in project.programs["MainProgram"].tags.items():
 # an_alias_tag
 # an_input_param DINT
 # an_int INT
-# a_bool BOOL
-# a_counter COUNTER
-# a_udt_instance A_UDT
-# ... (remaining tags)
+# an_output_param REAL
+# an_unsigned_dint UDINT
+# an_unsigned_int UINT
 ```
 
 ### Tag properties
+
+All tags carry common metadata:
 
 ```python
 tag = project.programs["MainProgram"].tags["a_udt_instance"]
@@ -245,118 +280,229 @@ print(tag.data_type)         # "A_UDT"
 print(tag.tag_type)          # "Base"
 print(tag.external_access)   # "Read/Write"
 print(tag.constant)          # False
+print(tag.description)       # tag-level description if any
 
-# Alias tags
+# Alias tags expose the aliased target path
 alias = project.programs["MainProgram"].tags["an_alias_tag"]
 print(alias.tag_type)        # "Alias"
-print(alias.alias_for)       # path of the aliased tag
+print(alias.alias_for)       # "Local:1:I.Pt01.Data"
 ```
 
-### The value tree (`TagNode`)
+### Scalars: integers, booleans, floats
 
-Every tag's `.data` property returns a `TagNode` — a single unified node that can represent a scalar value, a structure, or an array:
+Scalar tags have a `.value` property and expose type-specific accessors:
 
 ```python
-tag = project.programs["MainProgram"].tags["a_udt_instance"]
-root = tag.data
+# Integer tag
+int_tag = project.programs["MainProgram"].tags["an_int"]
+print(int_tag.value)         # 0
+print(int_tag.data_type)     # "INT"
+print(int_tag.radix)         # "Decimal"
+print(int_tag.min)           # -32768 (natural range for INT when tag sets no Min)
+print(int_tag.max)           # 32767 (natural range for INT when tag sets no Max)
 
-print(root.kind)       # "structure"
-print(root.data_type)  # "A_UDT"
-
-# Drill into structure members
-for name, node in root.members.items():
-    print(f"  .{name} ({node.data_type}): {node.kind} = {node.value}")
-    if node.description:      print(f"    desc: {node.description}")
-    if node.engineering_unit: print(f"    EU:   {node.engineering_unit}")
-    if node.min is not None:  print(f"    min:  {node.min}")
-    if node.max is not None:  print(f"    max:  {node.max}")
-    if node.state0:           print(f"    state0: {node.state0}")
-    if node.state1:           print(f"    state1: {node.state1}")
-#   .a_Bool (BOOL): scalar = 0
-#     desc: This is a bool
-#   .on_off_bool (BOOL): scalar = 0
-#     desc: This is a bool with extended properties
-#     EU:   Boolean
-#     state0: Off
-#     state1: On
-#   .a_sint (SINT): scalar = 0
-#     desc: This is a sint or byte
-#   .a_sint_with_props (SINT): scalar = 0
-#     desc: This is a SINT with extended properties
-#     EU:   mm
-#     min:  0
-#     max:  25
-#   .a_real (REAL): scalar = 0.0
-#   .a_nested_UDT (simple_udt): structure = None
-#   .an_array (REAL): array = None
-#   ... (remaining members)
-
-# Drill into a nested UDT
-nested_node = root.members["a_nested_UDT"]  # structure TagNode
-for name, child in nested_node.members.items():
-    print(name, child.value)
-
-# Shortcuts on Tag (delegates to .data)
-print(tag.value)    # None  (structure, not scalar)
-print(tag.members)  # same as tag.data.members
-print(tag.elements) # []    (not an array)
-
-# Bit access on a scalar integer
+# Drill into individual bits (tag with per-bit descriptions)
 dint_tag = project.programs["MainProgram"].tags["a_commented_dint"]
-print(dint_tag.value)  # 0
 for i in range(3):
-    bit = dint_tag.data.bit(i)
+    bit = dint_tag.bit(i)
     print(f"  bit({i}): {bit.value}  desc={bit.description!r}")
 #   bit(0): False  desc='this is bit 0'
 #   bit(1): False  desc='this is bit 1'
 #   bit(2): False  desc=''
+
+# Boolean tag (with state labels)
+bool_tag = project.programs["MainProgram"].tags["a_bool_with_properties"]
+print(bool_tag.value)        # False
+print(bool_tag.state0)       # "Off"
+print(bool_tag.state1)       # "On"
+
+# Float tag (with min/max bounds)
+float_tag = project.programs["MainProgram"].tags["a_real_with_properties"]
+print(float_tag.value)       # 12.3
+print(float_tag.min)         # -10.0
+print(float_tag.max)         # 400.0
 ```
 
-`TagNode.kind` is one of `"scalar"`, `"structure"`, or `"array"`. Metadata properties (`description`, `engineering_unit`, `min`, `max`, `state0`, `state1`, `external_logging`) are available on every node and combine per-tag operand overrides with the member's type-definition defaults. Metadata tags that are not present will be set to `None`.
+Metadata properties (`description`, `engineering_unit`, `min`, `max`, `state0`, `state1`, `external_logging`) come from the tag-level `<Tag>` element on value tags; any not present are `None`.
 
-### Specialty tag data types (`MESSAGE`, `MOTION_GROUP`, `AXIS_CIP_DRIVE`)
+### Structures and nested members
 
-A few tag data types don't carry a normal `Decorated`/`String` value tree — Logix instead exports a single configuration block. `py_l5x` exposes each of these through a dedicated typed wrapper (in `py_l5x.parsers.specialty_tags`) rather than through `tag.data`/`tag.value`:
+Structure tags have a `.members` dict-like accessor:
 
 ```python
-# MESSAGE tags — configures a CIP message instruction (e.g. MSG to another controller)
+tag = project.programs["MainProgram"].tags["a_udt_instance"]
+print(isinstance(tag, StructTag))  # True
+print(tag.data_type)               # "A_UDT"
+
+# Drill into structure members
+for name, node in tag.members.items():
+    # Scalars/strings have .value; structs/arrays don't
+    if hasattr(node, 'value'):
+        print(f"  .{name} ({node.data_type}): value={node.value}")
+    elif isinstance(node, StructNode):
+        print(f"  .{name} ({node.data_type}): <struct>")
+    elif isinstance(node, ArrayNode):
+        print(f"  .{name} ({node.data_type}): <array len={len(node)}>")
+    
+    if node.description:            print(f"    desc: {node.description}")
+    if node.engineering_unit:       print(f"    EU:   {node.engineering_unit}")
+    if hasattr(node, 'min') and node.min is not None:  print(f"    min:  {node.min}")
+    if hasattr(node, 'max') and node.max is not None:  print(f"    max:  {node.max}")
+    if hasattr(node, 'state0') and node.state0:        print(f"    state0: {node.state0}")
+    if hasattr(node, 'state1') and node.state1:        print(f"    state1: {node.state1}")
+#   .a_Bool (BOOL): value=False
+#     desc: This is a bool
+#   .on_off_bool (BOOL): value=False
+#     desc: This is a bool with extended properties
+#     EU:   Boolean
+#     state0: Off
+#     state1: On
+#   .a_sint (SINT): value=0
+#     desc: This is a sint or byte
+#     min:  -128
+#     max:  127
+#   .a_sint_with_props (SINT): value=0
+#     desc: This is a SINT with extended properties
+#     EU:   mm
+#     min:  0
+#     max:  25
+#   .a_real (REAL): value=0.0
+#     desc: a floating point value
+#   .another_bool (BOOL): value=False
+#   .a_dint (DINT): value=0
+#     min:  -2147483648
+#     max:  2147483647
+#   .a_nested_UDT (simple_udt): <struct>
+#     desc: a nest UDT type
+#   .an_aoi (GenericInput): <struct>
+#     desc: a nested Add On Instruction type
+#   .an_array (REAL): <array len=4>
+#     desc: an array of two floating point values. Only 1D is allowed in UDTs.
+
+# Drill into a nested UDT
+nested_node = tag.members["a_nested_UDT"]  # StructNode
+for name, child in nested_node.members.items():
+    if hasattr(child, 'value'):
+        print(f"  {name} = {child.value}")
+    elif isinstance(child, StructNode):
+        print(f"  {name} = <struct>")
+    elif isinstance(child, ArrayNode):
+        print(f"  {name} = <array len={len(child)}>")
+#   bool1 = False
+#   bool2 = False
+#   bool3 = False
+#   bool4 = False
+#   Dint = 0
+#   real = 0
+#   lint = 0
+```
+
+Use `isinstance(node, StructNode)` to check if a member is itself a structure before accessing `.members`.
+
+### Arrays
+
+Array tags have `.elements`, `__len__`, `__iter__`, and subscript access:
+
+```python
+arr_tag = project.programs["MainProgram"].tags["a_2d_array"]
+print(isinstance(arr_tag, ArrayTag))  # True
+print(len(arr_tag))                   # 6
+print(arr_tag.dimensions)             # (2, 3)
+
+# Iterate all elements (flat order)
+for i, element in enumerate(arr_tag.elements[:4]):
+    print(f"  [{i}] = {element.value}")
+#   [0] = 0
+#   [1] = 0
+#   [2] = 0
+#   [3] = 0
+
+# Subscript by flat index
+first = arr_tag[0]
+print(first.value)
+# 0
+
+# Subscript by multidimensional tuple (Logix notation)
+# For a 2D array, arr_tag[1, 2] accesses row 1, column 2
+element = arr_tag[1, 2]
+print(element.value)
+# 0
+```
+
+### Special types: TIME, DATETIME, STRING
+
+Some atomic types have special value representations:
+
+```python
+# TIME tags (Logix v37+): string literal like "T#1500ms"
+if isinstance(tag, TimeTag):
+    print(tag.value)   # "T#1500ms"
+    print(tag.unit)    # "ms" or "us"
+
+# DATETIME tags (Logix v37+): string literal like "DT#1970-01-01-00:00:00.000_000Z"
+if isinstance(tag, DateTimeTag):
+    print(tag.value)   # "DT#1970-01-01-00:00:00.000_000Z"
+    print(tag.unit)    # "us" or "ns"
+
+# STRING tags: quote-stripped text value
+if isinstance(tag, StringTag):
+    print(tag.value)   # the string, quotes removed
+    print(tag.len)     # current length
+    print(tag.max_length)  # declared max length
+    # Access LEN/DATA fields of the string structure
+    for name, member in tag.members.items():
+        print(f"  {name}: {member.value}")
+```
+
+TIME/DATETIME types are only exported in projects with firmware v37+.
+
+### Specialty tags: MESSAGE, MOTION_GROUP, AXIS_CIP_DRIVE
+
+A few tag data types don't carry a normal scalar/structure/array value — Logix exports a single configuration block instead. Use `isinstance()` checks and specialty accessors:
+
+```python
+from py_l5x import MessageTag, MotionGroupTag, AxisTag
+
+# MESSAGE tags — configure a CIP message instruction
 msg_tag = project.tags["message_tag"]
-params = msg_tag.message_parameters   # MessageParameters | None
-print(params.message_type)       # "CIP Data Table Write"
-print(params.connection_path)    # "AnotherPLC"
-print(params.local_element)      # "message_data"
-print(params.connected)          # True
-print(params.cache_connections)  # True
+if isinstance(msg_tag, MessageTag):
+    params = msg_tag.message_parameters
+    print(params.message_type)       # "CIP Data Table Write"
+    print(params.connection_path)    # "AnotherPLC"
+    print(params.local_element)      # "message_data"
+    print(params.connected)          # True
+    print(params.cache_connections)  # True
 
-# MOTION_GROUP tags — a group of coordinated CIP Motion servo axes
+# MOTION_GROUP tags — coordinate CIP Motion servo axes
 mg_tag = project.tags["ServosMotionGroup"]
-group = mg_tag.motion_group_parameters   # MotionGroupParameters | None
-print(group.coarse_update_period)  # 2000 (µs)
-print(group.auto_tag_update)       # "Enabled"
+if isinstance(mg_tag, MotionGroupTag):
+    group = mg_tag.motion_group_parameters
+    print(group.coarse_update_period)  # 2000
+    print(group.auto_tag_update)       # "Enabled"
 
-# AXIS_CIP_DRIVE tags — a single EtherNet/IP servo axis
+# AXIS_CIP_DRIVE tags — single EtherNet/IP servo axis
 axis_tag = project.tags["testServo"]
-axis = axis_tag.axis_parameters   # AxisParameters | None
-print(axis.motion_group)              # "ServosMotionGroup"
-print(axis.motor_catalog_number)      # "VPL-B0631T-C"
-print(axis.conversion_constant)       # 10000.0
-print(axis.position_units)            # "mm"
-print(axis.maximum_speed)             # 226.66667
-print(axis.actuator_type)             # "Screw"
-print(axis.motor_rated_output_power)  # 0.31
-print(axis)  # multi-line summary, similar to `print(project.controller)`
+if isinstance(axis_tag, AxisTag):
+    axis = axis_tag.axis_parameters
+    print(axis.motion_group)              # "ServosMotionGroup"
+    print(axis.motor_catalog_number)      # "VPL-B0631T-C"
+    print(axis.conversion_constant)       # 10000.0
+    print(axis.position_units)            # "mm"
+    print(axis.maximum_speed)             # 226.66667
+    print(axis.actuator_type)             # "Screw"
+    print(axis.motor_rated_output_power)  # 0.31
 ```
 
-Each wrapper exposes the most commonly used attributes as typed properties (with docstrings), plus `extra_attributes`/`attributes` fallbacks for anything not explicitly modeled — `AxisParameters` in particular carries well over a hundred drive/motor/tuning attributes, only the most useful of which get dedicated properties. `tag.data`/`tag.value` are `None` for these tag types since there's no value tree to walk.
-
-The legacy `L5K` mirror some of these `<Data>` sections also export is intentionally ignored throughout — it's a redundant raw-text encoding of the same data already present in the specialty parameter element.
-
-For any tag data type `py_l5x` doesn't yet recognise by name, `tag.special_data_format` reports the `<Data Format="...">` value and `tag.special_data_attributes` returns that element's raw attributes as a fallback:
+Each specialty tag class also has `special_data_format` and `special_data_attributes` properties for unmodeled tag types:
 
 ```python
-tag.special_data_format       # e.g. "Message", "MotionGroup", "Axis", or None for ordinary tags
-tag.special_data_attributes   # dict of the <Data> element's own attributes, or None
+# For any unrecognised specialty tag data type
+if isinstance(tag, UnknownTag):
+    print(tag.special_data_format)      # e.g. "SomeCustomFormat"
+    print(tag.special_data_attributes)  # dict of <Data> element attributes
 ```
+
+Specialty tags do NOT have `.value`, `.members`, or `.elements` — use `isinstance()` to branch and access the appropriate `.message_parameters` / `.motion_group_parameters` / `.axis_parameters` property instead.
 
 ## Programs, routines, and rungs
 

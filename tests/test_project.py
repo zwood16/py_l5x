@@ -157,9 +157,9 @@ class TestTypeRegistry:
         """Tags using UDT types can drill into members."""
         # Find a tag that uses a UDT type and verify member access works
         for tag in project.tags.values():
-            if tag.data is not None and isinstance(tag.data, StructNode):
+            if tag is not None and isinstance(tag, StructNode):
                 # Should be able to iterate members without error
-                members = list(tag.data.members)
+                members = list(tag.members)
                 assert isinstance(members, list)
                 break
 
@@ -167,8 +167,8 @@ class TestTypeRegistry:
         """Program tags can resolve their value tree."""
         for prog in project.programs.values():
             for tag in prog.tags.values():
-                if tag.data is not None:
-                    # Just verify access doesn't raise
+                if tag is not None and hasattr(tag, 'value'):
+                    # Just verify access doesn't raise for value tags
                     _ = tag.value
                     break
 

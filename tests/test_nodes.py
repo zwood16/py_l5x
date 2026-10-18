@@ -23,7 +23,6 @@ from py_l5x.parsers.tag import (
     TimeNode,
     TypeRegistry,
     _build_node,
-    _build_string_root,
     _TagOverrides,
 )
 
@@ -86,13 +85,13 @@ class TestDispatchBasicTypes:
 
     def test_a_dint_is_integer_node(self, main_program_tags: TagsCollection) -> None:
         """a_dint dispatches to IntegerNode."""
-        node = main_program_tags["a_dint"].data
+        node = main_program_tags["a_dint"]
         assert isinstance(node, IntegerNode)
         assert node.data_type == "DINT"
 
     def test_a_real_is_float_node(self, main_program_tags: TagsCollection) -> None:
         """a_real dispatches to FloatNode."""
-        node = main_program_tags["a_real"].data
+        node = main_program_tags["a_real"]
         assert isinstance(node, FloatNode)
         assert node.data_type == "REAL"
 
@@ -100,25 +99,25 @@ class TestDispatchBasicTypes:
         self, main_program_tags: TagsCollection
     ) -> None:
         """a_long_real dispatches to FloatNode."""
-        node = main_program_tags["a_long_real"].data
+        node = main_program_tags["a_long_real"]
         assert isinstance(node, FloatNode)
         assert node.data_type == "LREAL"
 
     def test_a_lint_is_integer_node(self, main_program_tags: TagsCollection) -> None:
         """a_lint dispatches to IntegerNode."""
-        node = main_program_tags["a_lint"].data
+        node = main_program_tags["a_lint"]
         assert isinstance(node, IntegerNode)
         assert node.data_type == "LINT"
 
     def test_a_bool_is_bool_node(self, main_program_tags: TagsCollection) -> None:
         """a_bool dispatches to BoolNode."""
-        node = main_program_tags["a_bool"].data
+        node = main_program_tags["a_bool"]
         assert isinstance(node, BoolNode)
         assert node.data_type == "BOOL"
 
     def test_a_string_is_string_node(self, main_program_tags: TagsCollection) -> None:
         """a_string dispatches to StringNode."""
-        node = main_program_tags["a_string"].data
+        node = main_program_tags["a_string"]
         assert isinstance(node, StringNode)
         assert node.data_type == "STRING"
 
@@ -126,7 +125,7 @@ class TestDispatchBasicTypes:
         self, main_program_tags: TagsCollection
     ) -> None:
         """a_udt_instance dispatches to StructNode."""
-        node = main_program_tags["a_udt_instance"].data
+        node = main_program_tags["a_udt_instance"]
         assert isinstance(node, StructNode)
         assert node.data_type == "A_UDT"
 
@@ -136,7 +135,7 @@ class TestV37TimeTypes:
 
     def test_duration_is_time_node(self, main_program_tags: TagsCollection) -> None:
         """duration tag is a TimeNode with TIME data type."""
-        node = main_program_tags["duration"].data
+        node = main_program_tags["duration"]
         assert isinstance(node, TimeNode)
         assert node.data_type == "TIME"
         assert node.value == "T#0us"
@@ -146,7 +145,7 @@ class TestV37TimeTypes:
         self, main_program_tags: TagsCollection
     ) -> None:
         """short_duration tag is a TimeNode with TIME32 data type."""
-        node = main_program_tags["short_duration"].data
+        node = main_program_tags["short_duration"]
         assert isinstance(node, TimeNode)
         assert node.data_type == "TIME32"
         assert node.value == "T32#0us"
@@ -156,7 +155,7 @@ class TestV37TimeTypes:
         self, main_program_tags: TagsCollection
     ) -> None:
         """long_duration tag is a TimeNode with LTIME data type."""
-        node = main_program_tags["long_duration"].data
+        node = main_program_tags["long_duration"]
         assert isinstance(node, TimeNode)
         assert node.data_type == "LTIME"
         assert node.value == "LT#0ns"
@@ -166,7 +165,7 @@ class TestV37TimeTypes:
         self, main_program_tags: TagsCollection
     ) -> None:
         """datetime tag is a DateTimeNode with DT data type."""
-        node = main_program_tags["datetime"].data
+        node = main_program_tags["datetime"]
         assert isinstance(node, DateTimeNode)
         assert node.data_type == "DT"
         assert node.value == "DT#1970-01-01-00:00:00.000_000Z"
@@ -176,7 +175,7 @@ class TestV37TimeTypes:
         self, main_program_tags: TagsCollection
     ) -> None:
         """long_datetime tag is a DateTimeNode with LDT data type."""
-        node = main_program_tags["long_datetime"].data
+        node = main_program_tags["long_datetime"]
         assert isinstance(node, DateTimeNode)
         assert node.data_type == "LDT"
         assert node.value == "LDT#1970-01-01-00:00:00.000_000_000Z"
@@ -190,7 +189,7 @@ class TestNestedStructMembers:
         self, main_program_tags: TagsCollection
     ) -> None:
         """a_udt_instance.a_nested_UDT is a StructNode."""
-        udt = main_program_tags["a_udt_instance"].data
+        udt = main_program_tags["a_udt_instance"]
         node = udt.members["a_nested_UDT"]
         assert isinstance(node, StructNode)
 
@@ -198,7 +197,7 @@ class TestNestedStructMembers:
         self, main_program_tags: TagsCollection
     ) -> None:
         """a_udt_instance.an_array is an ArrayNode."""
-        udt = main_program_tags["a_udt_instance"].data
+        udt = main_program_tags["a_udt_instance"]
         node = udt.members["an_array"]
         assert isinstance(node, ArrayNode)
 
@@ -206,7 +205,7 @@ class TestNestedStructMembers:
         self, main_program_tags: TagsCollection
     ) -> None:
         """a_udt_instance.a_sint_with_props is an IntegerNode."""
-        udt = main_program_tags["a_udt_instance"].data
+        udt = main_program_tags["a_udt_instance"]
         node = udt.members["a_sint_with_props"]
         assert isinstance(node, IntegerNode)
         assert node.data_type == "SINT"
@@ -215,7 +214,7 @@ class TestNestedStructMembers:
         self, main_program_tags: TagsCollection
     ) -> None:
         """a_udt_instance.a_real is a FloatNode."""
-        udt = main_program_tags["a_udt_instance"].data
+        udt = main_program_tags["a_udt_instance"]
         node = udt.members["a_real"]
         assert isinstance(node, FloatNode)
 
@@ -223,7 +222,7 @@ class TestNestedStructMembers:
         self, main_program_tags: TagsCollection
     ) -> None:
         """a_udt_instance.a_Bool is a BoolNode."""
-        udt = main_program_tags["a_udt_instance"].data
+        udt = main_program_tags["a_udt_instance"]
         node = udt.members["a_Bool"]
         assert isinstance(node, BoolNode)
 
@@ -235,14 +234,14 @@ class TestAllowableAlarmsArray:
         self, controller_tags: TagsCollection
     ) -> None:
         """ALLOWABLE_ALARMS is an ArrayNode."""
-        node = controller_tags["ALLOWABLE_ALARMS"].data
+        node = controller_tags["ALLOWABLE_ALARMS"]
         assert isinstance(node, ArrayNode)
 
     def test_allowable_alarms_elements_are_string_nodes(
         self, controller_tags: TagsCollection
     ) -> None:
         """ALLOWABLE_ALARMS elements are StringNodes."""
-        node = controller_tags["ALLOWABLE_ALARMS"].data
+        node = controller_tags["ALLOWABLE_ALARMS"]
         for elem in node.elements:
             assert isinstance(elem, StringNode)
 
@@ -253,9 +252,14 @@ class TestAllowableAlarmsArray:
 
 class TestRestrictedSurfaceBoolNode:
     def test_bool_node_lacks_bits_min_max(self, main_program_tags):
-        node = main_program_tags["a_bool"].data
+        # BoolTag is both Tag and BoolNode, but BoolNode doesn't have min/max.
+        # BoolTag won't have min/max either since they're not defined on BoolNode.
+        node = main_program_tags["a_bool"]
+        # node is a BoolTag (both Tag and BoolNode)
+        # BoolNode doesn't have bit/bits (that's only for integer members of a DINT/INT/etc.)
         assert not hasattr(node, "bit")
         assert not hasattr(node, "bits")
+        # BoolNode/BoolTag don't have min/max (those are only on IntegerNode/FloatNode)
         assert not hasattr(node, "min")
         assert not hasattr(node, "max")
 
@@ -276,7 +280,7 @@ class TestIntegerNodeBitValues:
         assert node.bit(2).value is True
 
     def test_bit_negative_raises(self, main_program_tags):
-        node = main_program_tags["a_dint"].data
+        node = main_program_tags["a_dint"]
         with pytest.raises(IndexError):
             node.bit(-1)
 
@@ -311,7 +315,7 @@ class TestIntegerNodeRadix:
 
 class TestBitOverrides:
     def test_a_commented_dint_bit_1_description(self, main_program_tags):
-        node = main_program_tags["a_commented_dint"].data
+        node = main_program_tags["a_commented_dint"]
         bit_node = node.bit(1)
         assert bit_node.description == "this is bit 1"
 
@@ -338,13 +342,13 @@ class TestFloatNode:
 
 class TestStringNode:
     def test_a_string_value(self, main_program_tags):
-        node = main_program_tags["a_string"].data
+        node = main_program_tags["a_string"]
         assert node.value == ""
         assert node.len == 0
         assert node.max_length == 82
 
     def test_allowable_alarms_element(self, controller_tags):
-        node = controller_tags["ALLOWABLE_ALARMS"].data
+        node = controller_tags["ALLOWABLE_ALARMS"]
         elem = node.elements[1]
         assert elem.value == "SRVO-003"
         assert elem.len == 8
@@ -359,34 +363,34 @@ class TestStringNode:
 
 class TestArrayNode2D:
     def test_dimensions(self, main_program_tags):
-        node = main_program_tags["a_2d_array"].data
+        node = main_program_tags["a_2d_array"]
         assert node.dimensions == (2, 3)
         assert len(node) == 6
 
     def test_subscript(self, main_program_tags):
-        node = main_program_tags["a_2d_array"].data
+        node = main_program_tags["a_2d_array"]
         elem = node[0, 1]
         assert elem.operand_path == "[0,1]"
 
     def test_negative_index(self, main_program_tags):
-        node = main_program_tags["a_2d_array"].data
+        node = main_program_tags["a_2d_array"]
         elem = node[-1]
         assert elem.operand_path == "[1,2]"
 
     def test_out_of_bounds(self, main_program_tags):
-        node = main_program_tags["a_2d_array"].data
+        node = main_program_tags["a_2d_array"]
         with pytest.raises(IndexError):
             node[5, 5]
 
 
 class TestArrayNode3D:
     def test_dimensions(self, main_program_tags):
-        node = main_program_tags["a_3d_array"].data
+        node = main_program_tags["a_3d_array"]
         assert node.dimensions == (2, 3, 4)
         assert len(node) == 24
 
     def test_subscript(self, main_program_tags):
-        node = main_program_tags["a_3d_array"].data
+        node = main_program_tags["a_3d_array"]
         elem = node[1, 2, 3]
         assert elem.operand_path == "[1,2,3]"
 
@@ -398,9 +402,11 @@ class TestArrayNode3D:
 
 class TestRepr:
     def test_integer_repr(self, main_program_tags):
-        node = main_program_tags["a_dint"].data
+        node = main_program_tags["a_dint"]
         repr_str = repr(node)
-        assert repr_str.startswith("IntegerNode(")
+        # Now root tags show their tag type, not node type
+        assert repr_str.startswith("IntegerTag(")
+        assert "'a_dint'" in repr_str
         assert "'DINT'" in repr_str
 
 
@@ -412,7 +418,7 @@ class TestRepr:
 class TestRestrictedSurfaceIntegerNode:
     """IntegerNode must lack members and elements."""
     def test_integer_node_lacks_members_elements(self, main_program_tags):
-        node = main_program_tags["a_dint"].data
+        node = main_program_tags["a_dint"]
         assert not hasattr(node, "members")
         assert not hasattr(node, "elements")
 
@@ -420,7 +426,7 @@ class TestRestrictedSurfaceIntegerNode:
 class TestRestrictedSurfaceFloatNode:
     """FloatNode must lack bit/bits attributes."""
     def test_float_node_lacks_bits(self, main_program_tags):
-        node = main_program_tags["a_real"].data
+        node = main_program_tags["a_real"]
         assert not hasattr(node, "bit")
         assert not hasattr(node, "bits")
 
@@ -428,7 +434,7 @@ class TestRestrictedSurfaceFloatNode:
 class TestRestrictedSurfaceStringNode:
     """StringNode must lack value/elements but has members."""
     def test_string_node_lacks_elements_bit(self, main_program_tags):
-        node = main_program_tags["a_string"].data
+        node = main_program_tags["a_string"]
         assert not hasattr(node, "elements")
         assert not hasattr(node, "bit")
 
@@ -436,7 +442,7 @@ class TestRestrictedSurfaceStringNode:
 class TestRestrictedSurfaceStructNode:
     """StructNode must lack value and elements."""
     def test_struct_node_lacks_value_elements(self, main_program_tags):
-        node = main_program_tags["a_udt_instance"].data
+        node = main_program_tags["a_udt_instance"]
         assert not hasattr(node, "value")
         assert not hasattr(node, "elements")
 
@@ -444,7 +450,7 @@ class TestRestrictedSurfaceStructNode:
 class TestRestrictedSurfaceArrayNode:
     """ArrayNode must lack value and members."""
     def test_array_node_lacks_value_members(self, main_program_tags):
-        node = main_program_tags["a_2d_array"].data
+        node = main_program_tags["a_2d_array"]
         assert not hasattr(node, "value")
         assert not hasattr(node, "members")
 
@@ -452,19 +458,19 @@ class TestRestrictedSurfaceArrayNode:
 class TestNoKindAttribute:
     """No node class should have a 'kind' attribute."""
     def test_integer_lacks_kind(self, main_program_tags):
-        node = main_program_tags["a_dint"].data
+        node = main_program_tags["a_dint"]
         assert not hasattr(node, "kind")
 
     def test_bool_lacks_kind(self, main_program_tags):
-        node = main_program_tags["a_bool"].data
+        node = main_program_tags["a_bool"]
         assert not hasattr(node, "kind")
 
     def test_string_lacks_kind(self, main_program_tags):
-        node = main_program_tags["a_string"].data
+        node = main_program_tags["a_string"]
         assert not hasattr(node, "kind")
 
     def test_array_lacks_kind(self, main_program_tags):
-        node = main_program_tags["a_2d_array"].data
+        node = main_program_tags["a_2d_array"]
         assert not hasattr(node, "kind")
 
 
@@ -531,17 +537,17 @@ class TestIntegerNodeSigned:
 class TestIntegerNodeBitAccess:
     """Test bit access with valid ranges."""
     def test_bit_raises_on_high_index(self, main_program_tags):
-        node = main_program_tags["a_dint"].data
+        node = main_program_tags["a_dint"]
         with pytest.raises(IndexError):
             node.bit(32)  # DINT has 32 bits (0-31)
 
     def test_bit_returns_bool_node(self, main_program_tags):
-        node = main_program_tags["a_dint"].data
+        node = main_program_tags["a_dint"]
         bit_node = node.bit(0)
         assert isinstance(bit_node, BoolNode)
 
     def test_bit_path_format(self, main_program_tags):
-        node = main_program_tags["a_dint"].data
+        node = main_program_tags["a_dint"]
         bit_node = node.bit(3)
         assert ".3" in bit_node.operand_path
 
@@ -624,17 +630,17 @@ class TestFloatNodeSpecialValues:
 class TestStringNodeMembers:
     """Test StringNode members structure."""
     def test_members_has_len_and_data(self, main_program_tags):
-        node = main_program_tags["a_string"].data
+        node = main_program_tags["a_string"]
         assert "LEN" in node.members
         assert "DATA" in node.members
 
     def test_len_member_is_integer_node(self, main_program_tags):
-        node = main_program_tags["a_string"].data
+        node = main_program_tags["a_string"]
         len_node = node.members["LEN"]
         assert isinstance(len_node, IntegerNode)
 
     def test_data_member_is_atomic_node(self, main_program_tags):
-        node = main_program_tags["a_string"].data
+        node = main_program_tags["a_string"]
         data_node = node.members["DATA"]
         # DATA should be an AtomicNode; check it's not a struct/array
         assert not isinstance(data_node, StructNode)
@@ -644,24 +650,24 @@ class TestStringNodeMembers:
 class TestStringNodeMaxLength:
     """Test max_length property."""
     def test_string_node_max_length(self, main_program_tags):
-        node = main_program_tags["a_string"].data
+        node = main_program_tags["a_string"]
         assert node.max_length == 82
 
 
 class TestArrayNode1D:
     """Test 1D array properties."""
     def test_1d_dimensions(self, main_program_tags):
-        node = main_program_tags["a_udt_instance"].data
+        node = main_program_tags["a_udt_instance"]
         arr = node.members["an_array"]
         assert arr.dimensions == (4,)
 
     def test_1d_length(self, main_program_tags):
-        node = main_program_tags["a_udt_instance"].data
+        node = main_program_tags["a_udt_instance"]
         arr = node.members["an_array"]
         assert len(arr) == 4
 
     def test_1d_element_path(self, main_program_tags):
-        node = main_program_tags["a_udt_instance"].data
+        node = main_program_tags["a_udt_instance"]
         arr = node.members["an_array"]
         elem = arr[0]
         assert "[0]" in elem.operand_path
@@ -670,13 +676,13 @@ class TestArrayNode1D:
 class TestArrayNodeNegativeIndexing:
     """Test negative indexing works correctly."""
     def test_2d_negative_index_equals_last(self, main_program_tags):
-        node = main_program_tags["a_2d_array"].data
+        node = main_program_tags["a_2d_array"]
         last_elem = node[-1]
         last_subscript = node[1, 2]
         assert last_elem.operand_path == last_subscript.operand_path
 
     def test_3d_negative_index_equals_last(self, main_program_tags):
-        node = main_program_tags["a_3d_array"].data
+        node = main_program_tags["a_3d_array"]
         last_elem = node[-1]
         last_subscript = node[1, 2, 3]
         assert last_elem.operand_path == last_subscript.operand_path
@@ -685,12 +691,12 @@ class TestArrayNodeNegativeIndexing:
 class TestArrayNodeIteration:
     """Test array iteration and slicing."""
     def test_2d_array_iteration_count(self, main_program_tags):
-        node = main_program_tags["a_2d_array"].data
+        node = main_program_tags["a_2d_array"]
         count = sum(1 for _ in node)
         assert count == 6
 
     def test_3d_array_iteration_count(self, main_program_tags):
-        node = main_program_tags["a_3d_array"].data
+        node = main_program_tags["a_3d_array"]
         count = sum(1 for _ in node)
         assert count == 24
 
@@ -710,13 +716,13 @@ class TestSpecGaps:
     """Spec cases not covered by the generated suites above."""
 
     def test_subscript_bit_override(self, main_program_tags):
-        node = main_program_tags["a_2d_array"].data
+        node = main_program_tags["a_2d_array"]
         elem = node[0, 1]
         assert elem.operand_path == "[0,1]"
         assert elem.bit(1).description == "different element bit comment"
 
     def test_ascii_radix_tag(self, main_program_tags):
-        node = main_program_tags["a_character"].data
+        node = main_program_tags["a_character"]
         assert isinstance(node, IntegerNode)
         assert node.radix == "ASCII"
         assert node.raw_value == "'$00'"
@@ -728,11 +734,15 @@ class TestSpecGaps:
         found = []
         for conn in comms.connections.values():
             for io in (conn.input_tag, conn.output_tag):
-                if io is None or not isinstance(io.data, StructNode):
+                if io is None:
+                    continue
+                # ModuleDataTag wraps a node, check .data
+                data_node = io.data
+                if data_node is None or not isinstance(data_node, StructNode):
                     continue
                 for name in ("Command", "Status"):
-                    if name in io.data.members:
-                        found.append(io.data.members[name])
+                    if name in data_node.members:
+                        found.append(data_node.members[name])
         assert found
         for member in found:
             assert isinstance(member, IntegerNode)
@@ -746,7 +756,7 @@ class TestSpecGaps:
         assert node.bits[0].value is True
 
     def test_commented_dint_bit1_metadata(self, main_program_tags):
-        bit1 = main_program_tags["a_commented_dint"].data.bit(1)
+        bit1 = main_program_tags["a_commented_dint"].bit(1)
         assert bit1.operand_path == ".1"
         assert bit1.description == "this is bit 1"
         assert bit1.engineering_unit == "mm"
@@ -759,8 +769,8 @@ class TestSpecGaps:
             "<Data Format=\"String\" Length=\"3\">"
             "<CDataContent>'abc'</CDataContent></Data>"
         )
-        node = _build_string_root(
-            el, "STRING", _TagOverrides(ET.fromstring("<Tag/>")), None
+        node = StringNode(
+            el, None, _TagOverrides(ET.fromstring("<Tag/>")), "", None, data_type="STRING"
         )
         assert isinstance(node, StringNode)
         assert node.value == "abc"
@@ -770,14 +780,14 @@ class TestSpecGaps:
         assert node.members["DATA"].value == "abc"
 
     def test_nested_string_member_paths(self, controller_tags):
-        elem = controller_tags["ALLOWABLE_ALARMS"].data[1]
+        elem = controller_tags["ALLOWABLE_ALARMS"][1]
         assert elem.operand_path == "[1]"
         assert elem.members["DATA"].operand_path == "[1].DATA"
         assert elem.members["LEN"].operand_path == "[1].LEN"
         assert type(elem.members["DATA"]) is AtomicNode
 
     def test_array_slice_and_negative(self, main_program_tags):
-        arr = main_program_tags["a_udt_instance"].data.members["an_array"]
+        arr = main_program_tags["a_udt_instance"].members["an_array"]
         assert [e.operand_path for e in arr.elements[1:3]] == [
             ".AN_ARRAY[1]",
             ".AN_ARRAY[2]",
@@ -786,10 +796,14 @@ class TestSpecGaps:
         assert arr.elements[0].data_type == "REAL"
 
     def test_struct_and_array_repr(self, main_program_tags):
-        udt = main_program_tags["a_udt_instance"].data
-        assert repr(udt).splitlines()[0] == "StructNode('A_UDT')"
-        assert "members:" in repr(udt)
+        udt = main_program_tags["a_udt_instance"]
+        # Now root tags show as Tag, not Node
+        assert repr(udt) == "StructTag('a_udt_instance', 'A_UDT')"
+        # The full Node repr was for nested nodes; check instead that members are accessible
+        assert "a_nested_UDT" in list(udt.members)
+        
         arr = udt.members["an_array"]
-        assert repr(arr).splitlines()[0] == "ArrayNode('REAL', path='.AN_ARRAY')"
+        # Nested nodes still show full Node-style repr
+        assert repr(arr).startswith("ArrayNode('REAL'")
         assert "elements: len=4" in repr(arr)
 
