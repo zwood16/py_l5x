@@ -73,9 +73,12 @@ class ProjectTagsView(Mapping[str, Tag | ModuleTagRef]):
     per-module tag views, so modules remain the single source of truth for
     module tags.
 
-    On a name conflict between a controller tag and a module tag, the
-    controller tag wins (module tags are only added when their global name is
-    not already taken).
+    Logix tag names cannot contain ``':'`` while every module global name does,
+    so a controller tag and a module tag can never share a name. Lookup is
+    therefore decided by the presence of ``':'``: names without one are
+    controller tags, and names with one are resolved against the module whose
+    :attr:`~py_l5x.parsers.module.Module.tag_prefix` matches the part before the
+    last ``':'``.
 
     Values are ``Tag`` instances for controller tags and :class:`ModuleTagRef`
     instances for module I/O tags.
@@ -97,82 +100,47 @@ class ProjectTagsView(Mapping[str, Tag | ModuleTagRef]):
         self._controller_tags = controller_tags
         self._modules = modules
 
-    def _module_refs(self) -> Iterator[ModuleTagRef]:
-        """Yield every module I/O tag reference across all modules.
-
-        Yields:
-            A :class:`ModuleTagRef` for each tag of each module, in module order.
-        """
-        for module in self._modules.values():
-            yield from module.tags.values()
-
-    def _module_ref_by_name(self, name: str) -> ModuleTagRef | None:
-        """Find the first module tag reference with the given global name.
-
-        Args:
-            name: The Studio 5000 global tag name to look up.
-
-        Returns:
-            The matching :class:`ModuleTagRef`, or None when no module exposes it.
-        """
-        for ref in self._module_refs():
-            if ref.name == name:
-                return ref
-        return None
-
     def __getitem__(self, name: str) -> Tag | ModuleTagRef:
-        """Get a tag by name, preferring controller tags over module tags.
+        """Get a controller tag or a module I/O tag by name.
 
         Args:
-            name: The tag name (a controller tag name or a module global name).
+            name: A controller tag name (no ``':'``) or a module global name
+                (``<tag_prefix>:<suffix>``).
 
         Returns:
             The matching ``Tag`` or :class:`ModuleTagRef`.
 
         Raises:
-            KeyError: If neither a controller tag nor a module tag has that name.
+            KeyError: If no controller tag or module tag has that name.
         """
-        try:
+        if ":" not in name:
             return self._controller_tags[name]
-        except KeyError:
-            ref = self._module_ref_by_name(name)
-            if ref is not None:
-                return ref
-            raise
+        prefix, _, _ = name.rpartition(":")
+        for module in self._modules.values():
+            if module.tag_prefix == prefix:
+                return module.tags[name]
+        raise KeyError(name)
 
     def __iter__(self) -> Iterator[str]:
         """Iterate all tag names: controller tags, then module global names.
 
         Yields:
-            Each unique tag name. Controller tag names come first; a module tag
-            whose global name collides with an already-yielded name is skipped.
+            Controller tag names first, then each module's global tag names in
+            module order.
         """
-        seen: set[str] = set()
-        for name in self._controller_tags:
-            seen.add(name)
-            yield name
-        for ref in self._module_refs():
-            if ref.name not in seen:
-                seen.add(ref.name)
-                yield ref.name
+        yield from self._controller_tags
+        for module in self._modules.values():
+            yield from module.tags
 
     def __len__(self) -> int:
-        """Return the number of distinct names visible in the merged view.
+        """Return the number of tags in the merged view.
 
         Returns:
-            The count of names yielded by ``__iter__``.
+            The controller tag count plus each module's tag count.
         """
-        return sum(1 for _ in self.__iter__())
-
-    def __contains__(self, name: object) -> bool:
-        """Return whether a controller or module tag has the given name."""
-        if not isinstance(name, str):
-            return False
-        try:
-            self[name]
-        except KeyError:
-            return False
-        return True
+        return len(self._controller_tags) + sum(
+            len(module.tags) for module in self._modules.values()
+        )
 
     def __repr__(self) -> str:
         """Return a debug-friendly representation of this merged tag view.
@@ -216,9 +184,10 @@ class Project:
             ValueError: If the file is not a valid L5X file.
         """
         self._root = root
-        self._controller_element = self._root.find("Controller")
-        if self._controller_element is None:
+        controller = self._root.find("Controller")
+        if controller is None:
             raise ValueError("No <Controller> element found; not a valid L5X file.")
+        self._controller_element = controller
 
         # Build collections that don't depend on TypeRegistry first.
         self._data_types = DataTypesCollection(self._controller_element)
@@ -450,8 +419,8 @@ class Project:
         variables* alongside the controller's own tags. This view exposes both
         under one surface: every controller tag keeps its name, and each module
         I/O tag is added under its Studio 5000 global name (for example
-        ``ValveBank:I`` or ``Local:1:C``). Controller tags win on a name
-        conflict.
+        ``ValveBank:I`` or ``Local:1:C``). Logix tag names cannot contain
+        ``':'`` and module global names always do, so the two never collide.
 
         Returns:
             A :class:`ProjectTagsView` mapping tag names to either ``Tag``
@@ -509,7 +478,7 @@ class Project:
             # rung number instead so the repr is informative.
             if self.target_type == "Rung":
                 t = self.target
-                rung_label = f"number={t.number}" if t is not None else "?"
+                rung_label = f"number={t.number}" if isinstance(t, Rung) else "?"
                 target_line = f"  Target:       Rung {rung_label}"
             else:
                 target_line = f"  Target:       {self.target_type} {self.target_name!r}"

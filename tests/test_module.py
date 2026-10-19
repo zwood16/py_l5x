@@ -62,14 +62,27 @@ class TestModulesCollection:
 
     def test_contains_expected_modules(self, modules: ModulesCollection) -> None:
         """Fixture exposes expected module names."""
-        assert len(modules) == 7
-        assert "Local" in modules
-        assert "Test_Input_Module" in modules
-        assert "Test_Safety_Input" in modules
-        assert "ShopRobot" in modules
-        assert "AnotherPLC" in modules
-        assert "ValveBank" in modules
-        assert "Test_Servo_Drive" in modules
+        expected = [
+            "Local",
+            "Test_Input_Module",
+            "Test_Safety_Input",
+            "Fast_Local_Input",
+            "ShopRobot",
+            "AnotherPLC",
+            "ValveBank",
+            "Test_Servo_Drive",
+            "PointIO",
+            "PointIO_Input",
+            "PointIO_Output",
+            "PointIO_AnalogInput",
+            "PointIO_AnalogOutput",
+            "PointIO_SafetyInput",
+            "PointIO_SafetyOutput",
+            "Compact5000_IO_Adapter",
+            "Remote_Output",
+        ]
+        assert len(modules) == 17
+        assert sorted(modules) == sorted(expected)
 
     def test_getitem_returns_module(self, modules: ModulesCollection) -> None:
         """Indexing returns a Module wrapper."""
@@ -318,9 +331,7 @@ class TestModuleTagsView:
         assert ref.connection is not None
         assert ref.connection.name == "_200424692C962C64"
 
-    def test_config_tag_and_default_suffixes(
-        self, modules: ModulesCollection
-    ) -> None:
+    def test_config_tag_and_default_suffixes(self, modules: ModulesCollection) -> None:
         """Config tag gets :C; missing suffixes derive from the data type."""
         mod = modules["ShopRobot"]
         assert list(mod.tags) == ["ShopRobot:C", "ShopRobot:I", "ShopRobot:O"]
@@ -346,10 +357,8 @@ class TestModuleTagsView:
     ) -> None:
         """Servo drive tag suffixes (S/SI/SO) come from the data type.
 
-        Note: Studio 5000 only generates tags for servo-drive connections that
-        carry a safety connection. This view applies the general rule uniformly,
-        so the non-safety diagnostic connection is also reported here (a known,
-        documented divergence).
+        Studio 5000 creates tags only where the L5X has tag elements; this
+        servo's diagnostic connection has them, so ``S`` is exposed as well.
         """
         mod = modules["Test_Servo_Drive"]
         names = list(mod.tags)
@@ -383,3 +392,294 @@ class TestModuleTagsView:
         assert len(view) == 2
         with pytest.raises(KeyError):
             _ = view["ValveBank:X"]
+
+
+#: Ground truth from a Studio 5000 tag export of example.L5X:
+#: global name -> (data type, class).
+EXPECTED_MODULE_TAGS: dict[str, tuple[str, str]] = {
+    "ValveBank:I": ("_0007:EX600_SEN78_85D36DB4:I:0", "Standard"),
+    "ValveBank:O": ("_0007:EX600_SEN78_AAB94180:O:0", "Standard"),
+    "Test_Servo_Drive:S": ("AB:Motion_Diagnostics:S:1", "Standard"),
+    "Test_Servo_Drive:SI": ("AB:CIP_Drive_Safety1:SI:0", "Safety"),
+    "Test_Servo_Drive:SO": ("AB:CIP_Drive_Safety1:SO:0", "Safety"),
+    "Local:1:C": ("AB:5000_DI16:C:0", "Standard"),
+    "Local:1:I": ("AB:5000_DI16:I:0", "Standard"),
+    "Local:2:I": ("AB:5000_SDI8:I:0", "Safety"),
+    "Local:3:C": ("AB:5000_DI16_Timestamp:C:0", "Standard"),
+    "Local:3:EI": ("AB:5000_DI16_Event4:EI:0", "Standard"),
+    "Local:3:EO": ("AB:5000_DI16_Event4:EO:0", "Standard"),
+    "Local:3:I": ("AB:5000_DI16_Timestamp_Event4:I:0", "Standard"),
+    "Local:3:O": ("AB:5000_DI16_Timestamp:O:0", "Standard"),
+    "PointIO:1:C": ("AB:1734_DI8:C:0", "Standard"),
+    "PointIO:2:C": ("AB:1734_DO8_NoDiag:C:0", "Standard"),
+    "PointIO:3:C": ("AB:1734_IE2:C:0", "Standard"),
+    "PointIO:3:I": ("AB:1734_IE2:I:0", "Standard"),
+    "PointIO:4:C": ("AB:1734_OE2:C:0", "Standard"),
+    "PointIO:4:I": ("AB:1734_OE2:I:0", "Standard"),
+    "PointIO:4:O": ("AB:1734_OE2:O:0", "Standard"),
+    "PointIO:5:I": ("AB:1734_IB8S_Safety2:I:0", "Safety"),
+    "PointIO:5:O": ("AB:1734_IB8S:O:0", "Safety"),
+    "PointIO:6:I": ("AB:1734_OB8S_Safety1:I:0", "Safety"),
+    "PointIO:6:O": ("AB:1734_OB8S:O:0", "Safety"),
+    "PointIO:I": ("AB:1734_7SLOT:I:0", "Standard"),
+    "PointIO:O": ("AB:1734_7SLOT:O:0", "Standard"),
+    "Compact5000_IO_Adapter:1:C": ("AB:5000_DO16_Diag:C:0", "Standard"),
+    "Compact5000_IO_Adapter:1:I": ("AB:5000_DO16_Diag:I:0", "Standard"),
+    "Compact5000_IO_Adapter:1:O": ("AB:5000_DO16:O:0", "Standard"),
+    "ShopRobot:C": ("AB:ETHERNET_MODULE:C:0", "Standard"),
+    "ShopRobot:I": ("AB:ETHERNET_MODULE_SINT_260Bytes:I:0", "Standard"),
+    "ShopRobot:O": ("AB:ETHERNET_MODULE_SINT_52Bytes:O:0", "Standard"),
+}
+
+
+class TestExampleModuleTagsGroundTruth:
+    """Module tag names, data types, and classes match Studio 5000 exports."""
+
+    def test_union_of_module_tags_matches_studio(
+        self, modules: ModulesCollection
+    ) -> None:
+        """All module tag names, types, and classes match the Studio export."""
+        refs = {
+            ref.name: ref for module in modules.values() for ref in module.tags.values()
+        }
+        assert set(refs) == set(EXPECTED_MODULE_TAGS)
+        for name, (data_type, class_) in EXPECTED_MODULE_TAGS.items():
+            assert refs[name].data_type == data_type, name
+            assert refs[name].class_ == class_, name
+            assert refs[name].is_safety == (class_ == "Safety"), name
+
+    def test_direct_value_access_matches_data(self, modules: ModulesCollection) -> None:
+        """Value-node attributes work directly on the ref, matching ``.data``."""
+        valve = modules["ValveBank"].tags["ValveBank:I"]
+        assert "ConnectionFaulted" in valve.members
+        assert list(valve.members) == list(valve.data.members)
+
+        config = modules["ShopRobot"].tags["ShopRobot:C"]
+        assert config.data is not None
+        assert len(config.elements) == len(config.data.elements)
+
+    def test_safety_repr_shows_class(self, modules: ModulesCollection) -> None:
+        """Safety tags show their class in the repr; standard tags do not."""
+        safety = modules["Test_Safety_Input"].tags["Local:2:I"]
+        assert safety.class_ == "Safety"
+        assert "class_: 'Safety'" in repr(safety)
+        standard = modules["Test_Input_Module"].tags["Local:1:I"]
+        assert "class_" not in repr(standard)
+
+
+def _build_modules(modules_xml: str) -> ModulesCollection:
+    """Build a ModulesCollection from synthetic ``<Module>`` XML."""
+    controller = ET.fromstring(
+        "<Controller Name='Synthetic'><DataTypes/>"
+        "<AddOnInstructionDefinitions/>"
+        f"<Modules>{modules_xml}</Modules></Controller>"
+    )
+    registry = TypeRegistry(
+        DataTypesCollection(controller), AddOnDataTypeCollection(controller)
+    )
+    return ModulesCollection(controller, registry)
+
+
+_LOCAL_CHASSIS_XML = (
+    '<Module Name="Local" ParentModule="Local" ParentModPortId="1">'
+    '<Ports><Port Id="1" Address="0" Type="5069" Upstream="false"/></Ports>'
+    "</Module>"
+)
+
+
+class TestTagPrefixRules:
+    """Module.tag_prefix addresses backplane modules by parent and slot."""
+
+    def test_local_backplane_slot_uses_upstream_address(self) -> None:
+        """A local-chassis 5069 module is ``Local:<upstream address>``.
+
+        ParentModPortId is the parent's port number and must not be used.
+        """
+        modules = _build_modules(
+            _LOCAL_CHASSIS_XML
+            + '<Module Name="Slot_Module" ParentModule="Local" ParentModPortId="1">'
+            '<Ports><Port Id="1" Address="4" Type="5069" Upstream="true"/></Ports>'
+            "</Module>"
+        )
+        assert modules["Slot_Module"].tag_prefix == "Local:4"
+        assert modules["Local"].tag_prefix == "Local"
+
+    def test_module_in_remote_rack_uses_adapter_name(self) -> None:
+        """A module behind a remote adapter is ``<Adapter>:<slot>``."""
+        modules = _build_modules(
+            _LOCAL_CHASSIS_XML
+            + '<Module Name="Adapter" ParentModule="Local" ParentModPortId="3">'
+            '<Ports><Port Id="1" Address="0" Type="5069" Upstream="false"/>'
+            '<Port Id="2" Address="10.0.0.5" Type="Ethernet" Upstream="true"/>'
+            "</Ports></Module>"
+            '<Module Name="Remote_Slot" ParentModule="Adapter" ParentModPortId="1">'
+            '<Ports><Port Id="1" Address="2" Type="5069" Upstream="true"/></Ports>'
+            "</Module>"
+        )
+        assert modules["Adapter"].tag_prefix == "Adapter"
+        assert modules["Remote_Slot"].tag_prefix == "Adapter:2"
+
+    def test_1756_icp_local_module_uses_local_prefix(self) -> None:
+        """A ControlLogix ICP upstream port is a backplane slot on the chassis."""
+        modules = _build_modules(
+            '<Module Name="Local" ParentModule="Local" ParentModPortId="1">'
+            '<Ports><Port Id="1" Address="0" Type="ICP" Upstream="false"/></Ports>'
+            "</Module>"
+            '<Module Name="ICP_Module" ParentModule="Local" ParentModPortId="1">'
+            '<Ports><Port Id="1" Address="2" Type="ICP" Upstream="true"/></Ports>'
+            "</Module>"
+        )
+        assert modules["ICP_Module"].tag_prefix == "Local:2"
+
+    @pytest.mark.parametrize("port_type", ["Ethernet", "ControlNet", "DeviceNet"])
+    def test_network_upstream_uses_own_name(self, port_type: str) -> None:
+        """Modules on a network upstream port are named after themselves."""
+        modules = _build_modules(
+            _LOCAL_CHASSIS_XML
+            + '<Module Name="Net_Module" ParentModule="Local" ParentModPortId="3">'
+            f'<Ports><Port Id="2" Address="192.168.1.10" Type="{port_type}" '
+            'Upstream="true"/></Ports>'
+            "</Module>"
+        )
+        assert modules["Net_Module"].tag_prefix == "Net_Module"
+
+    def test_upstream_without_address_uses_own_name(self) -> None:
+        """A backplane upstream port with no address gives no slot; use the name."""
+        modules = _build_modules(
+            _LOCAL_CHASSIS_XML
+            + '<Module Name="No_Addr" ParentModule="Local" ParentModPortId="1">'
+            '<Ports><Port Id="1" Type="5069" Upstream="true"/></Ports>'
+            "</Module>"
+        )
+        assert modules["No_Addr"].tag_prefix == "No_Addr"
+
+
+class TestModuleTagsDedup:
+    """Duplicate global names collapse to the first tag, consistently."""
+
+    def test_first_duplicate_wins(self) -> None:
+        """Iteration, indexing, and length all agree on the first tag per name."""
+        tag_xml = (
+            '<InputTag ExternalAccess="{access}"><Data Format="Decorated">'
+            '<Structure DataType="AB:Dup:I:0"/></Data></InputTag>'
+        )
+        modules = _build_modules(
+            '<Module Name="Dup" ParentModule="Local">'
+            '<Ports><Port Id="2" Address="10.0.0.9" Type="Ethernet" '
+            'Upstream="true"/></Ports>'
+            "<Communications><Connections>"
+            '<Connection Name="First" Type="Input" InputTagSuffix="I">'
+            + tag_xml.format(access="Read/Write")
+            + "</Connection>"
+            '<Connection Name="Second" Type="Input" InputTagSuffix="I">'
+            + tag_xml.format(access="Read Only")
+            + "</Connection>"
+            "</Connections></Communications></Module>"
+        )
+        view = modules["Dup"].tags
+        assert list(view) == ["Dup:I"]
+        assert len(view) == 1
+        ref = view["Dup:I"]
+        assert ref.connection is not None
+        assert ref.connection.name == "First"
+        assert ref.external_access == "Read/Write"
+
+
+class TestRealWorldModuleFixtures:
+    """Fixture checks for Point I/O, Compact 5000, and multi-connection modules."""
+
+    @pytest.mark.parametrize(
+        ("module_name", "expected_prefix"),
+        [
+            ("PointIO", "PointIO"),
+            ("PointIO_Input", "PointIO:1"),
+            ("PointIO_SafetyOutput", "PointIO:6"),
+            ("Compact5000_IO_Adapter", "Compact5000_IO_Adapter"),
+            ("Remote_Output", "Compact5000_IO_Adapter:1"),
+            ("Fast_Local_Input", "Local:3"),
+        ],
+    )
+    def test_tag_prefix_for_real_modules(
+        self, modules: ModulesCollection, module_name: str, expected_prefix: str
+    ) -> None:
+        """Parent/slot rule matches the prefixes Studio 5000 uses in the export."""
+        assert modules[module_name].tag_prefix == expected_prefix
+
+    @pytest.mark.parametrize(
+        "module_name", ["Local", "AnotherPLC", "Compact5000_IO_Adapter"]
+    )
+    def test_adapters_and_controllers_have_no_tags(
+        self, modules: ModulesCollection, module_name: str
+    ) -> None:
+        """Controllers and adapters without tag elements expose no module tags."""
+        assert len(modules[module_name].tags) == 0
+
+    def test_point_io_adapter_rack_optimized_tags(
+        self, modules: ModulesCollection
+    ) -> None:
+        """The Point I/O adapter exposes its own Output connection as I/O tags."""
+        assert list(modules["PointIO"].tags) == ["PointIO:I", "PointIO:O"]
+
+    @pytest.mark.parametrize(
+        ("module_name", "tag_name"),
+        [("PointIO_Input", "PointIO:1:C"), ("PointIO_Output", "PointIO:2:C")],
+    )
+    def test_config_only_slots_expose_only_config_tag(
+        self, modules: ModulesCollection, module_name: str, tag_name: str
+    ) -> None:
+        """Config-only Point I/O slots expose just the :C tag, with no connection."""
+        mod = modules[module_name]
+        assert list(mod.tags) == [tag_name]
+        ref = mod.tags[tag_name]
+        assert ref.kind == "C"
+        assert ref.connection is None
+
+    def test_multi_connection_module_tags_in_order(
+        self, modules: ModulesCollection
+    ) -> None:
+        """Fast_Local_Input exposes C, I, O, and event tags with explicit suffixes."""
+        tags = modules["Fast_Local_Input"].tags
+        assert list(tags) == [
+            "Local:3:C",
+            "Local:3:I",
+            "Local:3:O",
+            "Local:3:EI",
+            "Local:3:EO",
+        ]
+        ei = tags["Local:3:EI"]
+        eo = tags["Local:3:EO"]
+        assert ei.kind == "EI"
+        assert eo.kind == "EO"
+        assert ei.connection is not None
+        assert eo.connection is not None
+        assert ei.connection.name == "InputDataEvent"
+        assert eo.connection.name == "InputDataEvent"
+
+    def test_point_io_safety_split_connections(
+        self, modules: ModulesCollection
+    ) -> None:
+        """Safety Point I/O modules split I and O across SafetyInput/SafetyOutput."""
+        mod = modules["PointIO_SafetyInput"]
+        tag_in = mod.tags["PointIO:5:I"]
+        tag_out = mod.tags["PointIO:5:O"]
+        assert tag_in.connection is not None
+        assert tag_out.connection is not None
+        assert tag_in.connection.type == "SafetyInput"
+        assert tag_out.connection.type == "SafetyOutput"
+        for ref in (tag_in, tag_out):
+            assert ref.class_ == "Safety"
+            assert ref.is_safety is True
+
+    def test_point_io_standard_connection_is_standard(
+        self, modules: ModulesCollection
+    ) -> None:
+        """A standard Point I/O input tag is classed Standard, not Safety."""
+        ref = modules["PointIO_AnalogInput"].tags["PointIO:3:I"]
+        assert ref.class_ == "Standard"
+        assert ref.is_safety is False
+
+    def test_value_access_on_point_io_ref(self, modules: ModulesCollection) -> None:
+        """Member access on a Point I/O ref matches its underlying data."""
+        ref = modules["PointIO_AnalogInput"].tags["PointIO:3:I"]
+        assert len(ref.members) > 0
+        assert list(ref.members) == list(ref.data.members)

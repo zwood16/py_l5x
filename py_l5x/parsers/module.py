@@ -15,31 +15,29 @@ This module parses ``<Modules>`` in an L5X controller export and exposes:
   module's I/O tags keyed by their Studio 5000 *global variable* names (for
   example ``ValveBank:I``, ``Local:1:C``). Each :class:`ModuleTagRef` is a thin
   reference to the underlying tag with back-references to the owning
-  :class:`Module` and :class:`Connection`.
+  :class:`Module` and :class:`Connection`. Its value node is available directly
+  (``ref.members``, ``ref.elements``, ``ref.value``), as on controller tags.
 
 Tag-like value parsing reuses :class:`py_l5x.parsers.tag.TagNode` so nested
 structures and arrays behave the same way as controller/program tag nodes.
 
-Global-name convention and known limitation
---------------------------------------------
+Global-name convention
+----------------------
 In Studio 5000 a module's communication tags surface as *global variables*.
-Remote modules are named after the module (``ValveBank:I``); modules on the
-local backplane are addressed by position (``Local:1:I``). ``Module.tag_prefix``
-implements this rule, and :class:`ModuleTagsView` builds each name as
-``<tag_prefix>:<suffix>`` where the suffix comes from the connection's
-``InputTagSuffix``/``OutputTagSuffix`` when present, else is derived from the
-tag's root data type (the second-to-last colon segment), falling back to ``I``/
-``O``, or is ``C`` for a config tag.
-
-Known limitation: Studio 5000 does *not* generate tags for servo-drive
-connections unless they carry a safety connection. The view applies the general
-suffix rule uniformly, so a non-safety servo-drive connection would still be
-reported here even though Studio would not surface it.
+A module on a backplane/chassis port is addressed by its parent and slot
+(``Local:1:I`` for a module in slot 1 of the local chassis, ``RemoteRack:3:I``
+for a module in slot 3 of a remote rack); a module on a network port is named
+after itself (``ValveBank:I``). ``Module.tag_prefix`` implements this rule, and
+:class:`ModuleTagsView` builds each name as ``<tag_prefix>:<suffix>`` where the
+suffix comes from the connection's ``InputTagSuffix``/``OutputTagSuffix`` when
+present, else is derived from the tag's root data type (the second-to-last
+colon segment), falling back to ``I``/``O``, or is ``C`` for a config tag.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
+from typing import Any
 from xml.etree import ElementTree as ET
 
 from py_l5x.parsers.base import (
@@ -52,13 +50,16 @@ from py_l5x.parsers.base import (
 )
 from py_l5x.parsers.tag import (
     ArrayNode,
-    StringNode,
     StructNode,
     TagNode,
     TypeRegistry,
     _build_node,
+    _format_member_lines,
     _TagOverrides,
 )
+
+#: Upstream port types that are network links rather than chassis backplanes.
+_NETWORK_PORT_TYPES = frozenset({"Ethernet", "ControlNet", "DeviceNet"})
 
 
 def _parse_int(value: str) -> int | None:
@@ -500,9 +501,25 @@ class Module(BaseElement):
         doc="Whether auto diagnostics are enabled, if the attribute exists.",
     )
 
-    def __init__(self, element: ET.Element, type_registry: TypeRegistry) -> None:
+    def __init__(
+        self,
+        element: ET.Element,
+        type_registry: TypeRegistry,
+        controller_element: ET.Element | None = None,
+    ) -> None:
+        """Initialize from a ``<Module>`` element.
+
+        Args:
+            element: The ``<Module>`` element to wrap.
+            type_registry: The type registry used for parsing tag values.
+            controller_element: The ``<Controller>`` element containing the
+                ``<Modules>`` list. Needed to resolve this module's parent (for
+                :attr:`tag_prefix`); when omitted, parent lookup yields the
+                local controller.
+        """
         super().__init__(element)
         self._type_registry = type_registry
+        self._controller_element = controller_element
 
     data_exchange_id = str_attr(
         "DataExchangeId",
@@ -547,43 +564,72 @@ class Module(BaseElement):
     def tag_prefix(self) -> str:
         """Prefix used in this module's Studio 5000 global tag names.
 
-        In Studio 5000, module I/O tags surface as *global variables*. Remote
-        modules are named after the module itself (for example ``ValveBank:I``),
-        while modules mounted on the local backplane are addressed by position
-        (for example ``Local:1:I``).
+        Module I/O tags surface as *global variables*. A module attached through
+        a backplane/chassis upstream port (any upstream port whose type is not a
+        network such as ``Ethernet``, ``ControlNet``, or ``DeviceNet``, and that
+        has an ``Address``) is addressed as ``<parent prefix>:<slot>``, where
+        ``<slot>`` is that upstream port's address:
 
-        A module is treated as a local backplane module when its upstream port
-        (``Upstream="true"``) has a ``5069`` backplane type; its position is that
-        port's address. Remote modules (Ethernet upstream, or any non-backplane
-        upstream port) use their own name.
+        - parent is the controller module (no upstream port) -> ``Local``, so a
+          local-chassis module in slot 1 is ``Local:1``;
+        - parent is a remote adapter -> the parent's name, so a module in slot 3
+          behind ``RemoteRack`` is ``RemoteRack:3``.
+
+        Modules with a network upstream port (or no upstream port at all) are
+        named after themselves (for example ``ValveBank``).
 
         Returns:
-            The global-name prefix, e.g. ``"ValveBank"`` or ``"Local:1"``.
+            The global-name prefix, e.g. ``"ValveBank"``, ``"Local:1"``, or
+            ``"RemoteRack:3"``.
         """
-        upstream_address = ""
-        is_local_backplane = False
-        for port in self.ports.values():
-            if port.upstream:
-                is_local_backplane = port.type == "5069"
-                upstream_address = port.address or ""
-                break
-        if not is_local_backplane:
+        upstream = next((port for port in self.ports.values() if port.upstream), None)
+        if (
+            upstream is None
+            or not upstream.address
+            or upstream.type in _NETWORK_PORT_TYPES
+        ):
             return self.name
-        if upstream_address:
-            return f"Local:{upstream_address}"
-        # No usable address on the upstream backplane port; fall back to the
-        # parent-module port id (the slot the module occupies on the chassis).
-        if self.parent_mod_port_id:
-            return f"Local:{self.parent_mod_port_id}"
+        return f"{self._parent_tag_prefix()}:{upstream.address}"
+
+    def _parent_tag_prefix(self) -> str:
+        """Return the prefix naming this module's parent for backplane addressing.
+
+        Returns:
+            ``"Local"`` when the parent is the controller module (or cannot be
+            found), otherwise the parent module's name.
+        """
+        parent = self._parent_module_element()
+        if parent is None:
+            return "Local"
+        parent_module = Module(parent, self._type_registry, self._controller_element)
+        if any(port.upstream for port in parent_module.ports.values()):
+            return parent_module.name
         return "Local"
+
+    def _parent_module_element(self) -> ET.Element | None:
+        """Find the ``<Module>`` element named by this module's ``ParentModule``.
+
+        Looked up live from the controller element on every call. A module that
+        names itself as its parent (as the controller module does) yields None.
+
+        Returns:
+            The parent's ``<Module>`` element, or None when it is absent.
+        """
+        if self._controller_element is None or not self.parent_module:
+            return None
+        for el in self._controller_element.findall("Modules/Module"):
+            if el is not self._element and el.get("Name") == self.parent_module:
+                return el
+        return None
 
     @property
     def tags(self) -> ModuleTagsView:
         """Live mapping of this module's I/O tags keyed by global tag name.
 
-        See :class:`ModuleTagsView` for the naming convention and the known
-        servo-drive limitation. Modules without tag-bearing communication
-        sections yield an empty view.
+        Names follow the L5X ``<ConfigTag>``/``<InputTag>``/``<OutputTag>``
+        elements, matching Studio 5000. See :class:`ModuleTagsView` for the
+        naming convention. Modules without tag-bearing communication sections
+        yield an empty view.
         """
         return ModuleTagsView(self)
 
@@ -604,12 +650,13 @@ class ModuleTagRef:
 
     It is intentionally *not* a subclass of :class:`py_l5x.parsers.tag.Tag`:
     module tags wrap a :class:`ModuleDataTag`, which has a different shape than a
-    controller/program tag. Instead it exposes a small set of identity
-    properties (``name``, ``kind``, ``module_name``, ``data_type``) plus
+    controller/program tag. Instead it exposes identity properties (``name``,
+    ``kind``, ``module_name``, ``data_type``, ``class_``, ``is_safety``) plus
     back-references to the owning :class:`Module` and (for connection tags)
-    :class:`Connection`, delegates :attr:`data` to the wrapped tag, and forwards
-    any other attribute access (e.g. helpers living on the wrapped tag) via
-    ``__getattr__``.
+    :class:`Connection`. Value access mirrors controller tags: ``ref.members``,
+    ``ref.elements``, and ``ref.value`` reach the root value node directly.
+    ``ref.data`` remains available as well. Other unknown attributes are
+    looked up on the root value node first, then on the wrapped tag.
 
     Args:
         name: The Studio 5000 global tag name (for example ``"ValveBank:I"``).
@@ -673,9 +720,29 @@ class ModuleTagRef:
 
     @property
     def data_type(self) -> str:
-        """Data type name of the wrapped tag's root value node, if any."""
-        data = self.data
-        return data.data_type if data is not None else ""
+        """Data type of the wrapped tag's root node (e.g. ``"AB:5000_DI16:C:0"``).
+
+        Uses the raw root ``DataType`` rather than :attr:`data`, which may unwrap
+        a config payload to its inner array.
+        """
+        return self._wrapped.root_data_type
+
+    @property
+    def class_(self) -> str:
+        """Tag class: ``"Safety"`` or ``"Standard"``.
+
+        A tag is ``"Safety"`` when its owning connection's ``Type`` contains
+        ``"Safety"`` (e.g. ``SafetyInputDataDriven``). Config tags have no
+        connection and are ``"Standard"``.
+        """
+        if self._connection is not None and "Safety" in (self._connection.type or ""):
+            return "Safety"
+        return "Standard"
+
+    @property
+    def is_safety(self) -> bool:
+        """Whether this is a safety-class tag."""
+        return self.class_ == "Safety"
 
     @property
     def external_access(self) -> str:
@@ -691,43 +758,89 @@ class ModuleTagRef:
     def data(self) -> TagNode | None:
         """Root value-tree node, delegating to the wrapped tag's ``.data``.
 
-        For struct payloads this is a :class:`StructNode`; use
-        ``ref.data.members[...]`` or ``ref.data.elements[...]`` to reach nested
-        values, mirroring how controller/program tags behave.
+        Kept for backwards compatibility; prefer the direct accessors
+        (:attr:`members`, :attr:`elements`, :attr:`value`). For config tags this
+        is the unwrapped inner array, the same node those accessors use.
         """
         return self._wrapped.data
 
-    def __getattr__(self, item: str):
-        """Forward unknown attributes to the wrapped :class:`ModuleDataTag`.
+    def _value_attr(self, name: str) -> Any:
+        """Return ``name`` from the root value node, or raise AttributeError.
+
+        Args:
+            name: The value-node attribute to read (``members``, ``elements``,
+                or ``value``).
+
+        Returns:
+            The attribute's value from :attr:`data`.
+
+        Raises:
+            AttributeError: If the tag has no root node or it lacks ``name``.
+        """
+        data = self.data
+        if data is None or not hasattr(data, name):
+            raise AttributeError(f"{type(self).__name__!r} has no attribute {name!r}")
+        return getattr(data, name)
+
+    @property
+    def members(self) -> Mapping[str, TagNode]:
+        """Members of a struct/string root node (see :attr:`data`)."""
+        return self._value_attr("members")
+
+    @property
+    def elements(self) -> Any:
+        """Elements of an array root node (see :attr:`data`)."""
+        return self._value_attr("elements")
+
+    @property
+    def value(self) -> Any:
+        """Value of a scalar root node (see :attr:`data`)."""
+        return self._value_attr("value")
+
+    def __getattr__(self, item: str) -> Any:
+        """Forward unknown public attributes to the root node, then the wrapped tag.
 
         Only invoked when normal attribute lookup fails, so the properties and
         back-references defined above always take precedence. Underscore-prefixed
         names are never forwarded (this also guards against recursion if a
         private attribute is missing).
+
+        Args:
+            item: The attribute name being looked up.
+
+        Returns:
+            The attribute value from the root value node if it has one,
+            otherwise from the wrapped :class:`ModuleDataTag`.
+
+        Raises:
+            AttributeError: If neither the root node nor the wrapped tag has
+                ``item``.
         """
         if item.startswith("_"):
             raise AttributeError(item)
+        data = self.data
+        if data is not None and hasattr(data, item):
+            return getattr(data, item)
         return getattr(self._wrapped, item)
 
     def __repr__(self) -> str:
         """Return a multi-line summary resembling :class:`py_l5x.parsers.tag.Tag`.
 
-        Shows identity (name, data type), the tag kind, access levels, and --
-        for struct/string payloads -- the member names one per line.
+        Shows identity (name, data type), the tag kind, the class when Safety,
+        access levels, and -- for struct/string payloads -- the member names one
+        per line.
         """
         lines = [f"ModuleTagRef({self.name!r}, {self.data_type!r})"]
         lines.append(f"  kind: {self.kind!r}")
+        if self.is_safety:
+            lines.append(f"  class_: {self.class_!r}")
         for attr in ("external_access", "opc_ua_access"):
             val = getattr(self, attr)
             if val not in (None, ""):
                 lines.append(f"  {attr}: {val!r}")
         data = self.data
-        if isinstance(data, (StructNode, StringNode)):
-            names = [name for name in data.members]
-            if names:
-                items = ",\n    ".join(repr(name) for name in names)
-                lines.append(f"  members: [\n    {items}\n  ]")
-        elif isinstance(data, ArrayNode):
+        lines.extend(_format_member_lines(data))
+        if isinstance(data, ArrayNode):
             lines.append(f"  elements: len={len(data)}")
         return "\n".join(lines)
 
@@ -743,10 +856,15 @@ class ModuleTagsView(Mapping[str, ModuleTagRef]):
     ``AB:Motion_Diagnostics:S:1`` -> ``S``), falling back to ``I``/``O``. Each
     is exposed under ``<tag_prefix>:<suffix>`` (see :meth:`Module.tag_prefix`).
 
-    Known limitation: Studio 5000 does *not* generate tags for servo-drive
-    connections unless they carry a safety connection. This view applies the
-    general suffix rule uniformly, so a non-safety servo-drive connection would
-    still be reported here even though Studio would not surface it.
+    Built from the module's ``<Communications>`` section: the optional
+    ``<ConfigTag>`` (suffix ``C``), then each connection's ``<InputTag>`` and
+    ``<OutputTag>``. A tag's suffix comes from its connection's
+    ``InputTagSuffix``/``OutputTagSuffix`` when present, else is derived from
+    the tag's root data type (the second-to-last colon segment, e.g.
+    ``AB:Motion_Diagnostics:S:1`` -> ``S``), falling back to ``I``/``O``. Each
+    is exposed under ``<tag_prefix>:<suffix>`` (see :meth:`Module.tag_prefix`).
+    Names follow the L5X tag elements, so a tag exists only where Studio 5000
+    would create one. If two tags share a name, the first one wins.
 
     Args:
         module (Module): The module whose tags are exposed.
@@ -761,12 +879,13 @@ class ModuleTagsView(Mapping[str, ModuleTagRef]):
         self._module = module
 
     def _items(self) -> list[ModuleTagRef]:
-        """Return the ordered list of tag references for this module.
+        """Return the ordered, de-duplicated tag references for this module.
 
         Returns:
             A list of :class:`ModuleTagRef` instances (config tag first, then
-            each connection's input/output tags). Empty when the module has no
-            tag-bearing communication sections or no usable prefix.
+            each connection's input/output tags), keeping only the first ref for
+            each global name. Empty when the module has no tag-bearing
+            communication sections or no usable prefix.
         """
         prefix = self._module.tag_prefix
         comms = self._module.communications
@@ -801,7 +920,10 @@ class ModuleTagsView(Mapping[str, ModuleTagRef]):
                 refs.append(
                     ModuleTagRef(ref_name, suffix, self._module, connection, output_tag)
                 )
-        return refs
+        unique: dict[str, ModuleTagRef] = {}
+        for ref in refs:
+            unique.setdefault(ref.name, ref)
+        return list(unique.values())
 
     def __getitem__(self, name: str) -> ModuleTagRef:
         """Get a tag reference by its global name.
@@ -824,13 +946,10 @@ class ModuleTagsView(Mapping[str, ModuleTagRef]):
         """Iterate the global tag names exposed by this module.
 
         Yields:
-            Each unique global tag name, in config-then-connection order.
+            Each global tag name, in config-then-connection order.
         """
-        seen: set[str] = set()
         for ref in self._items():
-            if ref.name not in seen:
-                seen.add(ref.name)
-                yield ref.name
+            yield ref.name
 
     def __len__(self) -> int:
         """Return the number of distinct global tag names for this module.
@@ -838,17 +957,7 @@ class ModuleTagsView(Mapping[str, ModuleTagRef]):
         Returns:
             The count of names yielded by ``__iter__``.
         """
-        return sum(1 for _ in self.__iter__())
-
-    def __contains__(self, name: object) -> bool:
-        """Return whether the module exposes a tag with the given global name."""
-        if not isinstance(name, str):
-            return False
-        try:
-            self[name]
-        except KeyError:
-            return False
-        return True
+        return len(self._items())
 
     def __repr__(self) -> str:
         """Return a debug-friendly representation of this module tags view.
@@ -880,5 +989,5 @@ class ModulesCollection(BaseCollection[Module]):
             controller_element,
             "Modules/Module",
             Module,
-            item_args=(type_registry,),
+            item_args=(type_registry, controller_element),
         )

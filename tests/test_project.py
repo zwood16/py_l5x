@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
 from pathlib import Path
 
 import pytest
@@ -187,17 +186,13 @@ class TestMergedTagsView:
         """project.tags returns a ProjectTagsView."""
         assert isinstance(project.tags, ProjectTagsView)
 
-    def test_module_tag_resolves_by_global_name(
-        self, project: Project
-    ) -> None:
+    def test_module_tag_resolves_by_global_name(self, project: Project) -> None:
         """A module I/O tag resolves under its Studio 5000 global name."""
         ref = project.tags["ValveBank:I"]
         assert isinstance(ref, ModuleTagRef)
-        assert ref.data.members["ConnectionFaulted"].value is False
+        assert ref.members["ConnectionFaulted"].value is False
 
-    def test_local_backplane_module_tag_resolves(
-        self, project: Project
-    ) -> None:
+    def test_local_backplane_module_tag_resolves(self, project: Project) -> None:
         """A local backplane module tag resolves under Local:<pos>:<suffix>."""
         ref = project.tags["Local:1:I"]
         assert isinstance(ref, ModuleTagRef)
@@ -229,46 +224,99 @@ class TestMergedTagsView:
         merged_names = set(project.tags)
         assert expected <= merged_names
 
-    def test_controller_tag_wins_on_name_conflict(
-        self, project: Project
-    ) -> None:
-        """On a collision, the controller tag shadows the module tag.
+    def test_len_matches_iteration(self, project: Project) -> None:
+        """len(project.tags) equals the number of names yielded by iteration."""
+        assert len(project.tags) == len(list(project.tags))
 
-        The fixture has no natural collision, so we synthesize one with a fake
-        controller collection whose single tag is named like a module tag.
-        """
+    def test_controller_tag_names_have_no_colon(self, project: Project) -> None:
+        """Controller tag names never contain ':' (so they cannot collide)."""
+        for name in project._tags:
+            assert ":" not in name
 
-        class _FakeControllerTags(Mapping[str, Tag]):
-            def __init__(self, shadow: str) -> None:
-                self._shadow = shadow
+    def test_unknown_module_style_name_raises_key_error(self, project: Project) -> None:
+        """A colon-qualified name with no matching module tag raises KeyError."""
+        with pytest.raises(KeyError):
+            project.tags["no_such:I"]
 
-            def __getitem__(self, name: str) -> Tag:
-                if name == self._shadow:
-                    return project._tags["message_tag"]
-                raise KeyError(name)
-
-            def __iter__(self) -> Iterator[str]:
-                yield self._shadow
-
-            def __len__(self) -> int:
-                return 1
-
-        # Baseline: with no collision, the module tag resolves as a ref.
-        assert isinstance(project.tags["Local:1:I"], ModuleTagRef)
-
-        view = ProjectTagsView(_FakeControllerTags("Local:1:I"), project.modules)
-        # The controller tag now shadows the module tag of the same name.
-        assert isinstance(view["Local:1:I"], Tag)
-        assert not isinstance(view["Local:1:I"], ModuleTagRef)
-        # The shadowed module global name is no longer yielded separately.
-        assert list(view).count("Local:1:I") == 1
-
-    def test_merged_view_len_and_contains(self, project: Project) -> None:
-        """len and __contains__ are consistent with iteration."""
-        names = set(project.tags)
-        assert len(project.tags) == len(names)
+    def test_contains_uses_mapping_default(self, project: Project) -> None:
+        """Membership follows the Mapping default (lookup succeeds or KeyError)."""
         assert "ValveBank:I" in project.tags
+        assert "message_tag" in project.tags
         assert "no_such_tag" not in project.tags
+
+    def test_module_tag_names_exactly_expected(self, project: Project) -> None:
+        """The colon-qualified names are exactly the 32 expected module I/O tags."""
+        expected = {
+            "ValveBank:I",
+            "ValveBank:O",
+            "Test_Servo_Drive:S",
+            "Test_Servo_Drive:SI",
+            "Test_Servo_Drive:SO",
+            "Local:1:C",
+            "Local:1:I",
+            "Local:2:I",
+            "Local:3:C",
+            "Local:3:EI",
+            "Local:3:EO",
+            "Local:3:I",
+            "Local:3:O",
+            "PointIO:1:C",
+            "PointIO:2:C",
+            "PointIO:3:C",
+            "PointIO:3:I",
+            "PointIO:4:C",
+            "PointIO:4:I",
+            "PointIO:4:O",
+            "PointIO:5:I",
+            "PointIO:5:O",
+            "PointIO:6:I",
+            "PointIO:6:O",
+            "PointIO:I",
+            "PointIO:O",
+            "Compact5000_IO_Adapter:1:C",
+            "Compact5000_IO_Adapter:1:I",
+            "Compact5000_IO_Adapter:1:O",
+            "ShopRobot:C",
+            "ShopRobot:I",
+            "ShopRobot:O",
+        }
+        colon_names = [name for name in project.tags if ":" in name]
+        assert len(colon_names) == 32
+        assert set(colon_names) == expected
+
+    def test_len_includes_module_tags(self, project: Project) -> None:
+        """len(project.tags) is the controller tag count plus 32 module I/O tags."""
+        controller_count = len(project._tags)
+        assert len(project.tags) == controller_count + 32
+
+    @pytest.mark.parametrize(
+        ("name", "module_name"),
+        [
+            ("PointIO:I", "PointIO"),
+            ("PointIO:O", "PointIO"),
+            ("PointIO:3:I", "PointIO_AnalogInput"),
+            ("Compact5000_IO_Adapter:1:O", "Remote_Output"),
+            ("Local:3:EI", "Fast_Local_Input"),
+        ],
+    )
+    def test_new_module_prefixes_resolve(
+        self, project: Project, name: str, module_name: str
+    ) -> None:
+        """Point I/O, Compact 5000, and local 5069 tags resolve to their module."""
+        ref = project.tags[name]
+        assert isinstance(ref, ModuleTagRef)
+        assert ref.module_name == module_name
+
+    @pytest.mark.parametrize(
+        "name",
+        ["PointIO:7:I", "Compact5000_IO_Adapter:I", "Local:3:X"],
+    )
+    def test_near_miss_module_names_raise_key_error(
+        self, project: Project, name: str
+    ) -> None:
+        """Near-miss module tag names (no such slot/suffix) raise KeyError."""
+        with pytest.raises(KeyError):
+            project.tags[name]
 
 
 # ---------------------------------------------------------------------------

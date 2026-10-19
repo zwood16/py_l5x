@@ -671,12 +671,8 @@ class TagNode:
             if val is None or val == () or val == "":
                 continue
             lines.append(f"  {attr}: {val!r}")
-        if isinstance(self, (StructNode, StringNode)):
-            names = [name for name in self.members]
-            if names:
-                items = ",\n    ".join(repr(name) for name in names)
-                lines.append(f"  members: [\n    {items}\n  ]")
-        elif isinstance(self, ArrayNode):
+        lines.extend(_format_member_lines(self))
+        if isinstance(self, ArrayNode):
             lines.append(f"  elements: len={len(self)}")
         return "\n".join(lines)
 
@@ -1231,6 +1227,26 @@ class ConsumeInfo(BaseElement):
         )
 
 
+def _format_member_lines(node: object) -> list[str]:
+    """Format a struct/string node's member names, one per line.
+
+    Args:
+        node: Any object; only :class:`StructNode` and :class:`StringNode`
+            instances produce output.
+
+    Returns:
+        A single-element list holding the ``members: [...]`` block, or an empty
+        list when ``node`` is not a struct/string node or has no members.
+    """
+    if not isinstance(node, (StructNode, StringNode)):
+        return []
+    names = [name for name in node.members]
+    if not names:
+        return []
+    items = ",\n    ".join(repr(name) for name in names)
+    return [f"  members: [\n    {items}\n  ]"]
+
+
 def _describe_value_lines(obj: object) -> list[str]:
     """Extract value/members/elements description lines for a tag-like object.
 
@@ -1258,11 +1274,7 @@ def _describe_value_lines(obj: object) -> list[str]:
                 lines.append(f"  {name}: {val!r}")
 
     # Members list for struct/string tags (one name per line)
-    if isinstance(obj, (StructNode, StringNode)):
-        names = [name for name in obj.members]
-        if names:
-            items = ",\n    ".join(repr(name) for name in names)
-            lines.append(f"  members: [\n    {items}\n  ]")
+    lines.extend(_format_member_lines(obj))
 
     # Element count for arrays
     if isinstance(obj, ArrayNode):
