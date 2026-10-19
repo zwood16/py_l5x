@@ -15,6 +15,8 @@ from py_l5x.parsers.module import (
     InputTag,
     Module,
     ModulesCollection,
+    ModuleTagRef,
+    ModuleTagsView,
     OutputTag,
     Port,
 )
@@ -286,3 +288,98 @@ class TestModuleDataTagProperties:
         mod = modules["Test_Input_Module"]
         input_tag = mod.communications.connections["InputData"].input_tag
         assert not hasattr(input_tag, "elements")
+
+
+class TestModuleTagsView:
+    """Tests for Module.tags / ModuleTagsView global-name exposure."""
+
+    def test_remote_module_uses_module_name_prefix(
+        self, modules: ModulesCollection
+    ) -> None:
+        """Remote module tag names use <ModuleName>:<suffix>."""
+        mod = modules["ValveBank"]
+        assert mod.tag_prefix == "ValveBank"
+        assert list(mod.tags) == ["ValveBank:I", "ValveBank:O"]
+
+    def test_remote_module_tag_data_and_backrefs(
+        self, modules: ModulesCollection
+    ) -> None:
+        """A module tag ref exposes .data and back-references to its module."""
+        mod = modules["ValveBank"]
+        ref = mod.tags["ValveBank:I"]
+        assert isinstance(ref, ModuleTagRef)
+        assert isinstance(ref.data, StructNode)
+        assert "ConnectionFaulted" in ref.data.members
+        assert ref.module is mod
+        assert ref.module_name == "ValveBank"
+        assert ref.kind == "I"
+        # Back-reference to the owning connection (matched by name, since the
+        # connections collection builds a fresh wrapper on each access).
+        assert ref.connection is not None
+        assert ref.connection.name == "_200424692C962C64"
+
+    def test_config_tag_and_default_suffixes(
+        self, modules: ModulesCollection
+    ) -> None:
+        """Config tag gets :C; missing suffixes derive from the data type."""
+        mod = modules["ShopRobot"]
+        assert list(mod.tags) == ["ShopRobot:C", "ShopRobot:I", "ShopRobot:O"]
+        config_ref = mod.tags["ShopRobot:C"]
+        # Config tags are not owned by a connection.
+        assert config_ref.connection is None
+        assert config_ref.kind == "C"
+
+    def test_local_backplane_module_uses_position_prefix(
+        self, modules: ModulesCollection
+    ) -> None:
+        """Local backplane modules are addressed as Local:<position>:<suffix>."""
+        input_mod = modules["Test_Input_Module"]
+        assert input_mod.tag_prefix == "Local:1"
+        assert list(input_mod.tags) == ["Local:1:C", "Local:1:I"]
+
+        safety_mod = modules["Test_Safety_Input"]
+        assert safety_mod.tag_prefix == "Local:2"
+        assert list(safety_mod.tags) == ["Local:2:I"]
+
+    def test_servo_drive_suffixes_derived_from_data_type(
+        self, modules: ModulesCollection
+    ) -> None:
+        """Servo drive tag suffixes (S/SI/SO) come from the data type.
+
+        Note: Studio 5000 only generates tags for servo-drive connections that
+        carry a safety connection. This view applies the general rule uniformly,
+        so the non-safety diagnostic connection is also reported here (a known,
+        documented divergence).
+        """
+        mod = modules["Test_Servo_Drive"]
+        names = list(mod.tags)
+        assert "Test_Servo_Drive:S" in names  # diagnostics (non-safety)
+        assert "Test_Servo_Drive:SI" in names  # safety input
+        assert "Test_Servo_Drive:SO" in names  # safety output
+
+    def test_local_chassis_has_no_tags(self, modules: ModulesCollection) -> None:
+        """The Local chassis module exposes no tag-bearing communication."""
+        local = modules["Local"]
+        assert len(local.tags) == 0
+        assert list(local.tags) == []
+
+    def test_tag_ref_getattr_forwards_unknown_attributes(
+        self, modules: ModulesCollection
+    ) -> None:
+        """Unknown attributes forward to the wrapped tag; absent ones raise."""
+        ref = modules["ValveBank"].tags["ValveBank:I"]
+        # Forwarded attribute that exists on the wrapped InputTag.
+        assert ref.external_access == "Read/Write"
+        # Attribute that does not exist anywhere -> AttributeError, not a
+        # forwarded value.
+        with pytest.raises(AttributeError):
+            _ = ref.does_not_exist  # type: ignore[attr-defined]
+
+    def test_module_tags_view_is_mapping(self, modules: ModulesCollection) -> None:
+        """Module.tags supports the Mapping protocol."""
+        view: ModuleTagsView = modules["ValveBank"].tags
+        assert "ValveBank:I" in view
+        assert "ValveBank:X" not in view
+        assert len(view) == 2
+        with pytest.raises(KeyError):
+            _ = view["ValveBank:X"]

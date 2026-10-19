@@ -672,7 +672,10 @@ class TagNode:
                 continue
             lines.append(f"  {attr}: {val!r}")
         if isinstance(self, (StructNode, StringNode)):
-            lines.append(f"  members: {list(self.members)}")
+            names = [name for name in self.members]
+            if names:
+                items = ",\n    ".join(repr(name) for name in names)
+                lines.append(f"  members: [\n    {items}\n  ]")
         elif isinstance(self, ArrayNode):
             lines.append(f"  elements: len={len(self)}")
         return "\n".join(lines)

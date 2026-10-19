@@ -11,9 +11,9 @@ from py_l5x.parse import load
 from py_l5x.parsers.aoi import AOIDefinition, AOILocalTag
 from py_l5x.parsers.controller import ControllerInfo
 from py_l5x.parsers.datatype import AddOnParameter, DataType, DataTypeMember
-from py_l5x.parsers.module import Module
+from py_l5x.parsers.module import Module, ModuleTagRef, ModuleTagsView
 from py_l5x.parsers.program import Program
-from py_l5x.parsers.project import Project
+from py_l5x.parsers.project import Project, ProjectTagsView
 from py_l5x.parsers.routine import Routine
 from py_l5x.parsers.tag import (
     AliasTag,
@@ -70,10 +70,13 @@ __all__ = [
     "IntegerTag",
     "MessageTag",
     "Module",
+    "ModuleTagRef",
+    "ModuleTagsView",
     "MotionGroupTag",
     "ProduceInfo",
     "Program",
     "Project",
+    "ProjectTagsView",
     "Routine",
     "StringNode",
     "StringTag",

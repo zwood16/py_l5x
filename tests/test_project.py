@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 
 import pytest
 
 from py_l5x import load
-from py_l5x.parsers.project import Project
-from py_l5x.parsers.tag import StructNode
+from py_l5x.parsers.module import ModuleTagRef
+from py_l5x.parsers.project import Project, ProjectTagsView
+from py_l5x.parsers.tag import StructNode, Tag
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 EXAMPLE_L5X = FIXTURES_DIR / "example.L5X"
@@ -171,6 +173,102 @@ class TestTypeRegistry:
                     # Just verify access doesn't raise for value tags
                     _ = tag.value
                     break
+
+
+# ---------------------------------------------------------------------------
+# Merged global tag view (controller tags + module I/O tags)
+# ---------------------------------------------------------------------------
+
+
+class TestMergedTagsView:
+    """Tests that project.tags merges controller and module I/O tags."""
+
+    def test_tags_view_type(self, project: Project) -> None:
+        """project.tags returns a ProjectTagsView."""
+        assert isinstance(project.tags, ProjectTagsView)
+
+    def test_module_tag_resolves_by_global_name(
+        self, project: Project
+    ) -> None:
+        """A module I/O tag resolves under its Studio 5000 global name."""
+        ref = project.tags["ValveBank:I"]
+        assert isinstance(ref, ModuleTagRef)
+        assert ref.data.members["ConnectionFaulted"].value is False
+
+    def test_local_backplane_module_tag_resolves(
+        self, project: Project
+    ) -> None:
+        """A local backplane module tag resolves under Local:<pos>:<suffix>."""
+        ref = project.tags["Local:1:I"]
+        assert isinstance(ref, ModuleTagRef)
+        assert ref.module_name == "Test_Input_Module"
+
+    def test_controller_tags_still_resolve(self, project: Project) -> None:
+        """Controller tags keep resolving to Tag instances (not refs)."""
+        for name in ("message_tag", "consumed_tag", "produced_tag"):
+            tag = project.tags[name]
+            assert isinstance(tag, Tag)
+            assert not isinstance(tag, ModuleTagRef)
+
+    def test_controller_tags_unchanged_names(self, project: Project) -> None:
+        """Every controller tag name is still present in the merged view."""
+        controller_names = set(project._tags)
+        merged_names = set(project.tags)
+        assert controller_names <= merged_names
+
+    def test_module_tag_names_added(self, project: Project) -> None:
+        """Module I/O global names are added to the merged view."""
+        expected = {
+            "ValveBank:I",
+            "ValveBank:O",
+            "ShopRobot:C",
+            "Local:1:C",
+            "Local:2:I",
+            "Test_Servo_Drive:S",
+        }
+        merged_names = set(project.tags)
+        assert expected <= merged_names
+
+    def test_controller_tag_wins_on_name_conflict(
+        self, project: Project
+    ) -> None:
+        """On a collision, the controller tag shadows the module tag.
+
+        The fixture has no natural collision, so we synthesize one with a fake
+        controller collection whose single tag is named like a module tag.
+        """
+
+        class _FakeControllerTags(Mapping[str, Tag]):
+            def __init__(self, shadow: str) -> None:
+                self._shadow = shadow
+
+            def __getitem__(self, name: str) -> Tag:
+                if name == self._shadow:
+                    return project._tags["message_tag"]
+                raise KeyError(name)
+
+            def __iter__(self) -> Iterator[str]:
+                yield self._shadow
+
+            def __len__(self) -> int:
+                return 1
+
+        # Baseline: with no collision, the module tag resolves as a ref.
+        assert isinstance(project.tags["Local:1:I"], ModuleTagRef)
+
+        view = ProjectTagsView(_FakeControllerTags("Local:1:I"), project.modules)
+        # The controller tag now shadows the module tag of the same name.
+        assert isinstance(view["Local:1:I"], Tag)
+        assert not isinstance(view["Local:1:I"], ModuleTagRef)
+        # The shadowed module global name is no longer yielded separately.
+        assert list(view).count("Local:1:I") == 1
+
+    def test_merged_view_len_and_contains(self, project: Project) -> None:
+        """len and __contains__ are consistent with iteration."""
+        names = set(project.tags)
+        assert len(project.tags) == len(names)
+        assert "ValveBank:I" in project.tags
+        assert "no_such_tag" not in project.tags
 
 
 # ---------------------------------------------------------------------------

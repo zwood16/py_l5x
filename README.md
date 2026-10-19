@@ -54,7 +54,7 @@ Project
 ├── data_types          → DataTypesCollection  (keyed by name)
 ├── aois                → AOICollection         (keyed by name)
 ├── modules             → ModulesCollection     (keyed by name)
-├── tags                → TagsCollection        (controller-level, keyed by name)
+├── tags                → ProjectTagsView       (merged: controller + module I/O tags, keyed by name)
 ├── programs            → ProgramsCollection    (keyed by name)
 │   ├── tags            → TagsCollection        (program-local, keyed by name)
 │   └── routines        → RoutinesCollection    (keyed by name)
@@ -181,7 +181,20 @@ print(logic.as_text())
 
 ## Modules
 
-Modules represent physical or logical I/O hardware (local processors, communication modules, analog/digital I/O, etc.) connected to the controller. Each module has ports (connection points), communication settings, and optional configuration/input/output tag payloads that define the data exchanged with the module. Note that in the L5X structure, the `Module` holds the tags. You will not find module tags in the controller level tags list.
+Modules represent physical or logical I/O hardware (local processors, communication modules, analog/digital I/O, etc.) connected to the controller. Each module has ports (connection points), communication settings, and optional configuration/input/output tag payloads that define the data exchanged with the module.
+
+Module I/O tags are also exposed under their Studio 5000 global names in `project.tags`. Remote modules use the module name as prefix (`ValveBank:I`, `ValveBank:O`); modules on the local backplane are addressed by position (`Local:1:C`, `Local:2:I`). Each entry is a `ModuleTagRef` — a thin reference to the underlying tag in `project.modules` (still the single source of truth) carrying `.module` / `.connection` back-references and a `.data` property that behaves like a tag's root value node. Controller tags win on a name conflict.
+
+```python
+# Module I/O tag via its global name
+ref = project.tags["ValveBank:I"]
+print(ref.module_name)  # "ValveBank"
+print(ref.data.members["ConnectionFaulted"].value)  # False
+
+# Or directly off the module
+for name, ref in project.modules["ShopRobot"].tags.items():
+    print(name, ref.kind)  # ShopRobot:C / ShopRobot:I / ShopRobot:O
+```
 
 > Warning: only a few modules have been tested. You results may vary with module parsing and how useful the available info is.
 
