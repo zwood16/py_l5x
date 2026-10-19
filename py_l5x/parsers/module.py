@@ -18,7 +18,7 @@ structures and arrays behave the same way as controller/program tag nodes.
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping
 from xml.etree import ElementTree as ET
 
 from py_l5x.parsers.base import (

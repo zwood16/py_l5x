@@ -124,8 +124,9 @@ class _AOILocalValueTag(AOILocalTag):
         Args:
             element: The ``<LocalTag>`` element.
             type_registry: Used to resolve value tree members.
-            value_element: The ``DefaultData[@Format='Decorated']`` child element, or the
-                ``DefaultData[@Format='String']`` element for STRING-family local tags.
+            value_element: The ``DefaultData[@Format='Decorated']`` child
+                element, or the ``DefaultData[@Format='String']`` element for
+                STRING-family local tags.
         """
         # Initialize AOILocalTag first (for MRO)
         AOILocalTag.__init__(self, element, type_registry)
@@ -141,9 +142,10 @@ class _AOILocalValueTag(AOILocalTag):
 def _aoi_local_tag_class(node_cls: type[TagNode]) -> type[_AOILocalValueTag]:
     """Factory for typed AOI local tag classes, cached by node class.
 
-    Returns a dynamically-created class combining _AOILocalValueTag with the
-    specified node class. Caching ensures that multiple local tags with the same
-    underlying node type use the same class object (so type() comparisons work).
+    Returns a dynamically-created class combining the base _AOILocalValueTag
+    with the specified node class. Caching ensures that multiple local tags
+    with the same underlying node type use the same class object (so type()
+    comparisons work).
 
     Args:
         node_cls: The TagNode subclass (e.g., BoolNode, StructNode).
@@ -156,7 +158,10 @@ def _aoi_local_tag_class(node_cls: type[TagNode]) -> type[_AOILocalValueTag]:
         (_AOILocalValueTag, node_cls),
         {
             "__module__": __name__,
-            "__doc__": f"An AOI local tag whose value is a :class:`{node_cls.__name__}`.",
+            "__doc__": (
+                f"An AOI local tag whose value is a "
+                f":class:`{node_cls.__name__}`."
+            ),
         },
     )
 

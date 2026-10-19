@@ -251,10 +251,10 @@ class TestRestrictedSurfaceBoolNode:
         # BoolTag won't have min/max either since they're not defined on BoolNode.
         node = main_program_tags["a_bool"]
         # node is a BoolTag (both Tag and BoolNode)
-        # BoolNode doesn't have bit/bits (that's only for integer members of a DINT/INT/etc.)
+        # BoolNode has no bit/bits (only integer nodes do)
         assert not hasattr(node, "bit")
         assert not hasattr(node, "bits")
-        # BoolNode/BoolTag don't have min/max (those are only on IntegerNode/FloatNode)
+        # BoolNode/BoolTag don't have min/max (only IntegerNode/FloatNode do)
         assert not hasattr(node, "min")
         assert not hasattr(node, "max")
 
@@ -822,7 +822,7 @@ class TestSpecGaps:
         # the rich identity header (tag type, name, data type).
         assert repr(udt) == udt.describe()
         assert repr(udt).splitlines()[0] == "StructTag('a_udt_instance', 'A_UDT')"
-        # The full Node repr was for nested nodes; check instead that members are accessible
+        # Full Node repr is for nested nodes; here just check member access
         assert "a_nested_UDT" in list(udt.members)
 
         arr = udt.members["an_array"]

@@ -211,8 +211,9 @@ class TestRootTagMetadata:
     ) -> None:
         """Tag metadata properties provide direct access."""
         tag = main_program_tags["a_bool_with_properties"]
-        # a_bool_with_properties has tag-level state0/state1 but no engineering_unit at tag level
-        # (engineering_unit "boolean" comes from the BOOL data type definition, not the tag)
+        # a_bool_with_properties has tag-level state0/state1 but no
+        # engineering_unit at tag level (the "boolean" unit comes from the
+        # BOOL data type definition, not the tag)
         assert tag.state0 == "Off"
         assert tag.state1 == "On"
         assert tag.external_logging is True
@@ -265,7 +266,7 @@ class TestStringTags:
         assert node.value == ""
 
     def test_a_custom_string_value(self, main_program_tags: TagsCollection) -> None:
-        """a_custom_string (custom StringFamily UDT) resolves via the String fallback."""
+        """a_custom_string (StringFamily UDT) resolves via the String fallback."""
         assert main_program_tags["a_custom_string"].value == ""
 
 
@@ -296,7 +297,7 @@ class TestNestedUdtDrillDown:
         assert len(array_node.elements) == 4
 
     def test_nested_aoi_member(self, main_program_tags: TagsCollection) -> None:
-        """Drilling into a nested AOI-instance member (an_aoi.state) cross-refs AOI defs."""
+        """Nested AOI-instance member (an_aoi.state) cross-refs AOI defs."""
         udt = main_program_tags["a_udt_instance"]
         state_node = udt.members["an_aoi"].members["state"]
         assert state_node.value == 0
@@ -410,7 +411,7 @@ class TestOverrideLayering:
         assert bit0.engineering_unit == ""
 
     def test_udt_member_max_override(self, main_program_tags: TagsCollection) -> None:
-        """a_udt_instance's a_sint_with_props Max override resolves via the operand path."""
+        """a_udt_instance's a_sint_with_props Max override via operand path."""
         udt = main_program_tags["a_udt_instance"]
         member = udt.members["a_sint_with_props"]
         assert member.max == 25
@@ -426,7 +427,7 @@ class TestProgramScopedTags:
     """Tests for tags scoped to individual programs."""
 
     def test_another_program_aoi_tag(self, programs: ProgramsCollection) -> None:
-        """AnotherProgram's TestInput (GenericInput AOI instance) cross-refs correctly."""
+        """AnotherProgram's TestInput (GenericInput) cross-refs correctly."""
         another_tags = programs["AnotherProgram"].tags
         test_input = another_tags["TestInput"]
         on_delay = test_input.members["onDelay"]
@@ -877,7 +878,7 @@ class TestMakeTagDispatch:
     def test_dimensions_not_in_extra_attributes(
         self, main_program_tags: TagsCollection
     ) -> None:
-        """Dimensions is surfaced via dimensions property and not in extra_attributes."""
+        """Dimensions is surfaced via the property, not extra_attributes."""
         tag = main_program_tags["a_2d_array"]
         assert isinstance(tag, ArrayTag)
         # a_2d_array has a Dimensions attribute on its value element
@@ -1009,65 +1010,65 @@ class TestIrrelevantAccessorsRaiseAttributeError:
         """BoolTag has no bit/bits accessors (only IntegerNode has these)."""
         tag = main_program_tags["a_bool"]
         with pytest.raises(AttributeError):
-            tag.bit(0)
+            _ = tag.bit(0)
         with pytest.raises(AttributeError):
-            tag.bits
+            _ = tag.bits
 
     def test_float_tag_no_bits(self, main_program_tags: TagsCollection) -> None:
         """FloatTag has no bit/bits accessors."""
         tag = main_program_tags["a_real"]
         with pytest.raises(AttributeError):
-            tag.bit(0)
+            _ = tag.bit(0)
         with pytest.raises(AttributeError):
-            tag.bits
+            _ = tag.bits
 
     def test_string_tag_no_elements(self, main_program_tags: TagsCollection) -> None:
         """StringTag has no elements accessor."""
         tag = main_program_tags["a_string"]
         with pytest.raises(AttributeError):
-            tag.elements
+            _ = tag.elements
 
     def test_string_tag_no_bit(self, main_program_tags: TagsCollection) -> None:
         """StringTag has no bit accessor."""
         tag = main_program_tags["a_string"]
         with pytest.raises(AttributeError):
-            tag.bit(0)
+            _ = tag.bit(0)
 
     def test_struct_tag_no_elements(self, main_program_tags: TagsCollection) -> None:
         """StructTag has no elements accessor."""
         tag = main_program_tags["a_udt_instance"]
         with pytest.raises(AttributeError):
-            tag.elements
+            _ = tag.elements
 
     def test_struct_tag_no_value(self, main_program_tags: TagsCollection) -> None:
         """StructTag has no value accessor."""
         tag = main_program_tags["a_udt_instance"]
         with pytest.raises(AttributeError):
-            tag.value
+            _ = tag.value
 
     def test_array_tag_no_members(self, main_program_tags: TagsCollection) -> None:
         """ArrayTag has no members accessor."""
         tag = main_program_tags["a_2d_array"]
         with pytest.raises(AttributeError):
-            tag.members
+            _ = tag.members
 
     def test_array_tag_no_value(self, main_program_tags: TagsCollection) -> None:
         """ArrayTag has no value accessor."""
         tag = main_program_tags["a_2d_array"]
         with pytest.raises(AttributeError):
-            tag.value
+            _ = tag.value
 
     def test_alias_tag_no_value(self, main_program_tags: TagsCollection) -> None:
         """AliasTag has no value accessor."""
         tag = main_program_tags["an_alias_tag"]
         with pytest.raises(AttributeError):
-            tag.value
+            _ = tag.value
 
     def test_message_tag_no_members(self, controller_tags: TagsCollection) -> None:
         """MessageTag has no members accessor."""
         tag = controller_tags["message_tag"]
         with pytest.raises(AttributeError):
-            tag.members
+            _ = tag.members
 
 
 # ---------------------------------------------------------------------------
@@ -1262,11 +1263,14 @@ class TestFallbackAtomicTag:
     ) -> None:
         """An unknown atomic type name falls back to AtomicTag."""
         # Construct minimal XML for an unknown atomic type
-        tag_xml = """<Tag Name="test_unknown" DataType="UNKNOWN_ATOMIC_TYPE" TagType="Base">
-            <Data Format="Decorated">
-                <DataValue DataType="UNKNOWN_ATOMIC_TYPE" Value="42"/>
-            </Data>
-        </Tag>"""
+        tag_xml = (
+            '<Tag Name="test_unknown" DataType="UNKNOWN_ATOMIC_TYPE"'
+            ' TagType="Base">\n'
+            '    <Data Format="Decorated">\n'
+            '        <DataValue DataType="UNKNOWN_ATOMIC_TYPE" Value="42"/>\n'
+            "    </Data>\n"
+            "</Tag>"
+        )
         tag_el = ET.fromstring(tag_xml)
         from py_l5x.parsers.tag import _make_tag
 
@@ -1275,7 +1279,7 @@ class TestFallbackAtomicTag:
 
 
 class TestFallbackUnknownTag:
-    """Test UnknownTag fallback for tags with no value data or unrecognized special format."""
+    """Test UnknownTag fallback for tags lacking recognized value data."""
 
     def test_unknown_tag_no_value_data(self, type_registry: TypeRegistry) -> None:
         """A tag with no value data falls back to UnknownTag."""

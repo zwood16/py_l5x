@@ -221,7 +221,7 @@ class TestAOILocalTagTyping:
     def test_local_tag_extra_attributes_excludes_radix_etc(
         self, aoi_definitions: AOICollection
     ) -> None:
-        """Local tag.extra_attributes excludes Radix/Dimensions/Min/Max/ExternalLogging."""
+        """Local tag.extra_attributes excludes Radix/Dimensions/Min/Max/etc."""
         lookup = aoi_definitions["FanucAlarmLookup"]
         length = lookup.local_tags["length"]
         assert length.element.get("Radix") == "Decimal"

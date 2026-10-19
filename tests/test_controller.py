@@ -211,7 +211,7 @@ class TestControllerEdgeCases:
     """Tests for edge cases with minimal or missing attributes."""
 
     def test_minimal_controller(self) -> None:
-        """Controller with only required attributes returns None for missing metadata."""
+        """Controller with only required attrs returns None for missing metadata."""
         el = ET.Element("Controller", Name="Minimal", Use="Target")
         ctrl = ControllerInfo(el)
         assert ctrl.name == "Minimal"
@@ -222,7 +222,7 @@ class TestControllerEdgeCases:
         assert not ctrl.is_context
 
     def test_context_controller(self) -> None:
-        """Context controllers (component exports) report is_context and None metadata."""
+        """Context controllers (component exports) report is_context, no metadata."""
         el = ET.Element("Controller", Name="Example_PLC", Use="Context")
         ctrl = ControllerInfo(el)
         assert ctrl.is_context

@@ -478,7 +478,7 @@ class TestAddOnParameters:
     def test_datatype_members_excludes_inout(
         self, aoi_types: AddOnDataTypeCollection
     ) -> None:
-        """datatype_members excludes InOut parameters (e.g. FanucAlarmLookup's allowableAlarms)."""
+        """datatype_members excludes InOut params (FanucAlarmLookup allowableAlarms)."""
         alarm_lookup = aoi_types["FanucAlarmLookup"]
         assert "allowableAlarms" in alarm_lookup
         assert "allowableAlarms" not in alarm_lookup.datatype_members
@@ -538,7 +538,7 @@ class TestAddOnParameterMetadata:
         assert debounce["onDelay"].max == 2147483647
 
     def test_engineering_unit(self, debounce: AddOnParameters) -> None:
-        """Engineering unit matches the nested EngineeringUnits/EngineeringUnit CDATA."""
+        """Engineering unit matches the nested EngineeringUnits CDATA."""
         assert debounce["onDelay"].engineering_unit == "ms"
 
     def test_state0(self, debounce: AddOnParameters) -> None:

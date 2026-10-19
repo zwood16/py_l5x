@@ -312,7 +312,8 @@ def _find_value_root(
 
     Args:
         element: The tag/local-tag element to scan for data.
-        data_tag: The data element tag name ("Data" for tags, "DefaultData" for AOI locals).
+        data_tag: The data element tag name ("Data" for tags, "DefaultData"
+            for AOI locals).
         type_registry: Used to check if a structure is a STRING type.
 
     Returns:
