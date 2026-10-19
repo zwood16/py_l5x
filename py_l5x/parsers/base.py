@@ -496,6 +496,24 @@ class BaseElement(XmlAttrMixin):
         """
         return dict(self._element.attrib)
 
+    def _header(self) -> str:
+        """Return the single-line header shown at the top of :meth:`describe`.
+
+        Defaults to a concise ``ClassName('Name')`` form (or ``ClassName()``
+        when no ``Name`` attribute is present). Subclasses with richer
+        identity (e.g. tags, which also carry a data type) override this so
+        that :meth:`describe` and :meth:`__repr__` share the same header.
+
+        Returns:
+            A single-line header string for this element.
+        """
+        name = self._element.get("Name", "")
+        return (
+            f"{self.__class__.__name__}({name!r})"
+            if name
+            else f"{self.__class__.__name__}()"
+        )
+
     def describe(self) -> str:
         """Return a multi-line summary of only this instance's populated fields.
 
@@ -504,10 +522,14 @@ class BaseElement(XmlAttrMixin):
         answering "what actually matters for this particular element?".
         Attributes not covered by any declared field are listed separately.
 
+        The first line comes from :meth:`_header` rather than :meth:`__repr__`,
+        so subclasses may safely make their ``__repr__`` return the full
+        :meth:`describe` output without recursing.
+
         Returns:
             A formatted multi-line string suitable for interactive/debug use.
         """
-        lines = [repr(self)]
+        lines = [self._header()]
         for name, field in type(self)._fields.items():
             value = getattr(self, name)
             if value != field.default:
@@ -526,12 +548,7 @@ class BaseElement(XmlAttrMixin):
             A string of the form ``ClassName('Name')`` if a ``Name``
             attribute exists, otherwise ``ClassName()``.
         """
-        name = self._element.get("Name", "")
-        return (
-            f"{self.__class__.__name__}({name!r})"
-            if name
-            else f"{self.__class__.__name__}()"
-        )
+        return self._header()
 
 
 class BaseCollection[T](Mapping[str, T]):
@@ -628,7 +645,19 @@ class BaseCollection[T](Mapping[str, T]):
     def __repr__(self) -> str:
         """Return a string representation of the collection.
 
+        Each item name is printed on its own line so that large collections
+        remain easy to scan.
+
         Returns:
-            A string of the form ``ClassName([name1, name2, ...])``.
+            A string of the form::
+
+                ClassName([
+                    'name1',
+                    'name2'
+                ])
         """
-        return f"{self.__class__.__name__}({list(self)!r})"
+        names = list(self)
+        if not names:
+            return f"{self.__class__.__name__}([])"
+        items = ",\n    ".join(repr(name) for name in names)
+        return f"{self.__class__.__name__}([\n    {items}\n])"

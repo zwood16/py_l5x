@@ -95,9 +95,7 @@ class TestDispatchBasicTypes:
         assert isinstance(node, FloatNode)
         assert node.data_type == "REAL"
 
-    def test_a_long_real_is_float_node(
-        self, main_program_tags: TagsCollection
-    ) -> None:
+    def test_a_long_real_is_float_node(self, main_program_tags: TagsCollection) -> None:
         """a_long_real dispatches to FloatNode."""
         node = main_program_tags["a_long_real"]
         assert isinstance(node, FloatNode)
@@ -161,9 +159,7 @@ class TestV37TimeTypes:
         assert node.value == "LT#0ns"
         assert node.unit == "ns"
 
-    def test_datetime_is_datetime_node(
-        self, main_program_tags: TagsCollection
-    ) -> None:
+    def test_datetime_is_datetime_node(self, main_program_tags: TagsCollection) -> None:
         """datetime tag is a DateTimeNode with DT data type."""
         node = main_program_tags["datetime"]
         assert isinstance(node, DateTimeNode)
@@ -193,9 +189,7 @@ class TestNestedStructMembers:
         node = udt.members["a_nested_UDT"]
         assert isinstance(node, StructNode)
 
-    def test_an_array_is_array_node(
-        self, main_program_tags: TagsCollection
-    ) -> None:
+    def test_an_array_is_array_node(self, main_program_tags: TagsCollection) -> None:
         """a_udt_instance.an_array is an ArrayNode."""
         udt = main_program_tags["a_udt_instance"]
         node = udt.members["an_array"]
@@ -244,6 +238,7 @@ class TestAllowableAlarmsArray:
         node = controller_tags["ALLOWABLE_ALARMS"]
         for elem in node.elements:
             assert isinstance(elem, StringNode)
+
 
 # ============================================================================
 # 2. RESTRICTED SURFACE
@@ -328,6 +323,7 @@ class TestBitOverrides:
 class TestFloatNode:
     def test_qnan(self):
         import math
+
         xml_str = '<DataValue DataType="REAL" Value="1.#QNAN"/>'
         el = ET.fromstring(xml_str)
         overrides = _TagOverrides(ET.fromstring("<Tag/>"))
@@ -417,6 +413,7 @@ class TestRepr:
 
 class TestRestrictedSurfaceIntegerNode:
     """IntegerNode must lack members and elements."""
+
     def test_integer_node_lacks_members_elements(self, main_program_tags):
         node = main_program_tags["a_dint"]
         assert not hasattr(node, "members")
@@ -425,6 +422,7 @@ class TestRestrictedSurfaceIntegerNode:
 
 class TestRestrictedSurfaceFloatNode:
     """FloatNode must lack bit/bits attributes."""
+
     def test_float_node_lacks_bits(self, main_program_tags):
         node = main_program_tags["a_real"]
         assert not hasattr(node, "bit")
@@ -433,6 +431,7 @@ class TestRestrictedSurfaceFloatNode:
 
 class TestRestrictedSurfaceStringNode:
     """StringNode must lack value/elements but has members."""
+
     def test_string_node_lacks_elements_bit(self, main_program_tags):
         node = main_program_tags["a_string"]
         assert not hasattr(node, "elements")
@@ -441,6 +440,7 @@ class TestRestrictedSurfaceStringNode:
 
 class TestRestrictedSurfaceStructNode:
     """StructNode must lack value and elements."""
+
     def test_struct_node_lacks_value_elements(self, main_program_tags):
         node = main_program_tags["a_udt_instance"]
         assert not hasattr(node, "value")
@@ -449,6 +449,7 @@ class TestRestrictedSurfaceStructNode:
 
 class TestRestrictedSurfaceArrayNode:
     """ArrayNode must lack value and members."""
+
     def test_array_node_lacks_value_members(self, main_program_tags):
         node = main_program_tags["a_2d_array"]
         assert not hasattr(node, "value")
@@ -457,6 +458,7 @@ class TestRestrictedSurfaceArrayNode:
 
 class TestNoKindAttribute:
     """No node class should have a 'kind' attribute."""
+
     def test_integer_lacks_kind(self, main_program_tags):
         node = main_program_tags["a_dint"]
         assert not hasattr(node, "kind")
@@ -476,6 +478,7 @@ class TestNoKindAttribute:
 
 class TestIntegerNodeBitWidth:
     """Test bit width calculations for various integer types."""
+
     def test_sint_bit_width(self):
         xml_str = '<DataValue DataType="SINT" Radix="Decimal" Value="0"/>'
         el = ET.fromstring(xml_str)
@@ -496,31 +499,33 @@ class TestIntegerNodeBitWidth:
 
 
 class TestIntegerNodeMinMax:
-    """Test natural min/max for integer types with no overrides."""
-    def test_sint_natural_min_max(self):
+    """Test min/max for integer types with no declared bounds."""
+
+    def test_sint_undeclared_min_max(self):
         xml_str = '<DataValue DataType="SINT" Radix="Decimal" Value="0"/>'
         el = ET.fromstring(xml_str)
         node = _build_node(el, None, _TagOverrides(ET.fromstring("<Tag/>")), "", None)
-        assert node.min == -128
-        assert node.max == 127
+        assert node.min is None
+        assert node.max is None
 
-    def test_usint_natural_min_max(self):
+    def test_usint_undeclared_min_max(self):
         xml_str = '<DataValue DataType="USINT" Radix="Decimal" Value="0"/>'
         el = ET.fromstring(xml_str)
         node = _build_node(el, None, _TagOverrides(ET.fromstring("<Tag/>")), "", None)
-        assert node.min == 0
-        assert node.max == 255
+        assert node.min is None
+        assert node.max is None
 
-    def test_dint_natural_min_max(self):
+    def test_dint_undeclared_min_max(self):
         xml_str = '<DataValue DataType="DINT" Radix="Decimal" Value="0"/>'
         el = ET.fromstring(xml_str)
         node = _build_node(el, None, _TagOverrides(ET.fromstring("<Tag/>")), "", None)
-        assert node.min == -2147483648
-        assert node.max == 2147483647
+        assert node.min is None
+        assert node.max is None
 
 
 class TestIntegerNodeSigned:
     """Test signed property of integer nodes."""
+
     def test_sint_is_signed(self):
         xml_str = '<DataValue DataType="SINT" Radix="Decimal" Value="0"/>'
         el = ET.fromstring(xml_str)
@@ -536,6 +541,7 @@ class TestIntegerNodeSigned:
 
 class TestIntegerNodeBitAccess:
     """Test bit access with valid ranges."""
+
     def test_bit_raises_on_high_index(self, main_program_tags):
         node = main_program_tags["a_dint"]
         with pytest.raises(IndexError):
@@ -554,6 +560,7 @@ class TestIntegerNodeBitAccess:
 
 class TestIntegerNodeBitsProperty:
     """Test the bits property returns correct list."""
+
     def test_bits_list_length_sint(self):
         xml_str = '<DataValue DataType="SINT" Radix="Decimal" Value="0"/>'
         el = ET.fromstring(xml_str)
@@ -576,6 +583,7 @@ class TestIntegerNodeBitsProperty:
 
 class TestIntegerNodeNegativeValue:
     """Test bit values for negative integers."""
+
     def test_negative_sint_all_bits_true(self):
         xml_str = '<DataValue DataType="SINT" Radix="Decimal" Value="-1"/>'
         el = ET.fromstring(xml_str)
@@ -586,6 +594,7 @@ class TestIntegerNodeNegativeValue:
 
 class TestIntegerNodeRadixParsingEdgeCases:
     """Test radix parsing for various formats."""
+
     def test_ascii_dollar_format(self):
         xml_str = '<DataValue DataType="SINT" Radix="ASCII" Value="\'$41\'"/>'
         el = ET.fromstring(xml_str)
@@ -608,17 +617,18 @@ class TestIntegerNodeRadixParsingEdgeCases:
 
 class TestFloatNodeSpecialValues:
     """Test special float value parsing."""
+
     def test_positive_inf(self):
         xml_str = '<DataValue DataType="REAL" Value="1.#INF"/>'
         el = ET.fromstring(xml_str)
         node = _build_node(el, None, _TagOverrides(ET.fromstring("<Tag/>")), "", None)
-        assert node.value == float('inf')
+        assert node.value == float("inf")
 
     def test_negative_inf(self):
         xml_str = '<DataValue DataType="REAL" Value="-1.#INF"/>'
         el = ET.fromstring(xml_str)
         node = _build_node(el, None, _TagOverrides(ET.fromstring("<Tag/>")), "", None)
-        assert node.value == float('-inf')
+        assert node.value == float("-inf")
 
     def test_unparseable_float_fallback(self):
         xml_str = '<DataValue DataType="REAL" Value="bogus"/>'
@@ -629,6 +639,7 @@ class TestFloatNodeSpecialValues:
 
 class TestStringNodeMembers:
     """Test StringNode members structure."""
+
     def test_members_has_len_and_data(self, main_program_tags):
         node = main_program_tags["a_string"]
         assert "LEN" in node.members
@@ -649,6 +660,7 @@ class TestStringNodeMembers:
 
 class TestStringNodeMaxLength:
     """Test max_length property."""
+
     def test_string_node_max_length(self, main_program_tags):
         node = main_program_tags["a_string"]
         assert node.max_length == 82
@@ -656,6 +668,7 @@ class TestStringNodeMaxLength:
 
 class TestArrayNode1D:
     """Test 1D array properties."""
+
     def test_1d_dimensions(self, main_program_tags):
         node = main_program_tags["a_udt_instance"]
         arr = node.members["an_array"]
@@ -675,6 +688,7 @@ class TestArrayNode1D:
 
 class TestArrayNodeNegativeIndexing:
     """Test negative indexing works correctly."""
+
     def test_2d_negative_index_equals_last(self, main_program_tags):
         node = main_program_tags["a_2d_array"]
         last_elem = node[-1]
@@ -690,6 +704,7 @@ class TestArrayNodeNegativeIndexing:
 
 class TestArrayNodeIteration:
     """Test array iteration and slicing."""
+
     def test_2d_array_iteration_count(self, main_program_tags):
         node = main_program_tags["a_2d_array"]
         count = sum(1 for _ in node)
@@ -703,6 +718,7 @@ class TestArrayNodeIteration:
 
 class TestUnknownAtomicType:
     """Test that unknown atomic types create AtomicNode instances."""
+
     def test_unknown_type_is_atomic_node(self):
         xml_str = '<DataValue DataType="MYSTERY" Value="x"/>'
         el = ET.fromstring(xml_str)
@@ -766,11 +782,16 @@ class TestSpecGaps:
 
     def test_string_root_hand_built(self):
         el = ET.fromstring(
-            "<Data Format=\"String\" Length=\"3\">"
+            '<Data Format="String" Length="3">'
             "<CDataContent>'abc'</CDataContent></Data>"
         )
         node = StringNode(
-            el, None, _TagOverrides(ET.fromstring("<Tag/>")), "", None, data_type="STRING"
+            el,
+            None,
+            _TagOverrides(ET.fromstring("<Tag/>")),
+            "",
+            None,
+            data_type="STRING",
         )
         assert isinstance(node, StringNode)
         assert node.value == "abc"
@@ -797,13 +818,14 @@ class TestSpecGaps:
 
     def test_struct_and_array_repr(self, main_program_tags):
         udt = main_program_tags["a_udt_instance"]
-        # Now root tags show as Tag, not Node
-        assert repr(udt) == "StructTag('a_udt_instance', 'A_UDT')"
+        # Root tags now repr as their full describe() text; the first line is
+        # the rich identity header (tag type, name, data type).
+        assert repr(udt) == udt.describe()
+        assert repr(udt).splitlines()[0] == "StructTag('a_udt_instance', 'A_UDT')"
         # The full Node repr was for nested nodes; check instead that members are accessible
         assert "a_nested_UDT" in list(udt.members)
-        
+
         arr = udt.members["an_array"]
         # Nested nodes still show full Node-style repr
         assert repr(arr).startswith("ArrayNode('REAL'")
         assert "elements: len=4" in repr(arr)
-

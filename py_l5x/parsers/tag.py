@@ -328,7 +328,9 @@ def _find_value_root(
     if decorated is not None:
         child = next(iter(decorated), None)
         if child is not None:
-            node_cls, _ = _classify_node(child, None, type_registry, element.get("DataType"))
+            node_cls, _ = _classify_node(
+                child, None, type_registry, element.get("DataType")
+            )
             return (node_cls, child)
 
     return None
@@ -373,8 +375,24 @@ class _StructureMembers(Mapping):
         return sum(1 for child in self._node._value_element if child.get("Name"))
 
     def __repr__(self) -> str:
-        """Return a string representation listing member names."""
-        return f"members({list(self)!r})"
+        """Return a string representation listing member names.
+
+        Each member name is printed on its own line so that large structures
+        remain easy to scan.
+
+        Returns:
+            A string of the form::
+
+                members([
+                    'name1',
+                    'name2'
+                ])
+        """
+        names = list(self)
+        if not names:
+            return "members([])"
+        items = ",\n    ".join(repr(name) for name in names)
+        return f"members([\n    {items}\n])"
 
 
 class _ArrayElements(Sequence):
@@ -464,7 +482,7 @@ class _ArrayElements(Sequence):
 
 class TagNode(XmlAttrMixin):
     """Base class for all value-tree nodes: scalars, structures, arrays.
-    
+
     This is the public surface only with minimal methods that apply to all nodes.
     Subclasses add type-specific behavior and properties.
     """
@@ -482,7 +500,7 @@ class TagNode(XmlAttrMixin):
         raw_text: str | None = None,
     ) -> None:
         """Initialize a TagNode.
-        
+
         Args:
             element: The XML element this node wraps (None for synthetic nodes).
             member_def: The resolved member/parameter definition, or None.
@@ -524,7 +542,9 @@ class TagNode(XmlAttrMixin):
     @property
     def external_access(self) -> str:
         """This node's external access level, if any."""
-        if self._value_element is not None and self._value_element.get("ExternalAccess"):
+        if self._value_element is not None and self._value_element.get(
+            "ExternalAccess"
+        ):
             return self._value_element.get("ExternalAccess", "")
         return self._member_def.external_access if self._member_def else ""
 
@@ -602,7 +622,7 @@ class TagNode(XmlAttrMixin):
             if not hasattr(self, attr):
                 continue
             val = getattr(self, attr)
-            if val is None or val == "" or val == ():
+            if val is None or val == ():
                 continue
             lines.append(f"  {attr}: {val!r}")
         if isinstance(self, (StructNode, StringNode)):
@@ -629,8 +649,14 @@ class AtomicNode(TagNode):
     ) -> None:
         """Initialize an AtomicNode."""
         super().__init__(
-            element, member_def, overrides, operand_path, type_registry,
-            data_type=data_type, radix=radix, raw_text=raw_text
+            element,
+            member_def,
+            overrides,
+            operand_path,
+            type_registry,
+            data_type=data_type,
+            radix=radix,
+            raw_text=raw_text,
         )
         self._radix_override = radix
 
@@ -732,7 +758,12 @@ class IntegerNode(AtomicNode):
 
     @property
     def min(self) -> int | None:
-        """Minimum value, from override, member def, or ATOMIC_TYPES."""
+        """Minimum value, from an override or the member definition.
+
+        Returns:
+            The declared minimum, or ``None`` if no minimum was set in the
+            XML (the natural range of the atomic type is *not* assumed).
+        """
         override = self._meta_override("min")
         if override is not None:
             try:
@@ -741,12 +772,16 @@ class IntegerNode(AtomicNode):
                 return None
         if self._member_def and self._member_def.min is not None:
             return self._member_def.min
-        info = atomic_info(self.data_type)
-        return info.min if info else None
+        return None
 
     @property
     def max(self) -> int | None:
-        """Maximum value, from override, member def, or ATOMIC_TYPES."""
+        """Maximum value, from an override or the member definition.
+
+        Returns:
+            The declared maximum, or ``None`` if no maximum was set in the
+            XML (the natural range of the atomic type is *not* assumed).
+        """
         override = self._meta_override("max")
         if override is not None:
             try:
@@ -755,8 +790,7 @@ class IntegerNode(AtomicNode):
                 return None
         if self._member_def and self._member_def.max is not None:
             return self._member_def.max
-        info = atomic_info(self.data_type)
-        return info.max if info else None
+        return None
 
     def bit(self, n: int) -> BoolNode:
         """Access bit *n* as a :class:`BoolNode`.
@@ -939,9 +973,7 @@ class StringNode(TagNode):
         path = f"{self._operand_path}.LEN"
         len_el = self._child("LEN")
         if len_el is not None:
-            return _build_node(
-                len_el, None, self._overrides, path, self._type_registry
-            )
+            return _build_node(len_el, None, self._overrides, path, self._type_registry)
         return IntegerNode(
             None,
             None,
@@ -964,6 +996,7 @@ class StringNode(TagNode):
             raw_text=self.value,
         )
 
+
 class StructNode(TagNode):
     """A structure node exposing a members mapping."""
 
@@ -976,9 +1009,7 @@ class StructNode(TagNode):
         type_registry: TypeRegistry | None = None,
     ) -> None:
         """Initialize a StructNode."""
-        super().__init__(
-            element, member_def, overrides, operand_path, type_registry
-        )
+        super().__init__(element, member_def, overrides, operand_path, type_registry)
         self._members_cache = None
 
     @property
@@ -1001,9 +1032,7 @@ class ArrayNode(TagNode):
         type_registry: TypeRegistry | None = None,
     ) -> None:
         """Initialize an ArrayNode."""
-        super().__init__(
-            element, member_def, overrides, operand_path, type_registry
-        )
+        super().__init__(element, member_def, overrides, operand_path, type_registry)
         self._value_elements_cache = None
 
     @property
@@ -1086,22 +1115,22 @@ def _build_node(
         radix: Radix to use for such a scalar, likewise inherited.
     """
     # Use _classify_node to determine the node class
-    node_cls, resolved_dt = _classify_node(element, member_def, type_registry, data_type)
-    
+    node_cls, resolved_dt = _classify_node(
+        element, member_def, type_registry, data_type
+    )
+
     # Arrays
     if node_cls is ArrayNode:
         return ArrayNode(element, member_def, overrides, operand_path, type_registry)
-    
+
     # Structures
     if node_cls is StructNode:
         return StructNode(element, member_def, overrides, operand_path, type_registry)
-    
+
     # StringNodes
     if node_cls is StringNode:
-        return StringNode(
-            element, member_def, overrides, operand_path, type_registry
-        )
-    
+        return StringNode(element, member_def, overrides, operand_path, type_registry)
+
     # Scalars (AtomicNode and subclasses)
     # If Value attribute is present, use the typed node class
     if element.get("Value") is not None:
@@ -1114,7 +1143,7 @@ def _build_node(
             data_type=resolved_dt,
             radix=radix,
         )
-    
+
     # Scalar with CDATA text and no Value (e.g. a STRING's DATA member)
     cdata_el = element.find(CDATA_TAG)
     if cdata_el is not None and cdata_el.text:
@@ -1131,7 +1160,6 @@ def _build_node(
         radix=radix,
         raw_text=_parse_string_literal(text),
     )
-
 
 
 # ----------------------------------------------------------------------
@@ -1214,20 +1242,32 @@ def _describe_value_lines(obj: object) -> list[str]:
 
     # Add any metadata attributes that have values
     for name in (
-        "value", "len", "max_length", "unit", "dimensions", "radix",
-        "min", "max", "engineering_unit", "state0", "state1",
-        "external_logging", "alias_for", "special_data_format"
+        "value",
+        "len",
+        "max_length",
+        "unit",
+        "dimensions",
+        "radix",
+        "min",
+        "max",
+        "engineering_unit",
+        "state0",
+        "state1",
+        "external_logging",
+        "alias_for",
+        "special_data_format",
     ):
         if hasattr(obj, name):
             val = getattr(obj, name, None)
             if val is not None and val != "" and val != ():
                 lines.append(f"  {name}: {val!r}")
 
-    # Members list for struct/string tags
+    # Members list for struct/string tags (one name per line)
     if hasattr(obj, "members"):
-        members = obj.members
-        if members:
-            lines.append(f"  members: {list(members.keys())}")
+        names = [name for name in obj.members]
+        if names:
+            items = ",\n    ".join(repr(name) for name in names)
+            lines.append(f"  members: [\n    {items}\n  ]")
 
     # Element count for arrays
     if hasattr(obj, "elements"):
@@ -1243,7 +1283,7 @@ class _RootMetadataMixin:
 
     Reads metadata set directly on an identity element: Min/Max/ExternalLogging
     attributes and un-operanded EngineeringUnits/State0s/State1s entries.
-    
+
     Requires ``self._element`` to be defined (the XML element).
     """
 
@@ -1306,7 +1346,7 @@ class _RootMetadataMixin:
 
 class Tag(_RootMetadataMixin, BaseElement):
     """A single ``<Tag>`` element (controller- or program-scoped).
-    
+
     Base class for all tag types. Provides identity metadata, facets, and
     metadata hooks. Subclasses add value-tree node functionality.
 
@@ -1398,22 +1438,36 @@ class Tag(_RootMetadataMixin, BaseElement):
         el = self._element.find("ConsumeInfo")
         return ConsumeInfo(el) if el is not None else None
 
-    def __repr__(self) -> str:
-        """Return a concise representation including the tag name and type."""
+    def _header(self) -> str:
+        """Return the single-line identity header for :meth:`describe`.
+
+        Extends :meth:`BaseElement._header` to also include the data type, so a
+        tag stays identifiable even among value nodes that share a name. This is
+        what both :meth:`__repr__` (via :meth:`describe`) and :meth:`describe`
+        use for their first line.
+        """
         return f"{type(self).__name__}({self.name!r}, {self.data_type!r})"
+
+    def __repr__(self) -> str:
+        """Return the full :meth:`describe` text for this tag.
+
+        Returns:
+            The multi-line description produced by :meth:`describe`.
+        """
+        return self.describe()
 
     def describe(self) -> str:
         """Extend :meth:`BaseElement.describe` to include metadata and facets.
-        
+
         Includes identity info from super(), then for each metadata attribute
         that exists on this tag with a non-None/non-empty value, adds a line.
         For struct/array tags, also includes member/element summaries.
         """
         lines = [super().describe()]
-        
+
         # Add value/members/elements lines
         lines.extend(_describe_value_lines(self))
-        
+
         # Add facets
         facets = (
             ("produced", self.produced),
@@ -1424,19 +1478,22 @@ class Tag(_RootMetadataMixin, BaseElement):
                 continue
             lines.append(f"  {label}:")
             lines.extend(f"    {line}" for line in repr(facet).splitlines())
-        
+
         return "\n".join(lines)
 
 
 class _ValueTag(Tag):
     """Base for tags that are also their root value node (private, not exported).
-    
+
     Tags that carry a value tree (scalars, structures, arrays) inherit from both
     Tag and a node class. This base class initializes both parent classes.
     """
 
     def __init__(
-        self, element: ET.Element, type_registry: TypeRegistry, value_element: ET.Element
+        self,
+        element: ET.Element,
+        type_registry: TypeRegistry,
+        value_element: ET.Element,
     ) -> None:
         """Initialize a tag with a value node.
 
@@ -1494,7 +1551,7 @@ class ArrayTag(_ValueTag, ArrayNode):
 
 class AliasTag(Tag):
     """A ``<Tag>`` that aliases another tag or member (no value data).
-    
+
     Alias tags reference another tag/member via the ``AliasFor`` attribute
     and carry no value data themselves.
     """
@@ -1661,62 +1718,59 @@ def _classify_node(
     data_type: str | None = None,
 ) -> tuple[type[TagNode], str]:
     """Classify an element to determine the node class and resolved data type.
-    
+
     Helper used by both _build_node and _make_tag to factor out the dispatch logic.
-    
+
     Args:
         element: The element to classify.
         member_def: The resolved member definition, if any.
         type_registry: Used to resolve string types.
         data_type: Overridden data type.
-    
+
     Returns:
         A tuple of (node_class, resolved_data_type).
     """
     # Arrays
     if element.tag in ("Array", "ArrayMember"):
-        return ArrayNode, element.get("DataType", member_def.data_type if member_def else "")
-    
+        return ArrayNode, element.get(
+            "DataType", member_def.data_type if member_def else ""
+        )
+
     # Structures and potential StringNodes
     if element.tag in ("Structure", "StructureMember"):
         dt = element.get("DataType", member_def.data_type if member_def else "")
-        
+
         # Check if it's a STRING-family type
-        if (
-            (type_registry and type_registry.is_string_type(dt))
-            or dt == "STRING"
-        ):
+        if (type_registry and type_registry.is_string_type(dt)) or dt == "STRING":
             return StringNode, dt
-        
+
         # Check for LEN+DATA structure (synthetic STRING representation)
-        children_names = {
-            child.get("Name") for child in element if child.get("Name")
-        }
+        children_names = {child.get("Name") for child in element if child.get("Name")}
         if children_names == {"LEN", "DATA"}:
             return StringNode, dt
-        
+
         return StructNode, dt
-    
+
     # Scalars
     if data_type is None:
         data_type = element.get("DataType") or (
             member_def.data_type if member_def else ""
         )
     info = atomic_info(data_type) if data_type else None
-    
+
     # Only use family class if Value attribute is present
     if element.get("Value") is not None:
         node_cls = (
             _ATOMIC_NODE_CLASSES.get(info.family, AtomicNode) if info else AtomicNode
         )
         return node_cls, data_type
-    
+
     return AtomicNode, data_type
 
 
 def _make_tag(element: ET.Element, type_registry: TypeRegistry) -> Tag:
     """Factory function to create the appropriate Tag subclass.
-    
+
     Dispatches to AliasTag, MessageTag, AxisTag, MotionGroupTag, UnknownTag,
     or a specific value tag class (BoolTag, IntegerTag, etc.) based on the
     tag's structure and data.
@@ -1731,7 +1785,7 @@ def _make_tag(element: ET.Element, type_registry: TypeRegistry) -> Tag:
     # Alias tags
     if element.get("TagType") == "Alias":
         return AliasTag(element, type_registry)
-    
+
     # Check for non-value Data formats (Message, Axis, MotionGroup, unknown)
     for data_el in element.findall("Data"):
         fmt = data_el.get("Format")
@@ -1743,16 +1797,17 @@ def _make_tag(element: ET.Element, type_registry: TypeRegistry) -> Tag:
             if fmt == "MotionGroup":
                 return MotionGroupTag(element, type_registry)
             return UnknownTag(element, type_registry)
-    
+
     # Find value root (String or Decorated with child)
     root = _find_value_root(element, "Data", type_registry)
     if root is not None:
         node_cls, value_el = root
         tag_cls = _TAG_CLASSES.get(node_cls, AtomicTag)
         return tag_cls(element, type_registry, value_el)
-    
+
     # No recognized value data
     return UnknownTag(element, type_registry)
+
 
 class TagsCollection(BaseCollection[Tag]):
     """A ``Mapping`` over every ``<Tag>`` in a ``<Tags>`` section.
@@ -1775,4 +1830,6 @@ class TagsCollection(BaseCollection[Tag]):
                 collection.
             type_registry: Used to resolve each tag's value tree members.
         """
-        super().__init__(scope_element, "Tags/Tag", _make_tag, item_args=(type_registry,))
+        super().__init__(
+            scope_element, "Tags/Tag", _make_tag, item_args=(type_registry,)
+        )

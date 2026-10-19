@@ -151,7 +151,9 @@ class TestAoiLocalTags:
 class TestAOILocalTagTyping:
     """Tests for AOI local tag node typing and class caching."""
 
-    def test_struct_local_tag_isinstance_node(self, aoi_definitions: AOICollection) -> None:
+    def test_struct_local_tag_isinstance_node(
+        self, aoi_definitions: AOICollection
+    ) -> None:
         """A TIMER local tag is both an AOILocalTag and a StructNode."""
         debounce = aoi_definitions["Debounce"]
         timer = debounce.local_tags["debounceOnTimer"]
@@ -170,7 +172,9 @@ class TestAOILocalTagTyping:
         # Both are StructNode-based local tags, so should have the same type
         assert type(timer1) is type(timer2)
 
-    def test_integer_local_tag_with_properties(self, aoi_definitions: AOICollection) -> None:
+    def test_integer_local_tag_with_properties(
+        self, aoi_definitions: AOICollection
+    ) -> None:
         """An integer local tag exposes its value, radix, and constraints."""
         lookup = aoi_definitions["FanucAlarmLookup"]
         length = lookup.local_tags["length"]
@@ -178,8 +182,8 @@ class TestAOILocalTagTyping:
         assert type(length).__name__ == "AOILocalIntegerTag"
         assert length.value == 0
         assert length.radix == "Decimal"
-        assert length.min == -2147483648
-        assert length.max == 2147483647
+        assert length.min is None
+        assert length.max is None
         assert length.bit_width == 32
 
     def test_integer_local_tag_describe(self, aoi_definitions: AOICollection) -> None:
@@ -206,7 +210,9 @@ class TestAOILocalTagTyping:
         assert isinstance(robot_alarm_code, StringNode)
         assert robot_alarm_code.value == ""
 
-    def test_local_tag_has_no_data_attribute(self, aoi_definitions: AOICollection) -> None:
+    def test_local_tag_has_no_data_attribute(
+        self, aoi_definitions: AOICollection
+    ) -> None:
         """Typed local tags do not have a .data property (they ARE the node)."""
         debounce = aoi_definitions["Debounce"]
         timer = debounce.local_tags["debounceOnTimer"]
@@ -228,7 +234,9 @@ class TestAOILocalTagTyping:
         assert timer.element is not None
         assert timer.element.tag == "LocalTag"
 
-    def test_local_tag_value_element_differs(self, aoi_definitions: AOICollection) -> None:
+    def test_local_tag_value_element_differs(
+        self, aoi_definitions: AOICollection
+    ) -> None:
         """For typed local tags, value_element is not the same as element."""
         debounce = aoi_definitions["Debounce"]
         timer = debounce.local_tags["debounceOnTimer"]

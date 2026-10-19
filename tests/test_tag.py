@@ -18,7 +18,6 @@ from py_l5x.parsers.tag import (
     AtomicNode,
     AtomicTag,
     AxisTag,
-    BoolNode,
     BoolTag,
     DateTimeTag,
     FloatTag,
@@ -222,15 +221,15 @@ class TestRootTagMetadata:
         self, main_program_tags: TagsCollection
     ) -> None:
         """Metadata properties return appropriate defaults when not set on tag.
-        
+
         For value tags (IntegerTag, BoolTag, etc.), metadata properties come from
         the node classes via MRO (min/max from IntegerNode, state0/state1 from BoolNode,
         engineering_unit/external_logging from TagNode).
         """
-        # IntegerTag a_dint: has min/max from IntegerNode
+        # IntegerTag a_dint: no min/max declared on the tag
         tag = main_program_tags["a_dint"]
-        assert tag.min == -2147483648  # natural DINT range
-        assert tag.max == 2147483647
+        assert tag.min is None
+        assert tag.max is None
         assert tag.engineering_unit == ""  # from TagNode, no override
         assert tag.external_logging is None  # from TagNode, no override
         # But no state0/state1 since IntegerTag inherits from IntegerNode, not BoolNode
@@ -686,7 +685,7 @@ class TestSafetyProgram:
 
 class TestMakeTagDispatch:
     """Tests for correct tag type dispatch in _make_tag factory.
-    
+
     Verifies that the factory creates the correct Tag subclass based on
     the tag's data type, structure, and metadata.
     """
@@ -826,15 +825,15 @@ class TestMakeTagDispatch:
             # Verify it's NOT the base Tag class (it's a subclass)
             assert type(tag) is not Tag, f"Tag {name!r} is plain Tag, not a subclass"
 
-    def test_integer_tag_natural_range_without_override(
+    def test_integer_tag_no_range_without_override(
         self, main_program_tags: TagsCollection
     ) -> None:
-        """A root IntegerTag with no Min attribute returns DINT natural range."""
+        """A root IntegerTag with no Min/Max attributes reports no bounds."""
         tag = main_program_tags["a_dint"]
         assert isinstance(tag, IntegerTag)
         # a_dint has no Min/Max attributes on the <Tag> element
-        assert tag.min == -2147483648
-        assert tag.max == 2147483647
+        assert tag.min is None
+        assert tag.max is None
 
     def test_float_tag_with_properties(self, main_program_tags: TagsCollection) -> None:
         """A FloatTag with Min/Max attributes returns them with correct type."""
@@ -925,7 +924,6 @@ class TestIntegerBitWidth:
         assert isinstance(tag, IntegerTag)
         assert tag.bit_width == expected_width
 
-
     def test_bits_length_equals_bit_width(
         self, main_program_tags: TagsCollection
     ) -> None:
@@ -936,33 +934,31 @@ class TestIntegerBitWidth:
 
 
 class TestIntegerMinMax:
-    """Test natural min/max for integer types (no Tag-level override)."""
+    """Test min/max for integer types (no Tag-level override)."""
 
     @pytest.mark.parametrize(
-        "tag_name,expected_min,expected_max",
+        "tag_name",
         [
-            ("a_sint", -128, 127),
-            ("an_unsigned_sint", 0, 255),
-            ("an_int", -32768, 32767),
-            ("an_unsigned_int", 0, 65535),
-            ("a_dint", -2147483648, 2147483647),
-            ("an_unsigned_dint", 0, 4294967295),
-            ("a_lint", -9223372036854775808, 9223372036854775807),
-            ("an_unsigned_lint", 0, 18446744073709551615),
+            "a_sint",
+            "an_unsigned_sint",
+            "an_int",
+            "an_unsigned_int",
+            "a_dint",
+            "an_unsigned_dint",
+            "a_lint",
+            "an_unsigned_lint",
         ],
     )
-    def test_integer_natural_min_max(
+    def test_integer_undeclared_min_max(
         self,
         main_program_tags: TagsCollection,
         tag_name: str,
-        expected_min: int,
-        expected_max: int,
     ) -> None:
-        """Integer tags without Tag-level overrides report natural min/max."""
+        """Integer tags without declared bounds report no min/max."""
         tag = main_program_tags[tag_name]
         assert isinstance(tag, IntegerTag)
-        assert tag.min == expected_min
-        assert tag.max == expected_max
+        assert tag.min is None
+        assert tag.max is None
 
 
 class TestIntegerBitAccessor:
@@ -1009,9 +1005,7 @@ class TestIntegerBitAccessor:
 class TestIrrelevantAccessorsRaiseAttributeError:
     """Test AttributeError on irrelevant accessors for various tag types."""
 
-    def test_bool_tag_no_bit_accessor(
-        self, main_program_tags: TagsCollection
-    ) -> None:
+    def test_bool_tag_no_bit_accessor(self, main_program_tags: TagsCollection) -> None:
         """BoolTag has no bit/bits accessors (only IntegerNode has these)."""
         tag = main_program_tags["a_bool"]
         with pytest.raises(AttributeError):
@@ -1019,9 +1013,7 @@ class TestIrrelevantAccessorsRaiseAttributeError:
         with pytest.raises(AttributeError):
             tag.bits
 
-    def test_float_tag_no_bits(
-        self, main_program_tags: TagsCollection
-    ) -> None:
+    def test_float_tag_no_bits(self, main_program_tags: TagsCollection) -> None:
         """FloatTag has no bit/bits accessors."""
         tag = main_program_tags["a_real"]
         with pytest.raises(AttributeError):
@@ -1029,65 +1021,49 @@ class TestIrrelevantAccessorsRaiseAttributeError:
         with pytest.raises(AttributeError):
             tag.bits
 
-    def test_string_tag_no_elements(
-        self, main_program_tags: TagsCollection
-    ) -> None:
+    def test_string_tag_no_elements(self, main_program_tags: TagsCollection) -> None:
         """StringTag has no elements accessor."""
         tag = main_program_tags["a_string"]
         with pytest.raises(AttributeError):
             tag.elements
 
-    def test_string_tag_no_bit(
-        self, main_program_tags: TagsCollection
-    ) -> None:
+    def test_string_tag_no_bit(self, main_program_tags: TagsCollection) -> None:
         """StringTag has no bit accessor."""
         tag = main_program_tags["a_string"]
         with pytest.raises(AttributeError):
             tag.bit(0)
 
-    def test_struct_tag_no_elements(
-        self, main_program_tags: TagsCollection
-    ) -> None:
+    def test_struct_tag_no_elements(self, main_program_tags: TagsCollection) -> None:
         """StructTag has no elements accessor."""
         tag = main_program_tags["a_udt_instance"]
         with pytest.raises(AttributeError):
             tag.elements
 
-    def test_struct_tag_no_value(
-        self, main_program_tags: TagsCollection
-    ) -> None:
+    def test_struct_tag_no_value(self, main_program_tags: TagsCollection) -> None:
         """StructTag has no value accessor."""
         tag = main_program_tags["a_udt_instance"]
         with pytest.raises(AttributeError):
             tag.value
 
-    def test_array_tag_no_members(
-        self, main_program_tags: TagsCollection
-    ) -> None:
+    def test_array_tag_no_members(self, main_program_tags: TagsCollection) -> None:
         """ArrayTag has no members accessor."""
         tag = main_program_tags["a_2d_array"]
         with pytest.raises(AttributeError):
             tag.members
 
-    def test_array_tag_no_value(
-        self, main_program_tags: TagsCollection
-    ) -> None:
+    def test_array_tag_no_value(self, main_program_tags: TagsCollection) -> None:
         """ArrayTag has no value accessor."""
         tag = main_program_tags["a_2d_array"]
         with pytest.raises(AttributeError):
             tag.value
 
-    def test_alias_tag_no_value(
-        self, main_program_tags: TagsCollection
-    ) -> None:
+    def test_alias_tag_no_value(self, main_program_tags: TagsCollection) -> None:
         """AliasTag has no value accessor."""
         tag = main_program_tags["an_alias_tag"]
         with pytest.raises(AttributeError):
             tag.value
 
-    def test_message_tag_no_members(
-        self, controller_tags: TagsCollection
-    ) -> None:
+    def test_message_tag_no_members(self, controller_tags: TagsCollection) -> None:
         """MessageTag has no members accessor."""
         tag = controller_tags["message_tag"]
         with pytest.raises(AttributeError):
@@ -1190,9 +1166,7 @@ class TestTimeDateTagsExactValues:
         tag = main_program_tags["short_duration"]
         assert "Time32" in tag.radix
 
-    def test_duration_is_time_tag(
-        self, main_program_tags: TagsCollection
-    ) -> None:
+    def test_duration_is_time_tag(self, main_program_tags: TagsCollection) -> None:
         """duration (TIME) is a TimeTag."""
         tag = main_program_tags["duration"]
         assert isinstance(tag, TimeTag)
@@ -1212,9 +1186,7 @@ class TestTimeDateTagsExactValues:
         tag = main_program_tags["duration"]
         assert tag.radix == "Time (us)"
 
-    def test_long_duration_is_time_tag(
-        self, main_program_tags: TagsCollection
-    ) -> None:
+    def test_long_duration_is_time_tag(self, main_program_tags: TagsCollection) -> None:
         """long_duration (LTIME) is a TimeTag."""
         tag = main_program_tags["long_duration"]
         assert isinstance(tag, TimeTag)
@@ -1234,9 +1206,7 @@ class TestTimeDateTagsExactValues:
         tag = main_program_tags["long_duration"]
         assert tag.radix == "LTime (ns)"
 
-    def test_datetime_is_datetime_tag(
-        self, main_program_tags: TagsCollection
-    ) -> None:
+    def test_datetime_is_datetime_tag(self, main_program_tags: TagsCollection) -> None:
         """datetime (DT) is a DateTimeTag."""
         tag = main_program_tags["datetime"]
         assert isinstance(tag, DateTimeTag)
@@ -1299,6 +1269,7 @@ class TestFallbackAtomicTag:
         </Tag>"""
         tag_el = ET.fromstring(tag_xml)
         from py_l5x.parsers.tag import _make_tag
+
         tag = _make_tag(tag_el, type_registry)
         assert isinstance(tag, AtomicTag)
 
@@ -1306,14 +1277,13 @@ class TestFallbackAtomicTag:
 class TestFallbackUnknownTag:
     """Test UnknownTag fallback for tags with no value data or unrecognized special format."""
 
-    def test_unknown_tag_no_value_data(
-        self, type_registry: TypeRegistry
-    ) -> None:
+    def test_unknown_tag_no_value_data(self, type_registry: TypeRegistry) -> None:
         """A tag with no value data falls back to UnknownTag."""
         tag_xml = """<Tag Name="test_empty" TagType="Base" DataType="DINT">
         </Tag>"""
         tag_el = ET.fromstring(tag_xml)
         from py_l5x.parsers.tag import _make_tag
+
         tag = _make_tag(tag_el, type_registry)
         assert isinstance(tag, UnknownTag)
 
@@ -1326,6 +1296,7 @@ class TestFallbackUnknownTag:
         </Tag>"""
         tag_el = ET.fromstring(tag_xml)
         from py_l5x.parsers.tag import _make_tag
+
         tag = _make_tag(tag_el, type_registry)
         assert isinstance(tag, UnknownTag)
         assert tag.special_data_format == "UnknownFormat"
@@ -1340,9 +1311,7 @@ class TestFallbackUnknownTag:
 class TestRootMetadataMinMax:
     """Test Min/Max attributes on Tag element with typed return values."""
 
-    def test_integer_tag_with_min_max(
-        self, main_program_tags: TagsCollection
-    ) -> None:
+    def test_integer_tag_with_min_max(self, main_program_tags: TagsCollection) -> None:
         """opcua_dint has Min/Max as integers."""
         tag = main_program_tags["opcua_dint"]
         assert isinstance(tag, IntegerTag)
@@ -1351,9 +1320,7 @@ class TestRootMetadataMinMax:
         assert isinstance(tag.min, int)
         assert isinstance(tag.max, int)
 
-    def test_float_tag_with_min_max(
-        self, main_program_tags: TagsCollection
-    ) -> None:
+    def test_float_tag_with_min_max(self, main_program_tags: TagsCollection) -> None:
         """a_real_with_properties has Min/Max as floats."""
         tag = main_program_tags["a_real_with_properties"]
         assert isinstance(tag, FloatTag)
@@ -1390,7 +1357,9 @@ class TestPublicExports:
     def test_all_exports_are_module_attributes(self) -> None:
         """Every name in py_l5x.__all__ is an attribute of the py_l5x module."""
         for name in py_l5x.__all__:
-            assert hasattr(py_l5x, name), f"{name!r} in __all__ but not an attribute of py_l5x"
+            assert hasattr(py_l5x, name), (
+                f"{name!r} in __all__ but not an attribute of py_l5x"
+            )
 
     def test_tag_classes_in_all(self) -> None:
         """All 14 public tag classes are in py_l5x.__all__."""

@@ -32,9 +32,9 @@ from py_l5x.parsers.routine import RoutinesCollection
 from py_l5x.parsers.tag import (
     TagNode,
     TypeRegistry,
-    _TagOverrides,
     _describe_value_lines,
     _find_value_root,
+    _TagOverrides,
 )
 
 
@@ -62,7 +62,9 @@ class AOILocalTag(BaseElement):
 
     #: Attributes backed by a plain @property rather than a declared field
     #: (Radix, Dimensions are on value nodes, not the local tag element itself)
-    _DYNAMIC_KEYS: frozenset[str] = frozenset({"Radix", "Dimensions", "Min", "Max", "ExternalLogging"})
+    _DYNAMIC_KEYS: frozenset[str] = frozenset(
+        {"Radix", "Dimensions", "Min", "Max", "ExternalLogging"}
+    )
 
     def __init__(self, element: ET.Element, type_registry: TypeRegistry) -> None:
         super().__init__(element)
@@ -79,6 +81,15 @@ class AOILocalTag(BaseElement):
     def element(self) -> ET.Element:
         """The wrapped ``<LocalTag>`` XML element."""
         return self._element
+
+    def _header(self) -> str:
+        """Return the single-line identity header for :meth:`describe`.
+
+        Extends :meth:`BaseElement._header` to also include the data type, so a
+        local tag stays identifiable in :meth:`describe` just as it is in
+        :meth:`__repr__`.
+        """
+        return f"{type(self).__name__}({self.name!r}, {self.data_type!r})"
 
     def __repr__(self) -> str:
         """Return a concise representation including the local tag name and type."""
@@ -103,7 +114,10 @@ class _AOILocalValueTag(AOILocalTag):
     """
 
     def __init__(
-        self, element: ET.Element, type_registry: TypeRegistry, value_element: ET.Element
+        self,
+        element: ET.Element,
+        type_registry: TypeRegistry,
+        value_element: ET.Element,
     ) -> None:
         """Initialize an AOI local tag with a value node.
 
@@ -147,7 +161,9 @@ def _aoi_local_tag_class(node_cls: type[TagNode]) -> type[_AOILocalValueTag]:
     )
 
 
-def _make_aoi_local_tag(element: ET.Element, type_registry: TypeRegistry) -> AOILocalTag:
+def _make_aoi_local_tag(
+    element: ET.Element, type_registry: TypeRegistry
+) -> AOILocalTag:
     """Factory function to create the appropriate AOI local tag subclass.
 
     Dispatches to a plain AOILocalTag if no value data is found, or to a
