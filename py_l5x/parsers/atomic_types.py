@@ -208,11 +208,7 @@ def _parse_ascii_literal(body: str, info: AtomicInfo) -> int:
         elif nxt.upper() in _ASCII_ESCAPES:
             out.append(_ASCII_ESCAPES[nxt.upper()])
             i += 2
-        elif (
-            nxt in _HEX_DIGITS
-            and i + 2 < len(body)
-            and body[i + 2] in _HEX_DIGITS
-        ):
+        elif nxt in _HEX_DIGITS and i + 2 < len(body) and body[i + 2] in _HEX_DIGITS:
             out.append(int(body[i + 1 : i + 3], 16))
             i += 3
         else:
@@ -254,8 +250,10 @@ def parse_integer_literal(text: str, info: AtomicInfo) -> int:
         return _parse_based_literal(m["digits"], int(m["base"]), info)
     if _DECIMAL_RE.match(text):
         value = int(text)
-        if info.min is not None and info.max is not None and not (
-            info.min <= value <= info.max
+        if (
+            info.min is not None
+            and info.max is not None
+            and not (info.min <= value <= info.max)
         ):
             raise ValueError(f"{value} out of range for {info.name}")
         return value

@@ -30,43 +30,6 @@ from py_l5x.parsers.base import (
 )
 
 
-def _fmt(value: object) -> str:
-    """Format a property value for display in ``__repr__``.
-
-    Args:
-        value: Any property value (``str``, ``int``, ``float``, ``bool``, or
-            ``None``).
-
-    Returns:
-        ``str(value)``, or ``"\u2014"`` (an em dash) for ``None`` or an empty
-        string.
-    """
-    if value is None or value == "":
-        return "\u2014"
-    return str(value)
-
-
-def _repr_with_extras(header_lines: list[str], extra_attributes: dict[str, str]) -> str:
-    """Build a multi-line ``__repr__`` string with an Extra Attributes section.
-
-    Args:
-        header_lines: Already-formatted ``"Label: value"`` lines to show
-            first.
-        extra_attributes: Attributes not covered by dedicated properties;
-            appended (sorted) under an ``"Extra Attributes:"`` header if
-            non-empty.
-
-    Returns:
-        The joined multi-line representation string.
-    """
-    lines = list(header_lines)
-    if extra_attributes:
-        lines.append("Extra Attributes:")
-        for k, v in sorted(extra_attributes.items()):
-            lines.append(f"  {k}: {v}")
-    return "\n".join(lines)
-
-
 class MessageParameters(BaseElement):
     """``<MessageParameters>``, for ``MESSAGE`` type tags.
 

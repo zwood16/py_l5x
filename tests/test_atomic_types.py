@@ -200,9 +200,7 @@ class TestParseIntegerLiteral:
             ("'aB'", "INT", 0x6142),
         ],
     )
-    def test_valid_literals(
-        self, text: str, type_name: str, expected: int
-    ) -> None:
+    def test_valid_literals(self, text: str, type_name: str, expected: int) -> None:
         """Valid decimal, based, and ASCII literals parse correctly."""
         assert parse_integer_literal(text, ATOMIC_TYPES[type_name]) == expected
 

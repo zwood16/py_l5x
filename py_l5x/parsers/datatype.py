@@ -499,34 +499,41 @@ class AddOnParameter(BaseElement):
         extras = super().extra_attributes
         return {k: v for k, v in extras.items() if k not in self._DYNAMIC_KEYS}
 
+    def _header(self) -> str:
+        """Return the single-line identity header for :meth:`describe`.
+
+        Mirrors :meth:`~py_l5x.parsers.tag.Tag._header` by including the data
+        type, so a parameter stays identifiable even among other parameters
+        that share a name. This is what both :meth:`__repr__` (via
+        :meth:`describe`) and :meth:`describe` use for their first line.
+        """
+        return f"{type(self).__name__}({self.name!r}, {self.data_type!r})"
+
     def __repr__(self) -> str:
-        """Return a multi-line string representation of the parameter.
+        """Return the full :meth:`describe` text for this parameter.
 
         Returns:
-            A formatted string suitable for display in debug output.
+            The multi-line description produced by :meth:`describe`.
         """
-        lines = [
-            f"Parameter Name:   {self.name}",
-            f"Data Type:        {self.data_type}",
-            f"Usage:            {self.usage}",
-            f"Desc:             {self.description}",
-        ]
-        if self.required:
-            lines.append(f"Required:         {self.required}")
-        if not self.visible:
-            lines.append(f"Visible:          {self.visible}")
-        if self.min is not None:
-            lines.append(f"Min:              {self.min}")
-        if self.max is not None:
-            lines.append(f"Max:              {self.max}")
-        if self.engineering_unit:
-            lines.append(f"Engineering Unit: {self.engineering_unit}")
+        return self.describe()
 
-        extras = self.extra_attributes
-        if extras:
-            lines.append("Extra Attributes:")
-            for k, v in sorted(extras.items()):
-                lines.append(f"  {k}: {v}")
+    def describe(self) -> str:
+        """Extend :meth:`BaseElement.describe` with metadata properties.
+
+        Includes identity/field info from super(), then appends the metadata
+        properties (:attr:`min`, :attr:`max`, :attr:`engineering_unit`,
+        :attr:`state0`, :attr:`state1`) -- which are plain ``@property``s rather
+        than declared :class:`~py_l5x.parsers.base.XmlField` fields and so don't
+        appear in super()'s output -- when they are set.
+
+        Returns:
+            A formatted multi-line string suitable for interactive/debug use.
+        """
+        lines = [super().describe()]
+        for name in ("min", "max", "engineering_unit", "state0", "state1"):
+            val = getattr(self, name)
+            if val is not None and val != "":
+                lines.append(f"  {name}: {val!r}")
         return "\n".join(lines)
 
 

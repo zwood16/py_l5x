@@ -167,7 +167,7 @@ class TestTypeRegistry:
         """Program tags can resolve their value tree."""
         for prog in project.programs.values():
             for tag in prog.tags.values():
-                if tag is not None and hasattr(tag, 'value'):
+                if tag is not None and hasattr(tag, "value"):
                     # Just verify access doesn't raise for value tags
                     _ = tag.value
                     break

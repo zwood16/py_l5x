@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator, Mapping
-from typing import Any, overload
+from typing import Any, cast, overload
 from xml.etree import ElementTree as ET
 
 from py_l5x.parsers.utils import CDATA_TAG
@@ -18,25 +18,12 @@ class XmlAttrMixin:
 
     _element: ET.Element
 
-    def _get(self, xml_key: str, default: str = "") -> str:
-        """Retrieve an XML attribute value by key.
-
-        Args:
-            xml_key: The XML attribute name to look up.
-            default: Value to return if the attribute is absent.
-                Defaults to an empty string.
-
-        Returns:
-            The attribute value or *default* if the key is not present.
-        """
-        return self._element.get(xml_key, default)
-
     def _get_cdata_child(self, tag: str) -> str:
         """Return text from a CDATA-bearing child element.
 
         After CDATA pre-processing in ``_load_l5x``, any ``<![CDATA[...]]>``
         section is stored as a child element whose tag is ``CDATA_TAG``
-        (imported from :mod:`py_l5x.parse`)::
+        (imported from :mod:`py_l5x.parsers.utils`)::
 
             <tag><CDataContent>text</CDataContent></tag>
 
@@ -58,21 +45,6 @@ class XmlAttrMixin:
             if el.text:
                 return el.text.strip()
         return ""
-
-    def _get_description(self) -> str:
-        """Return the element description string.
-
-        Delegates to :meth:`_get_cdata_child` for the ``Description`` child
-        element and falls back to a plain ``Description`` XML attribute when
-        no child element is present.
-
-        Returns:
-            The description text, stripped of surrounding whitespace, or an
-            empty string if no description is found.
-        """
-        return self._get_cdata_child("Description") or self._element.get(
-            "Description", ""
-        )
 
 
 class XmlField[T]:
@@ -163,7 +135,8 @@ class XmlField[T]:
         if obj is None:
             return self
         raw = obj._element.get(self.xml_name)
-        return self.default if raw is None else self.parse(raw)
+        # Fields declared with default=None may return None at runtime.
+        return cast(T, self.default) if raw is None else self.parse(raw)
 
     def __set__(self, obj: XmlAttrMixin, value: T | None) -> None:
         """Convert and write *value* to the underlying XML attribute.

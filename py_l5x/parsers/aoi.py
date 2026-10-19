@@ -2,8 +2,8 @@
 
 This module provides rich AOI inspection surfaces similar to program parsing:
 
-- ``AddOnInstructionDefinition`` for one AOI definition element.
-- ``AddOnInstructionDefinitionsCollection`` for AOI lookup by name.
+- ``AOIDefinition`` for one AOI definition element.
+- ``AOICollection`` for AOI lookup by name.
 - ``AOILocalTag`` and ``AOILocalTagsCollection`` for AOI ``LocalTags`` with
   value drill-down (scalar/structure/array) reusing the tag-node model. Local
   tags are dynamically typed via ``_aoi_local_tag_class`` to subclass both
@@ -18,6 +18,7 @@ AOI parameters reuse :class:`py_l5x.parsers.datatype.AddOnParameters`.
 from __future__ import annotations
 
 import functools
+from typing import cast
 from xml.etree import ElementTree as ET
 
 from py_l5x.parsers.base import (
@@ -34,11 +35,13 @@ from py_l5x.parsers.tag import (
     TypeRegistry,
     _describe_value_lines,
     _find_value_root,
+    _init_value_root,
+    _RootMetadataMixin,
     _TagOverrides,
 )
 
 
-class AOILocalTag(BaseElement):
+class AOILocalTag(_RootMetadataMixin, BaseElement):
     """A single ``<LocalTag>`` under an AOI definition (identity base).
 
     An identity base providing name, data_type, constant, external_access,
@@ -93,7 +96,7 @@ class AOILocalTag(BaseElement):
 
     def __repr__(self) -> str:
         """Return a concise representation including the local tag name and type."""
-        return f"{type(self).__name__}({self.name!r}, {self.data_type!r})"
+        return self.describe()
 
     def describe(self) -> str:
         """Extend :meth:`BaseElement.describe` to include value/member/element metadata.
@@ -130,11 +133,9 @@ class _AOILocalValueTag(AOILocalTag):
         """
         # Initialize AOILocalTag first (for MRO)
         AOILocalTag.__init__(self, element, type_registry)
-        # Call the concrete node class's __init__ via super(BaseElement, self).
-        # This resolves to the first TagNode subclass in the MRO after BaseElement,
-        # allowing StructNode/ArrayNode to initialize their caches correctly.
-        super(BaseElement, self).__init__(
-            value_element, None, self._overrides, "", type_registry
+        # Initialize the node class base
+        _init_value_root(
+            cast(TagNode, self), value_element, self._overrides, type_registry
         )
 
 
@@ -159,8 +160,7 @@ def _aoi_local_tag_class(node_cls: type[TagNode]) -> type[_AOILocalValueTag]:
         {
             "__module__": __name__,
             "__doc__": (
-                f"An AOI local tag whose value is a "
-                f":class:`{node_cls.__name__}`."
+                f"An AOI local tag whose value is a :class:`{node_cls.__name__}`."
             ),
         },
     )
@@ -300,7 +300,7 @@ class AOIDefinition(BaseElement):
 
     def __repr__(self) -> str:
         """Return a concise representation including the AOI name."""
-        return f"AddOnInstructionDefinition({self.name!r})"
+        return f"{type(self).__name__}({self.name!r})"
 
 
 class AOICollection(BaseCollection[AOIDefinition]):
