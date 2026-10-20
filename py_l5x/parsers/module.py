@@ -931,7 +931,11 @@ class ModuleTagsView(Mapping[str, ModuleTagRef]):
         Returns:
             A representation containing the currently visible tag names.
         """
-        return f"ModuleTagsView({list(self)!r})"
+        names = list(self)
+        if not names:
+            return "ModuleTagsView([])"
+        items = ",\n    ".join(repr(name) for name in names)
+        return f"ModuleTagsView([\n    {items}\n])"
 
 
 class ModulesCollection(BaseCollection[Module]):

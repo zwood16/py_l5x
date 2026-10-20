@@ -147,9 +147,14 @@ class ProjectTagsView(Mapping[str, Tag | ModuleTagRef]):
         """Return a debug-friendly representation of this merged tag view.
 
         Returns:
-            A representation containing the currently visible tag names.
+            A representation with one tag name per line, matching
+            :class:`~py_l5x.parsers.base.BaseCollection`.
         """
-        return f"ProjectTagsView({list(self)!r})"
+        names = list(self)
+        if not names:
+            return "ProjectTagsView([])"
+        items = ",\n    ".join(repr(name) for name in names)
+        return f"ProjectTagsView([\n    {items}\n])"
 
 
 class Project:

@@ -26,10 +26,10 @@ uv add py_l5x-0.2.0-py3-none-any.whl
 Or pull it straight from the Github release:
 
 ```base
-uv add https://github.com/zwood16/py_l5x/releases/download/v0.2.0/py_l5x-0.2.0-py3-none-any.whl
+uv add https://github.com/zwood16/py_l5x/releases/download/v0.3.0/py_l5x-0.3.0-py3-none-any.whl
 ```
 
-or even add it directly using a link to the `.whl` file on the [Releases](https://github.com/zwood16/py_l5x/releases) page.
+Check the [Releases](https://github.com/zwood16/py_l5x/releases) page for the most up to date release files.
 
 ## Quick start
 
