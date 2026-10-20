@@ -10,12 +10,17 @@ child parsers as typed properties in a hierarchical structure:
     ├── data_types       → DataTypesCollection
     ├── aois             → AOICollection
     ├── modules          → ModulesCollection
-    ├── tags             → TagsCollection (controller-level)
+    ├── tags             → ProjectTagsView (merged: controller tags + module I/O tags)
+    ├── controller_tags  → TagsCollection (controller-scoped only, keyed by name)
     ├── programs         → ProgramsCollection
     │   └── tags         → TagsCollection (per-program)
     │   └── routines     → RoutinesCollection (per-program)
     └── tasks            → TasksCollection
         └── programs     → Mapping[str, Program] (per-task)
+
+``project.tags`` merges the controller's own tags with each module's I/O tags
+(their Studio 5000 global-variable names), so ``project.tags["ValveBank:I"]``
+and ``project.tags["Local:1:C"]`` resolve alongside ordinary controller tags.
 
 Usage:
     >>> from py_l5x import load
@@ -29,13 +34,14 @@ Usage:
 
 from __future__ import annotations
 
+from collections.abc import Iterator, Mapping
 from typing import TYPE_CHECKING, Union
 from xml.etree import ElementTree as ET
 
 from py_l5x.parsers.aoi import AOICollection, AOIDefinition
 from py_l5x.parsers.controller import ControllerInfo
 from py_l5x.parsers.datatype import AddOnDataTypeCollection, DataTypesCollection
-from py_l5x.parsers.module import Module, ModulesCollection
+from py_l5x.parsers.module import Module, ModulesCollection, ModuleTagRef
 from py_l5x.parsers.program import Program, ProgramsCollection
 from py_l5x.parsers.routine import Routine, Rung
 from py_l5x.parsers.tag import Tag, TagsCollection, TypeRegistry
@@ -56,6 +62,96 @@ _TargetObject = Union[
 ]
 
 
+class ProjectTagsView(Mapping[str, Tag | ModuleTagRef]):
+    """Merged view of controller tags and module I/O tags by global name.
+
+    In Studio 5000 a module's communication tags surface as *global variables*
+    alongside the controller's own tags. This read-only mapping exposes both
+    under one ``project.tags`` surface: every controller tag keeps its name, and
+    each module I/O tag is added under its Studio 5000 global name (see
+    :class:`py_l5x.parsers.module.ModuleTagsView`). The underlying objects are
+    the same instances produced by the controller/program tag parsers and the
+    per-module tag views, so modules remain the single source of truth for
+    module tags.
+
+    Logix tag names cannot contain ``':'`` while every module global name does,
+    so a controller tag and a module tag can never share a name. Lookup is
+    therefore decided by the presence of ``':'``: names without one are
+    controller tags, and names with one are resolved against the module whose
+    :attr:`~py_l5x.parsers.module.Module.tag_prefix` matches the part before the
+    last ``':'``.
+
+    Values are ``Tag`` instances for controller tags and :class:`ModuleTagRef`
+    instances for module I/O tags.
+
+    Args:
+        controller_tags (TagsCollection): The controller-level tag collection.
+        modules (ModulesCollection): The module collection to merge in.
+    """
+
+    def __init__(
+        self, controller_tags: TagsCollection, modules: ModulesCollection
+    ) -> None:
+        """Initialize the merged tag view.
+
+        Args:
+            controller_tags: The controller-level tag collection.
+            modules: The module collection whose I/O tags are merged in.
+        """
+        self._controller_tags = controller_tags
+        self._modules = modules
+
+    def __getitem__(self, name: str) -> Tag | ModuleTagRef:
+        """Get a controller tag or a module I/O tag by name.
+
+        Args:
+            name: A controller tag name (no ``':'``) or a module global name
+                (``<tag_prefix>:<suffix>``).
+
+        Returns:
+            The matching ``Tag`` or :class:`ModuleTagRef`.
+
+        Raises:
+            KeyError: If no controller tag or module tag has that name.
+        """
+        if ":" not in name:
+            return self._controller_tags[name]
+        prefix, _, _ = name.rpartition(":")
+        for module in self._modules.values():
+            if module.tag_prefix == prefix:
+                return module.tags[name]
+        raise KeyError(name)
+
+    def __iter__(self) -> Iterator[str]:
+        """Iterate all tag names: controller tags, then module global names.
+
+        Yields:
+            Controller tag names first, then each module's global tag names in
+            module order.
+        """
+        yield from self._controller_tags
+        for module in self._modules.values():
+            yield from module.tags
+
+    def __len__(self) -> int:
+        """Return the number of tags in the merged view.
+
+        Returns:
+            The controller tag count plus each module's tag count.
+        """
+        return len(self._controller_tags) + sum(
+            len(module.tags) for module in self._modules.values()
+        )
+
+    def __repr__(self) -> str:
+        """Return a debug-friendly representation of this merged tag view.
+
+        Returns:
+            A representation containing the currently visible tag names.
+        """
+        return f"ProjectTagsView({list(self)!r})"
+
+
 class Project:
     """Top-level container for a parsed L5X project.
 
@@ -64,19 +160,17 @@ class Project:
     tasks through a hierarchical object model.
 
     Args:
-        file_path: Path to the L5X file to load.
+        root: The root element of the parsed L5X XML document.
 
     Raises:
-        FileNotFoundError: If the file does not exist or cannot be read.
-        ValueError: If the file is not a valid L5X XML document or lacks
-            a ``<Controller>`` element.
+        ValueError: If the document has no ``<Controller>`` element (i.e. it
+            is not a valid L5X file).
 
     Example:
-        >>> project = Project("examples/example.L5X")
-        >>> print(project.controller.name)
-        Example_PLC
-        >>> list(project.data_types)
-        ['A_UDT', 'GenericRobotInputs', ...]
+        >>> from py_l5x import load
+        >>> project = load("tests/fixtures/example.L5X")
+        >>> project.controller.name
+        'Example_PLC'
     """
 
     def __init__(self, root: ET.Element) -> None:
@@ -89,9 +183,10 @@ class Project:
             ValueError: If the file is not a valid L5X file.
         """
         self._root = root
-        self._controller_element = self._root.find("Controller")
-        if self._controller_element is None:
+        controller = self._root.find("Controller")
+        if controller is None:
             raise ValueError("No <Controller> element found; not a valid L5X file.")
+        self._controller_element = controller
 
         # Build collections that don't depend on TypeRegistry first.
         self._data_types = DataTypesCollection(self._controller_element)
@@ -316,11 +411,35 @@ class Project:
     # ------------------------------------------------------------------
 
     @property
-    def tags(self) -> TagsCollection:
-        """Controller-level (global) tags, keyed by name.
+    def tags(self) -> ProjectTagsView:
+        """Merged global tags: controller tags plus module I/O tags, keyed by name.
+
+        In Studio 5000 a module's communication tags surface as *global
+        variables* alongside the controller's own tags. This view exposes both
+        under one surface: every controller tag keeps its name, and each module
+        I/O tag is added under its Studio 5000 global name (for example
+        ``ValveBank:I`` or ``Local:1:C``). Logix tag names cannot contain
+        ``':'`` and module global names always do, so the two never collide.
+
+        To iterate only the controller-scoped tags (every value is a ``Tag``),
+        use :attr:`controller_tags`.
 
         Returns:
-            A ``TagsCollection`` mapping tag names to ``Tag`` instances.
+            A :class:`ProjectTagsView` mapping tag names to either ``Tag``
+            instances (controller tags) or :class:`ModuleTagRef` instances
+            (module I/O tags).
+        """
+        return ProjectTagsView(self._tags, self._modules)
+
+    @property
+    def controller_tags(self) -> TagsCollection:
+        """Controller-scoped tags only, keyed by name.
+
+        Unlike :attr:`tags`, this excludes module I/O tags, so every value is a
+        ``Tag`` instance and every key is a plain Logix tag name (no ``':'``).
+
+        Returns:
+            A ``TagsCollection`` mapping controller tag names to ``Tag`` instances.
         """
         return self._tags
 
@@ -373,7 +492,7 @@ class Project:
             # rung number instead so the repr is informative.
             if self.target_type == "Rung":
                 t = self.target
-                rung_label = f"number={t.number}" if t is not None else "?"
+                rung_label = f"number={t.number}" if isinstance(t, Rung) else "?"
                 target_line = f"  Target:       Rung {rung_label}"
             else:
                 target_line = f"  Target:       {self.target_type} {self.target_name!r}"
@@ -392,7 +511,7 @@ class Project:
             f"  Data Types:   {len(self._data_types)}",
             f"  Modules:      {len(self._modules)}",
             f"  AOIs:         {len(self._aois)}",
-            f"  Controller Tags: {len(self._tags)}",
+            f"  Controller Tags: {len(self.controller_tags)}",
             f"  Programs:     {len(self._programs)}",
             f"  Tasks:        {len(self._tasks)}",
         ]

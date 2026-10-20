@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<RSLogix5000Content SchemaRevision="1.0" SoftwareRevision="37.00" TargetName="Example_PLC" TargetType="Controller" ContainsContext="false" ExportDate="Wed Jul 15 12:48:16 2026" ExportOptions="NoRawData L5KData DecoratedData ForceProtectedEncoding AllProjDocTrans">
-<Controller Use="Target" Name="Example_PLC" ProcessorType="5069-L310ERMS3" MajorRev="37" MinorRev="11" ProjectCreationDate="Tue Jun 30 10:14:37 2026" LastModifiedDate="Wed Jul 15 12:44:06 2026" SFCExecutionControl="CurrentActive" SFCRestartPosition="MostRecent" SFCLastScan="DontScan" ProjectSN="16#0000_0000"
+<RSLogix5000Content SchemaRevision="1.0" SoftwareRevision="37.00" TargetName="Example_PLC" TargetType="Controller" ContainsContext="false" ExportDate="Mon Oct 19 17:32:41 2026" ExportOptions="NoRawData L5KData DecoratedData ForceProtectedEncoding AllProjDocTrans">
+<Controller Use="Target" Name="Example_PLC" ProcessorType="5069-L310ERMS3" MajorRev="37" MinorRev="11" ProjectCreationDate="Tue Jun 30 10:14:37 2026" LastModifiedDate="Mon Oct 19 17:30:00 2026" SFCExecutionControl="CurrentActive" SFCRestartPosition="MostRecent" SFCLastScan="DontScan" ProjectSN="16#0000_0000"
  MatchProjectToController="false" CanUseRPIFromProducer="false" InhibitAutomaticFirmwareUpdate="0" PassThroughConfiguration="EnabledWithAppend" DownloadProjectDocumentationAndExtendedProperties="true" DownloadProjectCustomProperties="true" ReportMinorOverflow="false" EtherNetIPMode="A1/A2: Dual-IP" AutoDiagsEnabled="true" WebServerEnabled="false" DataExchangeId="{09B2637D-051F-4EFE-989A-EAD35A27AB93}"
 >
 <RedundancyInfo Enabled="false" KeepTestEditsOnSwitchOver="false"/>
@@ -1096,6 +1096,909 @@
 <public><ConfigID>16777344</ConfigID><CatNum>5069-IB8S</CatNum></public>
 </ExtendedProperties>
 </Module>
+<Module Name="Fast_Local_Input" CatalogNumber="5069-IB16F/A" Vendor="1" ProductType="7" ProductCode="391" Major="2" Minor="1" ParentModule="Local" ParentModPortId="1" Inhibited="false" MajorFault="false"
+ SafetyEnabled="false" AutoDiagsEnabled="true" DataExchangeId="{8497D651-4881-471E-9729-CD3190EABD6D}">
+<Description>
+<![CDATA[16-Pt Fast Input Card]]>
+</Description>
+<EKey State="CompatibleModule"/>
+<Ports>
+<Port Id="1" Address="3" Type="5069" Upstream="true"/>
+</Ports>
+<Communications>
+<ConfigTag ConfigSize="128" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[[132,162,[5,5,1000,0,0,0],[5,5,1000,0,0,0],[5,5,1000,0,0,0],[5,5,1000,0,0,0],[5,5,1000,0,0,0],[5,5,1000,0,0,0],[5,5,1000,0,0,0],[5,5,1000,0,0,0],[5,5,1000
+		,0,0,0],[5,5,1000,0,0,0],[5,5,1000,0,0,0],[5,5,1000,0,0,0],[5,5,1000,0,0,0],[5,5,1000,0,0,0],[5,5,1000,0,0,0],[5,5,1000,0,0,0]]]]>
+</Data>
+<Data Format="Decorated">
+<Structure DataType="AB:5000_DI16_Timestamp:C:0">
+<StructureMember Name="Pt00" DataType="AB:5000_DI_Timestamp_Channel:C:0">
+<DataValueMember Name="InputOffOnFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="InputOnOffFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="ChatterTime" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="ChatterCount" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="CaptureOffOnEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CaptureOnOffEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampLatchEn" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt01" DataType="AB:5000_DI_Timestamp_Channel:C:0">
+<DataValueMember Name="InputOffOnFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="InputOnOffFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="ChatterTime" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="ChatterCount" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="CaptureOffOnEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CaptureOnOffEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampLatchEn" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt02" DataType="AB:5000_DI_Timestamp_Channel:C:0">
+<DataValueMember Name="InputOffOnFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="InputOnOffFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="ChatterTime" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="ChatterCount" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="CaptureOffOnEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CaptureOnOffEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampLatchEn" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt03" DataType="AB:5000_DI_Timestamp_Channel:C:0">
+<DataValueMember Name="InputOffOnFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="InputOnOffFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="ChatterTime" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="ChatterCount" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="CaptureOffOnEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CaptureOnOffEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampLatchEn" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt04" DataType="AB:5000_DI_Timestamp_Channel:C:0">
+<DataValueMember Name="InputOffOnFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="InputOnOffFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="ChatterTime" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="ChatterCount" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="CaptureOffOnEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CaptureOnOffEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampLatchEn" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt05" DataType="AB:5000_DI_Timestamp_Channel:C:0">
+<DataValueMember Name="InputOffOnFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="InputOnOffFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="ChatterTime" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="ChatterCount" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="CaptureOffOnEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CaptureOnOffEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampLatchEn" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt06" DataType="AB:5000_DI_Timestamp_Channel:C:0">
+<DataValueMember Name="InputOffOnFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="InputOnOffFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="ChatterTime" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="ChatterCount" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="CaptureOffOnEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CaptureOnOffEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampLatchEn" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt07" DataType="AB:5000_DI_Timestamp_Channel:C:0">
+<DataValueMember Name="InputOffOnFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="InputOnOffFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="ChatterTime" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="ChatterCount" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="CaptureOffOnEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CaptureOnOffEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampLatchEn" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt08" DataType="AB:5000_DI_Timestamp_Channel:C:0">
+<DataValueMember Name="InputOffOnFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="InputOnOffFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="ChatterTime" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="ChatterCount" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="CaptureOffOnEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CaptureOnOffEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampLatchEn" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt09" DataType="AB:5000_DI_Timestamp_Channel:C:0">
+<DataValueMember Name="InputOffOnFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="InputOnOffFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="ChatterTime" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="ChatterCount" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="CaptureOffOnEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CaptureOnOffEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampLatchEn" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt10" DataType="AB:5000_DI_Timestamp_Channel:C:0">
+<DataValueMember Name="InputOffOnFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="InputOnOffFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="ChatterTime" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="ChatterCount" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="CaptureOffOnEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CaptureOnOffEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampLatchEn" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt11" DataType="AB:5000_DI_Timestamp_Channel:C:0">
+<DataValueMember Name="InputOffOnFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="InputOnOffFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="ChatterTime" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="ChatterCount" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="CaptureOffOnEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CaptureOnOffEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampLatchEn" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt12" DataType="AB:5000_DI_Timestamp_Channel:C:0">
+<DataValueMember Name="InputOffOnFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="InputOnOffFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="ChatterTime" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="ChatterCount" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="CaptureOffOnEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CaptureOnOffEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampLatchEn" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt13" DataType="AB:5000_DI_Timestamp_Channel:C:0">
+<DataValueMember Name="InputOffOnFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="InputOnOffFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="ChatterTime" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="ChatterCount" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="CaptureOffOnEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CaptureOnOffEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampLatchEn" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt14" DataType="AB:5000_DI_Timestamp_Channel:C:0">
+<DataValueMember Name="InputOffOnFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="InputOnOffFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="ChatterTime" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="ChatterCount" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="CaptureOffOnEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CaptureOnOffEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampLatchEn" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt15" DataType="AB:5000_DI_Timestamp_Channel:C:0">
+<DataValueMember Name="InputOffOnFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="InputOnOffFilter" DataType="SINT" Radix="Decimal" Value="5"/>
+<DataValueMember Name="ChatterTime" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="ChatterCount" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="CaptureOffOnEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CaptureOnOffEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampLatchEn" DataType="BOOL" Value="0"/>
+</StructureMember>
+</Structure>
+</Data>
+</ConfigTag>
+<Connections>
+<Connection Name="InputData" RPI="5000" Type="StandardDataDriven" OutputSize="128" InputSize="424" EventID="0" ProgrammaticallySendEventTrigger="false" Priority="Scheduled" InputConnectionType="Multicast" InputProductionTrigger="Cyclic" ConnectionPath="20 04 24 a2 2c 68 2c 83"
+ InputTagSuffix="I" OutputTagSuffix="O">
+<InputTag ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="Decorated">
+<Structure DataType="AB:5000_DI16_Timestamp_Event4:I:0">
+<DataValueMember Name="RunMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ConnectionFaulted" DataType="BOOL" Value="0"/>
+<DataValueMember Name="DiagnosticActive" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="DiagnosticSequenceCount" DataType="SINT" Radix="Decimal" Value="0"/>
+<StructureMember Name="Pt00" DataType="CHANNEL_DI_TIMESTAMP:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Chatter" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOffOn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOnOff" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOffOn" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+<DataValueMember Name="TimestampOnOff" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+</StructureMember>
+<StructureMember Name="Pt01" DataType="CHANNEL_DI_TIMESTAMP:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Chatter" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOffOn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOnOff" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOffOn" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+<DataValueMember Name="TimestampOnOff" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+</StructureMember>
+<StructureMember Name="Pt02" DataType="CHANNEL_DI_TIMESTAMP:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Chatter" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOffOn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOnOff" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOffOn" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+<DataValueMember Name="TimestampOnOff" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+</StructureMember>
+<StructureMember Name="Pt03" DataType="CHANNEL_DI_TIMESTAMP:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Chatter" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOffOn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOnOff" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOffOn" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+<DataValueMember Name="TimestampOnOff" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+</StructureMember>
+<StructureMember Name="Pt04" DataType="CHANNEL_DI_TIMESTAMP:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Chatter" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOffOn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOnOff" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOffOn" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+<DataValueMember Name="TimestampOnOff" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+</StructureMember>
+<StructureMember Name="Pt05" DataType="CHANNEL_DI_TIMESTAMP:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Chatter" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOffOn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOnOff" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOffOn" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+<DataValueMember Name="TimestampOnOff" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+</StructureMember>
+<StructureMember Name="Pt06" DataType="CHANNEL_DI_TIMESTAMP:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Chatter" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOffOn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOnOff" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOffOn" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+<DataValueMember Name="TimestampOnOff" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+</StructureMember>
+<StructureMember Name="Pt07" DataType="CHANNEL_DI_TIMESTAMP:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Chatter" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOffOn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOnOff" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOffOn" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+<DataValueMember Name="TimestampOnOff" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+</StructureMember>
+<StructureMember Name="Pt08" DataType="CHANNEL_DI_TIMESTAMP:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Chatter" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOffOn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOnOff" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOffOn" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+<DataValueMember Name="TimestampOnOff" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+</StructureMember>
+<StructureMember Name="Pt09" DataType="CHANNEL_DI_TIMESTAMP:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Chatter" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOffOn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOnOff" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOffOn" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+<DataValueMember Name="TimestampOnOff" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+</StructureMember>
+<StructureMember Name="Pt10" DataType="CHANNEL_DI_TIMESTAMP:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Chatter" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOffOn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOnOff" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOffOn" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+<DataValueMember Name="TimestampOnOff" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+</StructureMember>
+<StructureMember Name="Pt11" DataType="CHANNEL_DI_TIMESTAMP:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Chatter" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOffOn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOnOff" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOffOn" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+<DataValueMember Name="TimestampOnOff" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+</StructureMember>
+<StructureMember Name="Pt12" DataType="CHANNEL_DI_TIMESTAMP:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Chatter" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOffOn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOnOff" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOffOn" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+<DataValueMember Name="TimestampOnOff" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+</StructureMember>
+<StructureMember Name="Pt13" DataType="CHANNEL_DI_TIMESTAMP:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Chatter" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOffOn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOnOff" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOffOn" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+<DataValueMember Name="TimestampOnOff" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+</StructureMember>
+<StructureMember Name="Pt14" DataType="CHANNEL_DI_TIMESTAMP:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Chatter" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOffOn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOnOff" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOffOn" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+<DataValueMember Name="TimestampOnOff" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+</StructureMember>
+<StructureMember Name="Pt15" DataType="CHANNEL_DI_TIMESTAMP:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Chatter" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOffOn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOverflowOnOff" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumber" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOffOn" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+<DataValueMember Name="TimestampOnOff" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+</StructureMember>
+<ArrayMember Name="EventStatus" DataType="AB:5000_Event_Status_Struct:I:0" Dimensions="4">
+<Element Index="[0]">
+<Structure DataType="AB:5000_Event_Status_Struct:I:0">
+<DataValueMember Name="EventDropped" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventReset" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventsPending" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="EventNumber" DataType="DINT" Radix="Decimal" Value="0"/>
+</Structure>
+</Element>
+<Element Index="[1]">
+<Structure DataType="AB:5000_Event_Status_Struct:I:0">
+<DataValueMember Name="EventDropped" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventReset" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventsPending" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="EventNumber" DataType="DINT" Radix="Decimal" Value="0"/>
+</Structure>
+</Element>
+<Element Index="[2]">
+<Structure DataType="AB:5000_Event_Status_Struct:I:0">
+<DataValueMember Name="EventDropped" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventReset" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventsPending" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="EventNumber" DataType="DINT" Radix="Decimal" Value="0"/>
+</Structure>
+</Element>
+<Element Index="[3]">
+<Structure DataType="AB:5000_Event_Status_Struct:I:0">
+<DataValueMember Name="EventDropped" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventReset" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventsPending" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="EventNumber" DataType="DINT" Radix="Decimal" Value="0"/>
+</Structure>
+</Element>
+</ArrayMember>
+</Structure>
+</Data>
+</InputTag>
+<OutputTag ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[[[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]]]>
+</Data>
+<Data Format="Decorated">
+<Structure DataType="AB:5000_DI16_Timestamp:O:0">
+<StructureMember Name="Pt00" DataType="CHANNEL_DI_TIMESTAMP:O:0">
+<DataValueMember Name="ResetTimestamps" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt01" DataType="CHANNEL_DI_TIMESTAMP:O:0">
+<DataValueMember Name="ResetTimestamps" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt02" DataType="CHANNEL_DI_TIMESTAMP:O:0">
+<DataValueMember Name="ResetTimestamps" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt03" DataType="CHANNEL_DI_TIMESTAMP:O:0">
+<DataValueMember Name="ResetTimestamps" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt04" DataType="CHANNEL_DI_TIMESTAMP:O:0">
+<DataValueMember Name="ResetTimestamps" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt05" DataType="CHANNEL_DI_TIMESTAMP:O:0">
+<DataValueMember Name="ResetTimestamps" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt06" DataType="CHANNEL_DI_TIMESTAMP:O:0">
+<DataValueMember Name="ResetTimestamps" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt07" DataType="CHANNEL_DI_TIMESTAMP:O:0">
+<DataValueMember Name="ResetTimestamps" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt08" DataType="CHANNEL_DI_TIMESTAMP:O:0">
+<DataValueMember Name="ResetTimestamps" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt09" DataType="CHANNEL_DI_TIMESTAMP:O:0">
+<DataValueMember Name="ResetTimestamps" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt10" DataType="CHANNEL_DI_TIMESTAMP:O:0">
+<DataValueMember Name="ResetTimestamps" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt11" DataType="CHANNEL_DI_TIMESTAMP:O:0">
+<DataValueMember Name="ResetTimestamps" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt12" DataType="CHANNEL_DI_TIMESTAMP:O:0">
+<DataValueMember Name="ResetTimestamps" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt13" DataType="CHANNEL_DI_TIMESTAMP:O:0">
+<DataValueMember Name="ResetTimestamps" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt14" DataType="CHANNEL_DI_TIMESTAMP:O:0">
+<DataValueMember Name="ResetTimestamps" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt15" DataType="CHANNEL_DI_TIMESTAMP:O:0">
+<DataValueMember Name="ResetTimestamps" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TimestampOffOnNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="TimestampOnOffNumberAck" DataType="INT" Radix="Decimal" Value="0"/>
+</StructureMember>
+</Structure>
+</Data>
+</OutputTag>
+</Connection>
+<Connection Name="InputDataEvent" RPI="5000" Type="StandardDataDriven" OutputSize="64" InputSize="136" EventID="0" ProgrammaticallySendEventTrigger="false" Priority="Scheduled" InputConnectionType="Multicast" InputProductionTrigger="COS" ConnectionPath="20 04 24 bf 2d 00 23 03 2d 00 21 03"
+ InputTagSuffix="EI" OutputTagSuffix="EO">
+<InputTag ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="Decorated">
+<Structure DataType="AB:5000_DI16_Event4:EI:0">
+<DataValueMember Name="RunMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ConnectionFaulted" DataType="BOOL" Value="0"/>
+<DataValueMember Name="DiagnosticActive" DataType="BOOL" Value="0"/>
+<DataValueMember Name="DiagnosticSequenceCount" DataType="SINT" Radix="Decimal" Value="0"/>
+<StructureMember Name="Event00" DataType="AB:5000_DI16_Event_Struct:EI:0">
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventDropped" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventRising" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventFalling" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventsPending" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="EventNumber" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="EventTimestamp" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+<DataValueMember Name="Pt00Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt01Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt02Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt03Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt04Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt05Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt06Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt07Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt08Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt09Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt10Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt11Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt12Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt13Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt14Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt15Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt00Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt01Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt02Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt03Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt04Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt05Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt06Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt07Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt08Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt09Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt10Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt11Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt12Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt13Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt14Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt15Fault" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Event01" DataType="AB:5000_DI16_Event_Struct:EI:0">
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventDropped" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventRising" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventFalling" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventsPending" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="EventNumber" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="EventTimestamp" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+<DataValueMember Name="Pt00Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt01Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt02Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt03Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt04Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt05Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt06Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt07Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt08Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt09Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt10Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt11Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt12Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt13Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt14Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt15Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt00Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt01Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt02Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt03Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt04Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt05Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt06Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt07Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt08Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt09Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt10Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt11Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt12Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt13Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt14Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt15Fault" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Event02" DataType="AB:5000_DI16_Event_Struct:EI:0">
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventDropped" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventRising" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventFalling" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventsPending" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="EventNumber" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="EventTimestamp" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+<DataValueMember Name="Pt00Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt01Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt02Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt03Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt04Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt05Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt06Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt07Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt08Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt09Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt10Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt11Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt12Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt13Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt14Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt15Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt00Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt01Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt02Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt03Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt04Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt05Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt06Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt07Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt08Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt09Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt10Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt11Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt12Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt13Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt14Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt15Fault" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Event03" DataType="AB:5000_DI16_Event_Struct:EI:0">
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventDropped" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventRising" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventFalling" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncValid" DataType="BOOL" Value="0"/>
+<DataValueMember Name="CIPSyncTimeout" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventsPending" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="EventNumber" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="EventTimestamp" DataType="LINT" Radix="Date/Time (ns)" Value="LDT#1970-01-01-00:00:00.000_000_000Z"/>
+<DataValueMember Name="Pt00Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt01Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt02Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt03Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt04Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt05Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt06Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt07Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt08Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt09Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt10Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt11Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt12Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt13Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt14Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt15Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt00Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt01Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt02Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt03Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt04Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt05Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt06Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt07Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt08Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt09Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt10Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt11Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt12Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt13Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt14Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt15Fault" DataType="BOOL" Value="0"/>
+</StructureMember>
+</Structure>
+</Data>
+</InputTag>
+<OutputTag ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[[[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]]]]>
+</Data>
+<Data Format="Decorated">
+<Structure DataType="AB:5000_DI16_Event4:EO:0">
+<StructureMember Name="Event00" DataType="AB:5000_DI16_Event_Struct:EO:0">
+<DataValueMember Name="En" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventRisingEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventFallingEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="LatchEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ResetEvent" DataType="BOOL" Value="0"/>
+<DataValueMember Name="IndependentConditionTriggerEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventNumberAck" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="Pt00DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt01DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt02DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt03DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt04DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt05DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt06DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt07DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt08DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt09DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt10DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt11DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt12DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt13DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt14DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt15DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt00DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt01DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt02DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt03DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt04DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt05DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt06DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt07DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt08DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt09DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt10DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt11DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt12DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt13DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt14DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt15DataValue" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Event01" DataType="AB:5000_DI16_Event_Struct:EO:0">
+<DataValueMember Name="En" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventRisingEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventFallingEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="LatchEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ResetEvent" DataType="BOOL" Value="0"/>
+<DataValueMember Name="IndependentConditionTriggerEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventNumberAck" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="Pt00DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt01DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt02DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt03DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt04DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt05DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt06DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt07DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt08DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt09DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt10DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt11DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt12DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt13DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt14DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt15DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt00DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt01DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt02DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt03DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt04DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt05DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt06DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt07DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt08DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt09DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt10DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt11DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt12DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt13DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt14DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt15DataValue" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Event02" DataType="AB:5000_DI16_Event_Struct:EO:0">
+<DataValueMember Name="En" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventRisingEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventFallingEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="LatchEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ResetEvent" DataType="BOOL" Value="0"/>
+<DataValueMember Name="IndependentConditionTriggerEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventNumberAck" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="Pt00DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt01DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt02DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt03DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt04DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt05DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt06DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt07DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt08DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt09DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt10DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt11DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt12DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt13DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt14DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt15DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt00DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt01DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt02DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt03DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt04DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt05DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt06DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt07DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt08DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt09DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt10DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt11DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt12DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt13DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt14DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt15DataValue" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Event03" DataType="AB:5000_DI16_Event_Struct:EO:0">
+<DataValueMember Name="En" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventRisingEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventFallingEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="LatchEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ResetEvent" DataType="BOOL" Value="0"/>
+<DataValueMember Name="IndependentConditionTriggerEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="EventNumberAck" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="Pt00DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt01DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt02DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt03DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt04DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt05DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt06DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt07DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt08DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt09DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt10DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt11DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt12DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt13DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt14DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt15DataSelect" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt00DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt01DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt02DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt03DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt04DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt05DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt06DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt07DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt08DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt09DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt10DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt11DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt12DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt13DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt14DataValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt15DataValue" DataType="BOOL" Value="0"/>
+</StructureMember>
+</Structure>
+</Data>
+</OutputTag>
+</Connection>
+</Connections>
+</Communications>
+<ExtendedProperties>
+<public><Vendor>Rockwell Automation/Allen-Bradley</Vendor><CatNum>5069-IB16F</CatNum><ConfigID>601</ConfigID><ADDAVersion>1</ADDAVersion><TimeSyncRequired/></public>
+</ExtendedProperties>
+</Module>
 <Module Name="ShopRobot" CatalogNumber="ETHERNET-MODULE" Vendor="1" ProductType="0" ProductCode="18" Major="1" Minor="1" ParentModule="Local" ParentModPortId="3" Inhibited="false" MajorFault="false"
  DataExchangeId="{F9BEAC33-9110-4313-A4C4-B59DAC668846}">
 <EKey State="Disabled"/>
@@ -1868,8 +2771,8 @@
 <public><ConfigID>100</ConfigID><CatNum>5069-L306ER</CatNum></public>
 </ExtendedProperties>
 </Module>
-<Module Name="ValveBank" CatalogNumber="EX600-SEN7/8" Vendor="7" ProductType="12" ProductCode="258" Major="1" Minor="1" ParentModule="Local" ParentModPortId="3" Inhibited="false" MajorFault="false"
- SafetyEnabled="false" DataExchangeId="{729A7EBB-63FE-4A99-8DED-96008DFD2B05}">
+<Module Name="ValveBank" Vendor="7" ProductType="12" ProductCode="258" Major="1" Minor="1" ParentModule="Local" ParentModPortId="3" Inhibited="false" MajorFault="false" SafetyEnabled="false"
+ DataExchangeId="{729A7EBB-63FE-4A99-8DED-96008DFD2B05}">
 <EKey State="CompatibleModule"/>
 <Ports>
 <Port Id="2" Address="192.168.1.5" Type="Ethernet" Upstream="true"/>
@@ -1996,6 +2899,835 @@
 </Communications>
 <ExtendedProperties>
 <public><Vendor>Rockwell Automation/Allen-Bradley</Vendor><CatNum>2198-H003-ERS2</CatNum><FeedbackDevice1>1</FeedbackDevice1><ConfigID>50331751</ConfigID></public>
+</ExtendedProperties>
+</Module>
+<Module Name="PointIO" CatalogNumber="1734-AENTR/B" Vendor="1" ProductType="12" ProductCode="196" Major="4" Minor="1" ParentModule="Local" ParentModPortId="3" Inhibited="false" MajorFault="false"
+ DataExchangeId="{330E8BA9-D86E-4695-AF8B-265F8558F93B}">
+<Description>
+<![CDATA[Example of a Point IO Rack]]>
+</Description>
+<EKey State="CompatibleModule"/>
+<Ports>
+<Port Id="1" Address="0" Type="PointIO" Upstream="false">
+<Bus Size="7"/>
+</Port>
+<Port Id="2" Address="192.168.1.7" Type="Ethernet" Upstream="true"/>
+</Ports>
+<Communications CommMethod="805306369">
+<Connections>
+<Connection Name="Output" RPI="20000" Type="Output" EventID="0" ProgrammaticallySendEventTrigger="false" Unicast="true">
+<InputTag ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="Decorated">
+<Structure DataType="AB:1734_7SLOT:I:0">
+<DataValueMember Name="SlotStatusBits0_31" DataType="DINT" Radix="Binary" Value="2#0000_0000_0000_0000_0000_0000_0000_0000"/>
+<DataValueMember Name="SlotStatusBits32_63" DataType="DINT" Radix="Binary" Value="2#0000_0000_0000_0000_0000_0000_0000_0000"/>
+<ArrayMember Name="Data" DataType="SINT" Dimensions="7" Radix="Binary">
+<Element Index="[0]" Value="2#0000_0000"/>
+<Element Index="[1]" Value="2#0000_0000"/>
+<Element Index="[2]" Value="2#0000_0000"/>
+<Element Index="[3]" Value="2#0000_0000"/>
+<Element Index="[4]" Value="2#0000_0000"/>
+<Element Index="[5]" Value="2#0000_0000"/>
+<Element Index="[6]" Value="2#0000_0000"/>
+</ArrayMember>
+</Structure>
+</Data>
+</InputTag>
+<OutputTag ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[[0,0,[0,0,0,0,0,0,0]]]]>
+</Data>
+<Data Format="Decorated">
+<Structure DataType="AB:1734_7SLOT:O:0">
+<ArrayMember Name="Data" DataType="SINT" Dimensions="7" Radix="Binary">
+<Element Index="[0]" Value="2#0000_0000"/>
+<Element Index="[1]" Value="2#0000_0000"/>
+<Element Index="[2]" Value="2#0000_0000"/>
+<Element Index="[3]" Value="2#0000_0000"/>
+<Element Index="[4]" Value="2#0000_0000"/>
+<Element Index="[5]" Value="2#0000_0000"/>
+<Element Index="[6]" Value="2#0000_0000"/>
+</ArrayMember>
+</Structure>
+</Data>
+</OutputTag>
+</Connection>
+</Connections>
+</Communications>
+<ExtendedProperties>
+<public><ConfigID>262145</ConfigID><CatNum>1734-AENTR</CatNum></public>
+</ExtendedProperties>
+</Module>
+<Module Name="PointIO_Input" CatalogNumber="1734-IB8/C" Vendor="1" ProductType="7" ProductCode="216" Major="3" Minor="1" ParentModule="PointIO" ParentModPortId="1" Inhibited="false" MajorFault="false"
+ DataExchangeId="{801BF200-9BA2-49AB-B335-E55525EA07B7}">
+<Description>
+<![CDATA[8-pt Point IO Input Card]]>
+</Description>
+<EKey State="CompatibleModule"/>
+<Ports>
+<Port Id="1" Address="1" Type="PointIO" Upstream="true"/>
+</Ports>
+<Communications CommMethod="1073741824">
+<ConfigTag ConfigSize="36" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[[40,103,1,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000]]]>
+</Data>
+<Data Format="Decorated">
+<Structure DataType="AB:1734_DI8:C:0">
+<DataValueMember Name="Pt0FilterOffOn" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="Pt0FilterOnOff" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="Pt1FilterOffOn" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="Pt1FilterOnOff" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="Pt2FilterOffOn" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="Pt2FilterOnOff" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="Pt3FilterOffOn" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="Pt3FilterOnOff" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="Pt4FilterOffOn" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="Pt4FilterOnOff" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="Pt5FilterOffOn" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="Pt5FilterOnOff" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="Pt6FilterOffOn" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="Pt6FilterOnOff" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="Pt7FilterOffOn" DataType="INT" Radix="Decimal" Value="1000"/>
+<DataValueMember Name="Pt7FilterOnOff" DataType="INT" Radix="Decimal" Value="1000"/>
+</Structure>
+</Data>
+</ConfigTag>
+<Connections>
+<RackConnection>
+<InAliasTag/>
+</RackConnection>
+</Connections>
+</Communications>
+<ExtendedProperties>
+<public><ConfigID>262147</ConfigID><CatNum>1734-IB8</CatNum></public>
+</ExtendedProperties>
+</Module>
+<Module Name="PointIO_Output" CatalogNumber="1734-OB8/C" Vendor="1" ProductType="7" ProductCode="232" Major="3" Minor="1" ParentModule="PointIO" ParentModPortId="1" Inhibited="false" MajorFault="false"
+ DataExchangeId="{89402BF1-8705-46B1-BA4E-F0EC02868C33}">
+<Description>
+<![CDATA[8-Pt Point IO Output Module]]>
+</Description>
+<EKey State="CompatibleModule"/>
+<Ports>
+<Port Id="1" Address="2" Type="PointIO" Upstream="true"/>
+</Ports>
+<Communications CommMethod="1073741824">
+<ConfigTag ConfigSize="12" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[[16,123,1,0,0,0,0,0,0,0,0]]]>
+</Data>
+<Data Format="Decorated">
+<Structure DataType="AB:1734_DO8_NoDiag:C:0">
+<DataValueMember Name="FaultMode" DataType="SINT" Radix="Binary" Value="2#0000_0000"/>
+<DataValueMember Name="Pt0FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt1FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt2FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt3FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt4FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt5FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt6FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt7FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValue" DataType="SINT" Radix="Binary" Value="2#0000_0000"/>
+<DataValueMember Name="Pt0FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt1FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt2FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt3FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt4FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt5FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt6FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt7FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgMode" DataType="SINT" Radix="Binary" Value="2#0000_0000"/>
+<DataValueMember Name="Pt0ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt1ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt2ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt3ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt4ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt5ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt6ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt7ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgValue" DataType="SINT" Radix="Binary" Value="2#0000_0000"/>
+<DataValueMember Name="Pt0ProgValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt1ProgValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt2ProgValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt3ProgValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt4ProgValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt5ProgValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt6ProgValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt7ProgValue" DataType="BOOL" Value="0"/>
+</Structure>
+</Data>
+</ConfigTag>
+<Connections>
+<RackConnection>
+<InAliasTag/>
+<OutAliasTag/>
+</RackConnection>
+</Connections>
+</Communications>
+<ExtendedProperties>
+<public><ConfigID>262152</ConfigID><CatNum>1734-OB8</CatNum></public>
+</ExtendedProperties>
+</Module>
+<Module Name="PointIO_AnalogInput" CatalogNumber="1734-IE2V/C" Vendor="1" ProductType="115" ProductCode="55" Major="3" Minor="1" ParentModule="PointIO" ParentModPortId="1" Inhibited="false" MajorFault="false"
+ DataExchangeId="{54237E85-56A9-4001-9E46-7DF35D79CAB3}">
+<Description>
+<![CDATA[2-Pt Voltage Analog Input]]>
+</Description>
+<EKey State="CompatibleModule"/>
+<Ports>
+<Port Id="1" Address="3" Type="PointIO" Upstream="true"/>
+</Ports>
+<Communications CommMethod="536870913">
+<ConfigTag ConfigSize="42" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[[46,123,1,0,10000,0,500,9500,200,9800,2,0,0,0,0,10000,0,500,9500,200,9800,2,0,0,2,100]]]>
+</Data>
+<Data Format="Decorated">
+<Structure DataType="AB:1734_IE2:C:0">
+<DataValueMember Name="Ch0LowEngineering" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="Ch0HighEngineering" DataType="INT" Radix="Decimal" Value="10000"/>
+<DataValueMember Name="Ch0DigitalFilter" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="Ch0LAlarmLimit" DataType="INT" Radix="Decimal" Value="500"/>
+<DataValueMember Name="Ch0HAlarmLimit" DataType="INT" Radix="Decimal" Value="9500"/>
+<DataValueMember Name="Ch0LLAlarmLimit" DataType="INT" Radix="Decimal" Value="200"/>
+<DataValueMember Name="Ch0HHAlarmLimit" DataType="INT" Radix="Decimal" Value="9800"/>
+<DataValueMember Name="Ch0RangeType" DataType="SINT" Radix="Decimal" Value="2"/>
+<DataValueMember Name="Ch0LimitAlarmLatch" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="Ch0AlarmDisable" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="Ch1LowEngineering" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="Ch1HighEngineering" DataType="INT" Radix="Decimal" Value="10000"/>
+<DataValueMember Name="Ch1DigitalFilter" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="Ch1LAlarmLimit" DataType="INT" Radix="Decimal" Value="500"/>
+<DataValueMember Name="Ch1HAlarmLimit" DataType="INT" Radix="Decimal" Value="9500"/>
+<DataValueMember Name="Ch1LLAlarmLimit" DataType="INT" Radix="Decimal" Value="200"/>
+<DataValueMember Name="Ch1HHAlarmLimit" DataType="INT" Radix="Decimal" Value="9800"/>
+<DataValueMember Name="Ch1RangeType" DataType="SINT" Radix="Decimal" Value="2"/>
+<DataValueMember Name="Ch1LimitAlarmLatch" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="Ch1AlarmDisable" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="NotchFilter" DataType="SINT" Radix="Decimal" Value="2"/>
+<DataValueMember Name="RealTimeSample" DataType="INT" Radix="Decimal" Value="100"/>
+</Structure>
+</Data>
+</ConfigTag>
+<Connections>
+<Connection Name="InputData" RPI="80000" Type="Input" EventID="0" ProgrammaticallySendEventTrigger="false" Unicast="true">
+<InputTag ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="Decorated">
+<Structure DataType="AB:1734_IE2:I:0">
+<DataValueMember Name="Fault" DataType="DINT" Radix="Binary" Value="2#0000_0000_0000_0000_0000_0000_0000_0000"/>
+<DataValueMember Name="Ch0Data" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="Ch1Data" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="Ch0Status" DataType="SINT" Radix="Binary" Value="2#0000_0000"/>
+<DataValueMember Name="Ch0Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Ch0Calibration" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Ch0LAlarm" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Ch0HAlarm" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Ch0LLAlarm" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Ch0HHAlarm" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Ch0Underrange" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Ch0Overrange" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Ch1Status" DataType="SINT" Radix="Binary" Value="2#0000_0000"/>
+<DataValueMember Name="Ch1Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Ch1Calibration" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Ch1LAlarm" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Ch1HAlarm" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Ch1LLAlarm" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Ch1HHAlarm" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Ch1Underrange" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Ch1Overrange" DataType="BOOL" Value="0"/>
+</Structure>
+</Data>
+</InputTag>
+</Connection>
+</Connections>
+</Communications>
+<ExtendedProperties>
+<public><ConfigID>102</ConfigID><CatNum>1734-IE2V</CatNum></public>
+</ExtendedProperties>
+</Module>
+<Module Name="PointIO_AnalogOutput" CatalogNumber="1734-OE2V/C" Vendor="1" ProductType="115" ProductCode="56" Major="3" Minor="1" ParentModule="PointIO" ParentModPortId="1" Inhibited="false" MajorFault="false"
+ DataExchangeId="{ED0CEEC8-8ACC-4AEE-AB6A-BBFD441D8646}">
+<Description>
+<![CDATA[2-Pt Voltage Analog Output]]>
+</Description>
+<EKey State="CompatibleModule"/>
+<Ports>
+<Port Id="1" Address="4" Type="PointIO" Upstream="true"/>
+</Ports>
+<Communications CommMethod="536870913">
+<ConfigTag ConfigSize="40" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[[44,123,1,0,0,0,10000,-32768,32767,1,1,1,0,0,0,0,0,0,10000,-32768,32767,1,1,1,0,0,0]]]>
+</Data>
+<Data Format="Decorated">
+<Structure DataType="AB:1734_OE2:C:0">
+<DataValueMember Name="Ch0FaultValue" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="Ch0ProgValue" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="Ch0LowEngineering" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="Ch0HighEngineering" DataType="INT" Radix="Decimal" Value="10000"/>
+<DataValueMember Name="Ch0LowLimit" DataType="INT" Radix="Decimal" Value="-32768"/>
+<DataValueMember Name="Ch0HighLimit" DataType="INT" Radix="Decimal" Value="32767"/>
+<DataValueMember Name="Ch0RangeType" DataType="SINT" Radix="Decimal" Value="1"/>
+<DataValueMember Name="Ch0FaultMode" DataType="SINT" Radix="Decimal" Value="1"/>
+<DataValueMember Name="Ch0ProgMode" DataType="SINT" Radix="Decimal" Value="1"/>
+<DataValueMember Name="Ch0LimitAlarmLatch" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="Ch0AlarmDisable" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="Ch1FaultValue" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="Ch1ProgValue" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="Ch1LowEngineering" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="Ch1HighEngineering" DataType="INT" Radix="Decimal" Value="10000"/>
+<DataValueMember Name="Ch1LowLimit" DataType="INT" Radix="Decimal" Value="-32768"/>
+<DataValueMember Name="Ch1HighLimit" DataType="INT" Radix="Decimal" Value="32767"/>
+<DataValueMember Name="Ch1RangeType" DataType="SINT" Radix="Decimal" Value="1"/>
+<DataValueMember Name="Ch1FaultMode" DataType="SINT" Radix="Decimal" Value="1"/>
+<DataValueMember Name="Ch1ProgMode" DataType="SINT" Radix="Decimal" Value="1"/>
+<DataValueMember Name="Ch1LimitAlarmLatch" DataType="SINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="Ch1AlarmDisable" DataType="SINT" Radix="Decimal" Value="0"/>
+</Structure>
+</Data>
+</ConfigTag>
+<Connections>
+<Connection Name="OutputData" RPI="80000" Type="Output" EventID="0" ProgrammaticallySendEventTrigger="false" Unicast="true">
+<InputTag ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="Decorated">
+<Structure DataType="AB:1734_OE2:I:0">
+<DataValueMember Name="Fault" DataType="DINT" Radix="Binary" Value="2#0000_0000_0000_0000_0000_0000_0000_0000"/>
+<DataValueMember Name="Ch0Status" DataType="SINT" Radix="Binary" Value="2#0000_0000"/>
+<DataValueMember Name="Ch0Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Ch0Calibration" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Ch0LAlarm" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Ch0HAlarm" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Ch1Status" DataType="SINT" Radix="Binary" Value="2#0000_0000"/>
+<DataValueMember Name="Ch1Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Ch1Calibration" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Ch1LAlarm" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Ch1HAlarm" DataType="BOOL" Value="0"/>
+</Structure>
+</Data>
+</InputTag>
+<OutputTag ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[[0,0]]]>
+</Data>
+<Data Format="Decorated">
+<Structure DataType="AB:1734_OE2:O:0">
+<DataValueMember Name="Ch0Data" DataType="INT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="Ch1Data" DataType="INT" Radix="Decimal" Value="0"/>
+</Structure>
+</Data>
+</OutputTag>
+</Connection>
+</Connections>
+</Communications>
+<ExtendedProperties>
+<public><ConfigID>402</ConfigID><CatNum>1734-OE2V</CatNum></public>
+</ExtendedProperties>
+</Module>
+<Module Name="PointIO_SafetyInput" CatalogNumber="1734-IB8S/B" Vendor="1" ProductType="35" ProductCode="15" Major="2" Minor="1" ParentModule="PointIO" ParentModPortId="1" Inhibited="false" MajorFault="false"
+ SafetyNetwork="16#0000_4e2f_0503_ac50" DataExchangeId="{8B1FF8F9-BE01-4EDC-9883-3BAF8EFC8C7D}">
+<Description>
+<![CDATA[8-pt Safety Input]]>
+</Description>
+<EKey State="CompatibleModule"/>
+<Ports>
+<Port Id="1" Address="5" Type="PointIO" Upstream="true"/>
+</Ports>
+<Communications>
+<ConfigData ConfigSize="82">
+<Data Format="L5K">
+<![CDATA[[86,864,-1305618411,84126763,20015,514,1000,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]]]>
+</Data>
+</ConfigData>
+<Connections>
+<Connection Name="Input" RPI="10000" Type="SafetyInput" EventID="0" ProgrammaticallySendEventTrigger="false" TimeoutMultiplier="2" NetworkDelayMultiplier="200" ReactionTimeLimit="40.064" MaxObservedNetworkDelay="0" Unicast="true">
+<InputTag ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="Decorated">
+<Structure DataType="AB:1734_IB8S_Safety2:I:0">
+<DataValueMember Name="RunMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ConnectionFaulted" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt00Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt01Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt02Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt03Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt04Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt05Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt06Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt07Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt00Status" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt01Status" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt02Status" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt03Status" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt04Status" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt05Status" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt06Status" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt07Status" DataType="BOOL" Value="0"/>
+</Structure>
+</Data>
+</InputTag>
+</Connection>
+<Connection Name="Output" Type="SafetyOutput" EventID="0" ProgrammaticallySendEventTrigger="false" TimeoutMultiplier="2" NetworkDelayMultiplier="200" ReactionTimeLimit="60" MaxObservedNetworkDelay="0" Unicast="true">
+<OutputTag ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[[0]]]>
+</Data>
+<Data Format="Decorated">
+<Structure DataType="AB:1734_IB8S:O:0">
+<DataValueMember Name="Test00Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Test01Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Test02Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Test03Data" DataType="BOOL" Value="0"/>
+</Structure>
+</Data>
+</OutputTag>
+</Connection>
+</Connections>
+</Communications>
+<ExtendedProperties>
+<public><ConfigID>102</ConfigID><CatNum>1734-IB8S</CatNum></public>
+</ExtendedProperties>
+</Module>
+<Module Name="PointIO_SafetyOutput" CatalogNumber="1734-OB8S/B" Vendor="1" ProductType="35" ProductCode="16" Major="2" Minor="1" ParentModule="PointIO" ParentModPortId="1" Inhibited="false" MajorFault="false"
+ SafetyNetwork="16#0000_4e2f_0503_ac50" DataExchangeId="{85E27BEE-1E50-4D43-8F43-7C80D7F4F17A}">
+<Description>
+<![CDATA[8-Pt Safety Output Card]]>
+</Description>
+<EKey State="CompatibleModule"/>
+<Ports>
+<Port Id="1" Address="6" Type="PointIO" Upstream="true"/>
+</Ports>
+<Communications>
+<ConfigData ConfigSize="26">
+<Data Format="L5K">
+<![CDATA[[30,864,2015074446,84156904,20015,1000,0,16842752,257]]]>
+</Data>
+</ConfigData>
+<Connections>
+<Connection Name="Input" RPI="10000" Type="SafetyInput" EventID="0" ProgrammaticallySendEventTrigger="false" TimeoutMultiplier="2" NetworkDelayMultiplier="200" ReactionTimeLimit="40.064" MaxObservedNetworkDelay="0" Unicast="true">
+<InputTag ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="Decorated">
+<Structure DataType="AB:1734_OB8S_Safety1:I:0">
+<DataValueMember Name="RunMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ConnectionFaulted" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt00OutputStatus" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt01OutputStatus" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt02OutputStatus" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt03OutputStatus" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt04OutputStatus" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt05OutputStatus" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt06OutputStatus" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt07OutputStatus" DataType="BOOL" Value="0"/>
+</Structure>
+</Data>
+</InputTag>
+</Connection>
+<Connection Name="Output" Type="SafetyOutput" EventID="0" ProgrammaticallySendEventTrigger="false" TimeoutMultiplier="2" NetworkDelayMultiplier="200" ReactionTimeLimit="60" MaxObservedNetworkDelay="0" Unicast="true">
+<OutputTag ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[[0]]]>
+</Data>
+<Data Format="Decorated">
+<Structure DataType="AB:1734_OB8S:O:0">
+<DataValueMember Name="Pt00Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt01Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt02Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt03Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt04Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt05Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt06Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Pt07Data" DataType="BOOL" Value="0"/>
+</Structure>
+</Data>
+</OutputTag>
+</Connection>
+</Connections>
+</Communications>
+<ExtendedProperties>
+<public><ConfigID>205</ConfigID><CatNum>1734-OB8S</CatNum></public>
+</ExtendedProperties>
+</Module>
+<Module Name="Compact5000_IO_Adapter" CatalogNumber="5069-AENTR" Vendor="1" ProductType="12" ProductCode="317" Major="4" Minor="1" ParentModule="Local" ParentModPortId="3" Inhibited="false" MajorFault="false"
+ SafetyEnabled="false" DataExchangeId="{4FB56623-E447-421C-8F6A-B5EDDDEDA156}">
+<Description>
+<![CDATA[Compact 5000 IO version of the classic Point IO Adapter]]>
+</Description>
+<EKey State="CompatibleModule"/>
+<Ports>
+<Port Id="1" Address="0" Type="5069" Upstream="false">
+<Bus Size="2"/>
+</Port>
+<Port Id="2" Address="192.168.1.8" Type="Ethernet" Upstream="true"/>
+</Ports>
+<ExtendedProperties>
+<public><Vendor>Rockwell Automation/Allen-Bradley</Vendor><CatNum>5069-AENTR</CatNum><TimeSyncEnabled/><ConfigID>4325481</ConfigID></public>
+</ExtendedProperties>
+</Module>
+<Module Name="Remote_Output" CatalogNumber="5069-OB16/B" Vendor="1" ProductType="7" ProductCode="392" Major="3" Minor="1" ParentModule="Compact5000_IO_Adapter" ParentModPortId="1" Inhibited="false" MajorFault="false"
+ SafetyEnabled="false" AutoDiagsEnabled="true" DataExchangeId="{1BE58E7D-3AB8-4717-A853-57623C7AA3F2}">
+<Description>
+<![CDATA[16-Pt Output Card]]>
+</Description>
+<EKey State="CompatibleModule"/>
+<Ports>
+<Port Id="1" Address="1" Type="5069" Upstream="true"/>
+</Ports>
+<Communications>
+<ConfigTag ConfigSize="64" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[[68,163,[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]]]]>
+</Data>
+<Data Format="Decorated">
+<Structure DataType="AB:5000_DO16_Diag:C:0">
+<StructureMember Name="Pt00" DataType="AB:5000_DO_Diag_Channel:C:0">
+<DataValueMember Name="FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultFinalState" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgramToFaultEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoadEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValueStateDuration" DataType="SINT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt01" DataType="AB:5000_DO_Diag_Channel:C:0">
+<DataValueMember Name="FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultFinalState" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgramToFaultEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoadEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValueStateDuration" DataType="SINT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt02" DataType="AB:5000_DO_Diag_Channel:C:0">
+<DataValueMember Name="FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultFinalState" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgramToFaultEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoadEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValueStateDuration" DataType="SINT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt03" DataType="AB:5000_DO_Diag_Channel:C:0">
+<DataValueMember Name="FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultFinalState" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgramToFaultEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoadEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValueStateDuration" DataType="SINT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt04" DataType="AB:5000_DO_Diag_Channel:C:0">
+<DataValueMember Name="FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultFinalState" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgramToFaultEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoadEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValueStateDuration" DataType="SINT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt05" DataType="AB:5000_DO_Diag_Channel:C:0">
+<DataValueMember Name="FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultFinalState" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgramToFaultEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoadEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValueStateDuration" DataType="SINT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt06" DataType="AB:5000_DO_Diag_Channel:C:0">
+<DataValueMember Name="FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultFinalState" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgramToFaultEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoadEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValueStateDuration" DataType="SINT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt07" DataType="AB:5000_DO_Diag_Channel:C:0">
+<DataValueMember Name="FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultFinalState" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgramToFaultEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoadEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValueStateDuration" DataType="SINT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt08" DataType="AB:5000_DO_Diag_Channel:C:0">
+<DataValueMember Name="FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultFinalState" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgramToFaultEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoadEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValueStateDuration" DataType="SINT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt09" DataType="AB:5000_DO_Diag_Channel:C:0">
+<DataValueMember Name="FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultFinalState" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgramToFaultEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoadEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValueStateDuration" DataType="SINT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt10" DataType="AB:5000_DO_Diag_Channel:C:0">
+<DataValueMember Name="FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultFinalState" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgramToFaultEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoadEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValueStateDuration" DataType="SINT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt11" DataType="AB:5000_DO_Diag_Channel:C:0">
+<DataValueMember Name="FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultFinalState" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgramToFaultEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoadEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValueStateDuration" DataType="SINT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt12" DataType="AB:5000_DO_Diag_Channel:C:0">
+<DataValueMember Name="FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultFinalState" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgramToFaultEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoadEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValueStateDuration" DataType="SINT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt13" DataType="AB:5000_DO_Diag_Channel:C:0">
+<DataValueMember Name="FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultFinalState" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgramToFaultEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoadEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValueStateDuration" DataType="SINT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt14" DataType="AB:5000_DO_Diag_Channel:C:0">
+<DataValueMember Name="FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultFinalState" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgramToFaultEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoadEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValueStateDuration" DataType="SINT" Radix="Decimal" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt15" DataType="AB:5000_DO_Diag_Channel:C:0">
+<DataValueMember Name="FaultMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgValue" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultFinalState" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ProgramToFaultEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoadEn" DataType="BOOL" Value="0"/>
+<DataValueMember Name="FaultValueStateDuration" DataType="SINT" Radix="Decimal" Value="0"/>
+</StructureMember>
+</Structure>
+</Data>
+</ConfigTag>
+<Connections>
+<Connection Name="OutputData" RPI="5000" Type="StandardDataDriven" OutputSize="64" InputSize="68" EventID="0" ProgrammaticallySendEventTrigger="false" Priority="Scheduled" InputConnectionType="Unicast" InputProductionTrigger="Cyclic" ConnectionPath="20 04 24 a3 2c 64 2c 85"
+ InputTagSuffix="I" OutputTagSuffix="O">
+<InputTag ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="Decorated">
+<Structure DataType="AB:5000_DO16_Diag:I:0">
+<DataValueMember Name="RunMode" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ConnectionFaulted" DataType="BOOL" Value="0"/>
+<DataValueMember Name="DiagnosticActive" DataType="BOOL" Value="0"/>
+<DataValueMember Name="DiagnosticSequenceCount" DataType="SINT" Radix="Decimal" Value="0"/>
+<StructureMember Name="Pt00" DataType="CHANNEL_DO_DIAG:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoad" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt01" DataType="CHANNEL_DO_DIAG:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoad" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt02" DataType="CHANNEL_DO_DIAG:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoad" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt03" DataType="CHANNEL_DO_DIAG:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoad" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt04" DataType="CHANNEL_DO_DIAG:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoad" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt05" DataType="CHANNEL_DO_DIAG:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoad" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt06" DataType="CHANNEL_DO_DIAG:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoad" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt07" DataType="CHANNEL_DO_DIAG:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoad" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt08" DataType="CHANNEL_DO_DIAG:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoad" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt09" DataType="CHANNEL_DO_DIAG:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoad" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt10" DataType="CHANNEL_DO_DIAG:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoad" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt11" DataType="CHANNEL_DO_DIAG:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoad" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt12" DataType="CHANNEL_DO_DIAG:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoad" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt13" DataType="CHANNEL_DO_DIAG:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoad" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt14" DataType="CHANNEL_DO_DIAG:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoad" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt15" DataType="CHANNEL_DO_DIAG:I:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Fault" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Uncertain" DataType="BOOL" Value="0"/>
+<DataValueMember Name="NoLoad" DataType="BOOL" Value="0"/>
+<DataValueMember Name="ShortCircuit" DataType="BOOL" Value="0"/>
+</StructureMember>
+</Structure>
+</Data>
+</InputTag>
+<OutputTag ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[[[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]]]>
+</Data>
+<Data Format="Decorated">
+<Structure DataType="AB:5000_DO16:O:0">
+<StructureMember Name="Pt00" DataType="CHANNEL_DO:O:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt01" DataType="CHANNEL_DO:O:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt02" DataType="CHANNEL_DO:O:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt03" DataType="CHANNEL_DO:O:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt04" DataType="CHANNEL_DO:O:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt05" DataType="CHANNEL_DO:O:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt06" DataType="CHANNEL_DO:O:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt07" DataType="CHANNEL_DO:O:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt08" DataType="CHANNEL_DO:O:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt09" DataType="CHANNEL_DO:O:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt10" DataType="CHANNEL_DO:O:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt11" DataType="CHANNEL_DO:O:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt12" DataType="CHANNEL_DO:O:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt13" DataType="CHANNEL_DO:O:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt14" DataType="CHANNEL_DO:O:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+</StructureMember>
+<StructureMember Name="Pt15" DataType="CHANNEL_DO:O:0">
+<DataValueMember Name="Data" DataType="BOOL" Value="0"/>
+</StructureMember>
+</Structure>
+</Data>
+</OutputTag>
+</Connection>
+</Connections>
+</Communications>
+<ExtendedProperties>
+<public><Vendor>Rockwell Automation/Allen-Bradley</Vendor><CatNum>5069-OB16</CatNum><ConfigID>110</ConfigID><ADDAVersion>1</ADDAVersion></public>
 </ExtendedProperties>
 </Module>
 </Modules>
@@ -4596,6 +6328,65 @@ Step 7000: Robot program stopped. Waiting for start command]]>
 <DataValue DataType="USINT" Radix="Decimal" Value="0"/>
 </Data>
 </Tag>
+<Tag Name="a_2d_array" TagType="Base" DataType="SINT" Dimensions="2 3" Radix="Decimal" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Comments>
+<Comment Operand="[0,0]">
+<![CDATA[element comment]]>
+</Comment>
+<Comment Operand="[0,0].0">
+<![CDATA[element bit comment]]>
+</Comment>
+<Comment Operand="[0,1].1">
+<![CDATA[different element bit comment]]>
+</Comment>
+</Comments>
+<Data Format="L5K">
+<![CDATA[[0,0,0,0,0,0]]]>
+</Data>
+<Data Format="Decorated">
+<Array DataType="SINT" Dimensions="2,3" Radix="Decimal">
+<Element Index="[0,0]" Value="0"/>
+<Element Index="[0,1]" Value="0"/>
+<Element Index="[0,2]" Value="0"/>
+<Element Index="[1,0]" Value="0"/>
+<Element Index="[1,1]" Value="0"/>
+<Element Index="[1,2]" Value="0"/>
+</Array>
+</Data>
+</Tag>
+<Tag Name="a_3d_array" TagType="Base" DataType="SINT" Dimensions="2 3 4" Radix="Decimal" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="L5K">
+<![CDATA[[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]]]>
+</Data>
+<Data Format="Decorated">
+<Array DataType="SINT" Dimensions="2,3,4" Radix="Decimal">
+<Element Index="[0,0,0]" Value="0"/>
+<Element Index="[0,0,1]" Value="0"/>
+<Element Index="[0,0,2]" Value="0"/>
+<Element Index="[0,0,3]" Value="0"/>
+<Element Index="[0,1,0]" Value="0"/>
+<Element Index="[0,1,1]" Value="0"/>
+<Element Index="[0,1,2]" Value="0"/>
+<Element Index="[0,1,3]" Value="0"/>
+<Element Index="[0,2,0]" Value="0"/>
+<Element Index="[0,2,1]" Value="0"/>
+<Element Index="[0,2,2]" Value="0"/>
+<Element Index="[0,2,3]" Value="0"/>
+<Element Index="[1,0,0]" Value="0"/>
+<Element Index="[1,0,1]" Value="0"/>
+<Element Index="[1,0,2]" Value="0"/>
+<Element Index="[1,0,3]" Value="0"/>
+<Element Index="[1,1,0]" Value="0"/>
+<Element Index="[1,1,1]" Value="0"/>
+<Element Index="[1,1,2]" Value="0"/>
+<Element Index="[1,1,3]" Value="0"/>
+<Element Index="[1,2,0]" Value="0"/>
+<Element Index="[1,2,1]" Value="0"/>
+<Element Index="[1,2,2]" Value="0"/>
+<Element Index="[1,2,3]" Value="0"/>
+</Array>
+</Data>
+</Tag>
 <Tag Name="a_bool" TagType="Base" DataType="BOOL" Radix="Decimal" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
 <Data Format="L5K">
 <![CDATA[0]]>
@@ -4686,6 +6477,17 @@ Step 7000: Robot program stopped. Waiting for start command]]>
 </Data>
 <Data Format="Decorated">
 <DataValue DataType="DINT" Radix="Decimal" Value="0"/>
+</Data>
+</Tag>
+<Tag Name="A_CONSTANT" TagType="Base" DataType="DINT" Radix="Decimal" Constant="true" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Description>
+<![CDATA[the answer to life the universe and everything]]>
+</Description>
+<Data Format="L5K">
+<![CDATA[42]]>
+</Data>
+<Data Format="Decorated">
+<DataValue DataType="DINT" Radix="Decimal" Value="42"/>
 </Data>
 </Tag>
 <Tag Name="a_counter" TagType="Base" DataType="COUNTER" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">

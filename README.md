@@ -29,6 +29,8 @@ Or pull it straight from the Github release:
 uv add https://github.com/zwood16/py_l5x/releases/download/v0.2.0/py_l5x-0.2.0-py3-none-any.whl
 ```
 
+or even add it directly using a link to the `.whl` file on the [Releases](https://github.com/zwood16/py_l5x/releases) page.
+
 ## Quick start
 
 ```python
@@ -38,14 +40,14 @@ project = load("my_project.L5X")
 print(project)
 # Project('Example_PLC')
 #   Target:       Full project
-#   Processor:    5069-L306ERM
+#   Processor:    5069-L310ERMS3
 #   Firmware:     37.11
 #   Data Types:   9
-#   Modules:      5
+#   Modules:      17
 #   AOIs:         6
-#   Controller Tags: 5
-#   Programs:     6
-#   Tasks:        3
+#   Controller Tags: 9
+#   Programs:     7
+#   Tasks:        4
 ```
 
 `load()` accepts either a `str` path or a `pathlib.Path`. It raises `FileNotFoundError` if the file does not exist and `ValueError` if the file is not valid XML.
@@ -60,7 +62,8 @@ Project
 ├── data_types          → DataTypesCollection  (keyed by name)
 ├── aois                → AOICollection         (keyed by name)
 ├── modules             → ModulesCollection     (keyed by name)
-├── tags                → TagsCollection        (controller-level, keyed by name)
+├── tags                → ProjectTagsView       (merged: controller + module I/O tags, keyed by name)
+├── controller_tags     → TagsCollection        (controller-scoped only, keyed by name)
 ├── programs            → ProgramsCollection    (keyed by name)
 │   ├── tags            → TagsCollection        (program-local, keyed by name)
 │   └── routines        → RoutinesCollection    (keyed by name)
@@ -71,6 +74,29 @@ Project
 
 All collections implement `Mapping[str, T]` so they support the usual `dict`-like access: `project.programs["MainProgram"]`, `"A_UDT" in project.data_types`, `list(project.tags)`, etc.
 
+## Inspecting objects
+
+Most objects (tags, AOI local tags, data types, data type members, AOI parameters, and `ControllerInfo`) print as a multi-line summary of their populated fields. `print(obj)` and `obj.describe()` produce the same output, and `Cls.fields()` lists every field a class can expose (Python attribute name → XML attribute name):
+
+```python
+from py_l5x import IntegerTag
+
+tag = project.programs["MainProgram"].tags["an_int"]
+print(tag)
+# IntegerTag('an_int', 'INT')
+#   name = 'an_int'
+#   tag_type = 'Base'
+#   data_type = 'INT'
+#   external_access = 'Read/Write'
+#   opc_ua_access = 'None'
+#   value: 0
+#   radix: 'Decimal'
+
+print(IntegerTag.fields()["data_type"])  # "DataType"
+```
+
+Attributes that are present in the XML but not modeled by a field are listed under `Extra Attributes:`.
+
 ## Controller metadata
 
 The `ControllerInfo` object exposes project-level metadata such as the controller name, processor type, firmware version, and project dates. For full-project exports, all metadata is populated; for component exports (single Programs, AOIs, etc.), this metadata is sparse or `None` since Studio 5000 does not include it in the export envelope.
@@ -78,13 +104,13 @@ The `ControllerInfo` object exposes project-level metadata such as the controlle
 ```python
 ctrl = project.controller
 
-print(ctrl.name)                  # "Example_PLC"
-print(ctrl.processor_type)        # "5069-L306ERM"  (None for component exports)
-print(ctrl.major_rev)             # "37"             (None for component exports)
-print(ctrl.minor_rev)             # "11"             (None for component exports)
-print(ctrl.last_modified_date)    # "Thu Jul 09 10:25:47 2026"
-print(ctrl.project_sn)            # "16#0000_0000"
-print(ctrl.is_context)            # False (True when loaded from a component export)
+print(ctrl.name)  # "Example_PLC"
+print(ctrl.processor_type)  # "5069-L310ERMS3"  (None for component exports)
+print(ctrl.major_rev)  # "37"             (None for component exports)
+print(ctrl.minor_rev)  # "11"             (None for component exports)
+print(ctrl.last_modified_date)  # "Mon Oct 19 17:30:00 2026"
+print(ctrl.project_sn)  # "16#0000_0000"
+print(ctrl.is_context)  # False (True when loaded from a component export)
 ```
 
 For component exports (see [Component exports](#component-exports)), `is_context` is `True` and the firmware/processor/date attributes are `None` because Studio 5000 does not include them.
@@ -109,9 +135,9 @@ for name, udt in project.data_types.items():
 
 # Access a specific UDT
 udt = project.data_types["A_UDT"]
-print(udt.name)            # "A_UDT"
-print(udt.family)          # "NoFamily"
-print(udt.is_string)       # False
+print(udt.name)  # "A_UDT"
+print(udt.family)  # "NoFamily"
+print(udt.is_string)  # False
 
 # Iterate visible members (hidden packed-boolean host bytes excluded)
 for name, member in udt.visible_members.items():
@@ -136,8 +162,8 @@ for name, member in udt.visible_members.items():
 
 # STRING-family UDT
 stype = project.data_types["robotAlarmCode"]
-print(stype.is_string)     # True
-print(stype.max_length)    # 8
+print(stype.is_string)  # True
+print(stype.max_length)  # 8
 ```
 
 ## Add-On Instructions (AOIs)
@@ -155,9 +181,9 @@ for name, aoi in project.aois.items():
 # FanucRobot 1.4
 
 aoi = project.aois["Debounce"]
-print(aoi.name)                    # "Debounce"
-print(aoi.revision)                # "1.2"
-print(aoi.execute_enable_in_false) # True
+print(aoi.name)  # "Debounce"
+print(aoi.revision)  # "1.2"
+print(aoi.execute_enable_in_false)  # True
 
 # Parameters
 for name, param in aoi.parameters.items():
@@ -169,10 +195,33 @@ for name, param in aoi.parameters.items():
 #   offDelay: DINT (Input)
 
 # Local tags
+from py_l5x import AOILocalStructTag
+
 for name, local in aoi.local_tags.items():
-    print(f"  {name}: {local.data_type} = {local.value}")
-#   debounceOnTimer: TIMER = None
-#   debounceOffTimer: TIMER = None
+    print(f"  {name}: {local.data_type}")
+    if isinstance(local, AOILocalStructTag):
+        print(f"    Members: {list(local.members.keys())}")
+    else:
+        print(f"    Value: {local.value}")
+#   debounceOnTimer: TIMER
+#     Members: ['PRE', 'ACC', 'EN', 'TT', 'DN']
+#   debounceOffTimer: TIMER
+#     Members: ['PRE', 'ACC', 'EN', 'TT', 'DN']
+```
+
+Each local tag is an instance of a typed class: `AOILocalBoolTag`, `AOILocalIntegerTag`, `AOILocalFloatTag`, `AOILocalTimeTag`, `AOILocalDateTimeTag`, `AOILocalStringTag`, `AOILocalStructTag`, `AOILocalArrayTag`, and `AOILocalAtomicTag`. They all subclass `AOILocalTag` and the matching node class (e.g. `AOILocalStructTag` is also a `StructNode`), so you can branch with `isinstance()`:
+
+```python
+from py_l5x import AOILocalIntegerTag, AOILocalStructTag, AOILocalTag, StructNode
+
+timer = aoi.local_tags["debounceOnTimer"]
+print(isinstance(timer, AOILocalStructTag))  # True
+print(isinstance(timer, StructNode))  # True
+print(isinstance(timer, AOILocalTag))  # True
+
+step = project.aois["FanucPNS"].local_tags["Step"]
+print(isinstance(step, AOILocalIntegerTag))  # True
+print(step.value)  # 0
 
 # AOI routines (same API as program routines — see below)
 logic = aoi.routines["Logic"]
@@ -181,24 +230,54 @@ print(logic.as_text())
 
 ## Modules
 
-Modules represent physical or logical I/O hardware (local processors, communication modules, analog/digital I/O, etc.) connected to the controller. Each module has ports (connection points), communication settings, and optional configuration/input/output tag payloads that define the data exchanged with the module. Note that in the L5X structure, the `Module` holds the tags. You will not find module tags in the controller level tags list.
+Modules represent physical or logical I/O hardware (local processors, communication modules, analog/digital I/O, etc.) connected to the controller. Each module has ports (connection points), communication settings, and optional configuration/input/output tag payloads that define the data exchanged with the module.
 
-> Warning: only a few modules have been tested. You results may vary with module parsing and how useful the available info is.
+Module I/O tags are also exposed under their Studio 5000 global names in `project.tags`. The name prefix depends on where the module is attached:
+
+- **Local chassis:** `Local:<slot>:<suffix>` (e.g. `Local:1:C`)
+- **Remote rack** (behind an adapter): `<AdapterName>:<slot>:<suffix>` (e.g. `PointIO:3:I`, `Compact5000_IO_Adapter:1:O`)
+- **Network-attached:** `<ModuleName>:<suffix>` (e.g. `ValveBank:I`, `ValveBank:O`)
+
+The suffix comes from the connection's `InputTagSuffix`/`OutputTagSuffix` when set, otherwise from the tag's data type, otherwise `I`/`O`. Configuration tags always use `C`.
+
+Each entry is a `ModuleTagRef`, a thin reference to the underlying tag in `project.modules` (still the single source of truth). It provides `name`, `kind`, `data_type`, `class_`, `is_safety`, and `.module` / `.connection` back-references. Value attributes such as `members`, `elements`, and `value` are forwarded to the root value node (`ref.data`), then to the wrapped module tag. Anything missing from both raises `AttributeError` naming `ModuleTagRef`. Module tag names always contain `:`, while Logix controller tag names cannot, so the two never collide in `project.tags`.
+
+```python
+# Module I/O tag via its global name
+ref = project.tags["ValveBank:I"]
+print(ref.module_name)  # "ValveBank"
+print(ref.members["ConnectionFaulted"].value)  # False
+
+try:
+    ref.elements  # ValveBank:I is a structure, so it has no elements
+except AttributeError as e:
+    print(e)  # 'ModuleTagRef' object has no attribute 'elements'
+
+# Or directly off the module
+for name, ref in project.modules["ShopRobot"].tags.items():
+    print(name, ref.kind)
+# ShopRobot:C C
+# ShopRobot:I I
+# ShopRobot:O O
+```
+
+> Warning: only a few modules have been tested. Your results may vary with module parsing and how useful the available info is.
 
 ```python
 for name, mod in project.modules.items():
     print(f"{name}: {mod.catalog_number}")
-# Local: 5069-L306ERM
+# Local: 5069-L310ERMS3
 # Test_Input_Module: 5069-IB16/A
+# Test_Safety_Input: 5069-IB8S/A
+# Fast_Local_Input: 5069-IB16F/A
 # ShopRobot: ETHERNET-MODULE
-# AnotherPLC: 5069-L306ER
-# ValveBank: EX600-SEN7/8
+# ... (17 modules in total)
 
 mod = project.modules["ShopRobot"]
-print(mod.name)            # "ShopRobot"
+print(mod.name)  # "ShopRobot"
 print(mod.catalog_number)  # "ETHERNET-MODULE"
-print(mod.inhibited)       # False
-print(mod.ekey_state)      # "Disabled"
+print(mod.inhibited)  # False
+print(mod.ekey_state)  # "Disabled"
 
 # Ports
 for port_id, port in mod.ports.items():
@@ -214,21 +293,70 @@ if mod.communications:
 
 ## Tags and the value tree
 
-Tags are typed variables that hold data in the controller. Each tag can be a scalar (a single value like an integer or boolean), a structure (an instance of a UDT or AOI), or an array. The **value tree** (`TagNode`) is a hierarchical representation of a tag's data that lets you drill down into members, array elements, and nested structures while carrying full metadata (descriptions, engineering units, min/max, state labels) at every level.
+Tags are typed variables that hold data in the controller. Each tag can be a scalar (a single value like an integer or boolean), a structure (an instance of a UDT or AOI), or an array. Tags ARE their root value node — there is no separate `.data` property. Instead, tags are instances of typed classes (`IntegerTag`, `BoolTag`, `StructTag`, `ArrayTag`, `StringTag`, etc.) that also subclass the appropriate node class, so you access value data directly on the tag.
+
+### Tag types and isinstance-based branching
+
+`TagsCollection` returns one of several typed tag classes from `py_l5x`:
+
+```python
+from py_l5x import (
+    IntegerTag,
+    FloatTag,
+    BoolTag,
+    TimeTag,
+    DateTimeTag,
+    StringTag,
+    StructTag,
+    ArrayTag,
+    AtomicTag,
+    AliasTag,
+    MessageTag,
+    AxisTag,
+    MotionGroupTag,
+    UnknownTag,
+    StructNode,
+    ArrayNode,
+)
+
+for name, tag in project.programs["MainProgram"].tags.items():
+    if isinstance(tag, IntegerTag):
+        print(f"{name}: int = {tag.value}")
+    elif isinstance(tag, BoolTag):
+        print(f"{name}: bool = {tag.value} (state0={tag.state0}, state1={tag.state1})")
+    elif isinstance(tag, StructTag):
+        print(f"{name}: struct with members {list(tag.members.keys())}")
+    elif isinstance(tag, ArrayTag):
+        print(f"{name}: array of length {len(tag)}")
+    elif isinstance(tag, AliasTag):
+        print(f"{name}: alias for {tag.alias_for}")
+    elif isinstance(tag, MessageTag):
+        print(f"{name}: MESSAGE tag")
+    else:
+        print(f"{name}: {tag.data_type}")
+```
+
+Scalar/structure/array tags subclass both `Tag` and the corresponding node class (`IntegerNode`, `StructNode`, `ArrayNode`, etc.), so all node accessors work directly on the tag.
 
 ### Accessing tags
 
 ```python
-# Controller-level tags
-for name, tag in project.tags.items():
+# Controller-level tags (controller_tags holds only Tag instances)
+for name, tag in project.controller_tags.items():
     print(name, tag.data_type, tag.tag_type)
 # ALLOWABLE_ALARMS robotAlarmCode Base
 # consumed_tag DINT Consumed
+# fromNormal_reset BOOL Base
 # message_data DINT Base
 # message_tag MESSAGE Base
 # produced_tag DINT Produced
+# ServosMotionGroup MOTION_GROUP Base
+# testServo AXIS_CIP_DRIVE Base
+# toSafety_reset BOOL Base
 
-tag = project.tags["message_data"]
+# project.tags additionally includes module I/O tags under their global names
+"Local:1:C" in project.tags  # True
+type(project.tags["Local:1:C"]).__name__  # "ModuleTagRef"
 
 # Program-local tags
 for name, tag in project.programs["MainProgram"].tags.items():
@@ -236,133 +364,255 @@ for name, tag in project.programs["MainProgram"].tags.items():
 # an_alias_tag
 # an_input_param DINT
 # an_int INT
-# a_bool BOOL
-# a_counter COUNTER
-# a_udt_instance A_UDT
-# ... (remaining tags)
+# an_output_param REAL
+# an_unsigned_dint UDINT
+# an_unsigned_int UINT
+# ...
 ```
 
 ### Tag properties
 
+All tags carry common metadata:
+
 ```python
 tag = project.programs["MainProgram"].tags["a_udt_instance"]
-print(tag.name)              # "a_udt_instance"
-print(tag.data_type)         # "A_UDT"
-print(tag.tag_type)          # "Base"
-print(tag.external_access)   # "Read/Write"
-print(tag.constant)          # False
+print(tag.name)  # "a_udt_instance"
+print(tag.data_type)  # "A_UDT"
+print(tag.tag_type)  # "Base"
+print(tag.external_access)  # "Read/Write"
+print(tag.constant)  # False
+print(tag.description)  # tag-level description if any
 
-# Alias tags
+# Alias tags expose the aliased target path
 alias = project.programs["MainProgram"].tags["an_alias_tag"]
-print(alias.tag_type)        # "Alias"
-print(alias.alias_for)       # path of the aliased tag
+print(alias.tag_type)  # "Alias"
+print(alias.alias_for)  # "Local:1:I.Pt01.Data"
 ```
 
-### The value tree (`TagNode`)
+### Scalars: integers, booleans, floats
 
-Every tag's `.data` property returns a `TagNode` — a single unified node that can represent a scalar value, a structure, or an array:
+Scalar tags have a `.value` property and expose type-specific accessors:
 
 ```python
-tag = project.programs["MainProgram"].tags["a_udt_instance"]
-root = tag.data
+# Integer tag
+int_tag = project.programs["MainProgram"].tags["an_int"]
+print(int_tag.value)  # 0
+print(int_tag.data_type)  # "INT"
+print(int_tag.radix)  # "Decimal"
+print(int_tag.min)  # None (no Min set on the tag)
+print(int_tag.max)  # None (no Max set on the tag)
 
-print(root.kind)       # "structure"
-print(root.data_type)  # "A_UDT"
-
-# Drill into structure members
-for name, node in root.members.items():
-    print(f"  .{name} ({node.data_type}): {node.kind} = {node.value}")
-    if node.description:      print(f"    desc: {node.description}")
-    if node.engineering_unit: print(f"    EU:   {node.engineering_unit}")
-    if node.min is not None:  print(f"    min:  {node.min}")
-    if node.max is not None:  print(f"    max:  {node.max}")
-    if node.state0:           print(f"    state0: {node.state0}")
-    if node.state1:           print(f"    state1: {node.state1}")
-#   .a_Bool (BOOL): scalar = 0
-#     desc: This is a bool
-#   .on_off_bool (BOOL): scalar = 0
-#     desc: This is a bool with extended properties
-#     EU:   Boolean
-#     state0: Off
-#     state1: On
-#   .a_sint (SINT): scalar = 0
-#     desc: This is a sint or byte
-#   .a_sint_with_props (SINT): scalar = 0
-#     desc: This is a SINT with extended properties
-#     EU:   mm
-#     min:  0
-#     max:  25
-#   .a_real (REAL): scalar = 0.0
-#   .a_nested_UDT (simple_udt): structure = None
-#   .an_array (REAL): array = None
-#   ... (remaining members)
-
-# Drill into a nested UDT
-nested_node = root.members["a_nested_UDT"]  # structure TagNode
-for name, child in nested_node.members.items():
-    print(name, child.value)
-
-# Shortcuts on Tag (delegates to .data)
-print(tag.value)    # None  (structure, not scalar)
-print(tag.members)  # same as tag.data.members
-print(tag.elements) # []    (not an array)
-
-# Bit access on a scalar integer
+# Drill into individual bits (tag with per-bit descriptions)
 dint_tag = project.programs["MainProgram"].tags["a_commented_dint"]
-print(dint_tag.value)  # 0
 for i in range(3):
-    bit = dint_tag.data.bit(i)
+    bit = dint_tag.bit(i)
     print(f"  bit({i}): {bit.value}  desc={bit.description!r}")
 #   bit(0): False  desc='this is bit 0'
 #   bit(1): False  desc='this is bit 1'
 #   bit(2): False  desc=''
+
+# Boolean tag (with state labels)
+bool_tag = project.programs["MainProgram"].tags["a_bool_with_properties"]
+print(bool_tag.value)  # False
+print(bool_tag.state0)  # "Off"
+print(bool_tag.state1)  # "On"
+
+# Float tag (with min/max bounds)
+float_tag = project.programs["MainProgram"].tags["a_real_with_properties"]
+print(float_tag.value)  # 12.3
+print(float_tag.min)  # -10.0
+print(float_tag.max)  # 400.0
 ```
 
-`TagNode.kind` is one of `"scalar"`, `"structure"`, or `"array"`. Metadata properties (`description`, `engineering_unit`, `min`, `max`, `state0`, `state1`, `external_logging`) are available on every node and combine per-tag operand overrides with the member's type-definition defaults. Metadata tags that are not present will be set to `None`.
+Metadata properties (`description`, `engineering_unit`, `min`, `max`, `state0`, `state1`, `external_logging`) come from the tag-level `<Tag>` element on value tags. `min` and `max` are only populated when the tag sets them; the data type's natural range is not assumed, so they return `None` otherwise. `description` and `engineering_unit` return `""` when absent (as do `state0` and `state1` on `BoolTag`), and `external_logging` returns `None`.
 
-### Specialty tag data types (`MESSAGE`, `MOTION_GROUP`, `AXIS_CIP_DRIVE`)
+### Structures and nested members
 
-A few tag data types don't carry a normal `Decorated`/`String` value tree — Logix instead exports a single configuration block. `py_l5x` exposes each of these through a dedicated typed wrapper (in `py_l5x.parsers.specialty_tags`) rather than through `tag.data`/`tag.value`:
+Structure tags have a `.members` dict-like accessor:
 
 ```python
-# MESSAGE tags — configures a CIP message instruction (e.g. MSG to another controller)
+tag = project.programs["MainProgram"].tags["a_udt_instance"]
+print(isinstance(tag, StructTag))  # True
+print(tag.data_type)  # "A_UDT"
+
+# Drill into structure members
+for name, node in tag.members.items():
+    # Scalars/strings have .value; structs/arrays don't
+    if hasattr(node, "value"):
+        print(f"  .{name} ({node.data_type}): value={node.value}")
+    elif isinstance(node, StructNode):
+        print(f"  .{name} ({node.data_type}): <struct>")
+    elif isinstance(node, ArrayNode):
+        print(f"  .{name} ({node.data_type}): <array len={len(node)}>")
+
+    if node.description:
+        print(f"    desc: {node.description}")
+    if node.engineering_unit:
+        print(f"    EU:   {node.engineering_unit}")
+    if hasattr(node, "min") and node.min is not None:
+        print(f"    min:  {node.min}")
+    if hasattr(node, "max") and node.max is not None:
+        print(f"    max:  {node.max}")
+    if hasattr(node, "state0") and node.state0:
+        print(f"    state0: {node.state0}")
+    if hasattr(node, "state1") and node.state1:
+        print(f"    state1: {node.state1}")
+#   .a_Bool (BOOL): value=False
+#     desc: This is a bool
+#   .on_off_bool (BOOL): value=False
+#     desc: This is a bool with extended properties
+#     EU:   Boolean
+#     state0: Off
+#     state1: On
+#   .a_sint (SINT): value=0
+#     desc: This is a sint or byte
+#   .a_sint_with_props (SINT): value=0
+#     desc: This is a SINT with extended properties
+#     EU:   mm
+#     min:  0
+#     max:  25
+#   .a_real (REAL): value=0.0
+#     desc: a floating point value
+#   .another_bool (BOOL): value=False
+#   .a_dint (DINT): value=0
+#   .a_nested_UDT (simple_udt): <struct>
+#     desc: a nest UDT type
+#   .an_aoi (GenericInput): <struct>
+#     desc: a nested Add On Instruction type
+#   .an_array (REAL): <array len=4>
+#     desc: an array of two floating point values. Only 1D is allowed in UDTs.
+
+# Drill into a nested UDT
+nested_node = tag.members["a_nested_UDT"]  # StructNode
+for name, child in nested_node.members.items():
+    if hasattr(child, "value"):
+        print(f"  {name} = {child.value}")
+    elif isinstance(child, StructNode):
+        print(f"  {name} = <struct>")
+    elif isinstance(child, ArrayNode):
+        print(f"  {name} = <array len={len(child)}>")
+#   bool1 = False
+#   bool2 = False
+#   bool3 = False
+#   bool4 = False
+#   Dint = 0
+#   real = 0
+#   lint = 0
+```
+
+Use `isinstance(node, StructNode)` to check if a member is itself a structure before accessing `.members`.
+
+### Arrays
+
+Array tags have `.elements`, `__len__`, `__iter__`, and subscript access:
+
+```python
+arr_tag = project.programs["MainProgram"].tags["a_2d_array"]
+print(isinstance(arr_tag, ArrayTag))  # True
+print(len(arr_tag))  # 6
+print(arr_tag.dimensions)  # (2, 3)
+
+# Iterate all elements (flat order)
+for i, element in enumerate(arr_tag.elements[:4]):
+    print(f"  [{i}] = {element.value}")
+#   [0] = 0
+#   [1] = 0
+#   [2] = 0
+#   [3] = 0
+
+# Subscript by flat index
+first = arr_tag[0]
+print(first.value)
+# 0
+
+# Subscript by multidimensional tuple (Logix notation)
+# For a 2D array, arr_tag[1, 2] accesses row 1, column 2
+element = arr_tag[1, 2]
+print(element.value)
+# 0
+```
+
+### Special types: TIME, DATETIME, STRING
+
+Some atomic types have special value representations:
+
+```python
+prog = project.programs["MainProgram"]
+
+# TIME tags (Logix v37+): string literal like "T#1500us"
+duration = prog.tags["duration"]
+if isinstance(duration, TimeTag):
+    print(duration.value)  # "T#0us"
+    print(duration.unit)  # "us" or "ns"
+
+# DATETIME tags (Logix v37+): string literal like "DT#1970-01-01-00:00:00.000_000Z"
+datetime_tag = prog.tags["datetime"]
+if isinstance(datetime_tag, DateTimeTag):
+    print(datetime_tag.value)  # "DT#1970-01-01-00:00:00.000_000Z"
+    print(datetime_tag.unit)  # "us" or "ns"
+
+# STRING tags: quote-stripped text value
+a_string = prog.tags["a_string"]
+if isinstance(a_string, StringTag):
+    print(repr(a_string.value))  # ''
+    print(a_string.len)  # 0
+    print(a_string.max_length)  # 82
+    # Access LEN/DATA fields of the string structure
+    for name, member in a_string.members.items():
+        print(f"  {name}: {member.value!r}")
+#   LEN: 0
+#   DATA: ''
+```
+
+TIME/DATETIME types are only exported in projects with firmware v37+.
+
+### Specialty tags: MESSAGE, MOTION_GROUP, AXIS_CIP_DRIVE
+
+A few tag data types don't carry a normal scalar/structure/array value — Logix exports a single configuration block instead. Use `isinstance()` checks and specialty accessors:
+
+```python
+from py_l5x import MessageTag, MotionGroupTag, AxisTag
+
+# MESSAGE tags — configure a CIP message instruction
 msg_tag = project.tags["message_tag"]
-params = msg_tag.message_parameters   # MessageParameters | None
-print(params.message_type)       # "CIP Data Table Write"
-print(params.connection_path)    # "AnotherPLC"
-print(params.local_element)      # "message_data"
-print(params.connected)          # True
-print(params.cache_connections)  # True
+if isinstance(msg_tag, MessageTag):
+    params = msg_tag.message_parameters
+    print(params.message_type)  # "CIP Data Table Write"
+    print(params.connection_path)  # "AnotherPLC"
+    print(params.local_element)  # "message_data"
+    print(params.connected)  # True
+    print(params.cache_connections)  # True
 
-# MOTION_GROUP tags — a group of coordinated CIP Motion servo axes
+# MOTION_GROUP tags — coordinate CIP Motion servo axes
 mg_tag = project.tags["ServosMotionGroup"]
-group = mg_tag.motion_group_parameters   # MotionGroupParameters | None
-print(group.coarse_update_period)  # 2000 (µs)
-print(group.auto_tag_update)       # "Enabled"
+if isinstance(mg_tag, MotionGroupTag):
+    group = mg_tag.motion_group_parameters
+    print(group.coarse_update_period)  # 2000
+    print(group.auto_tag_update)  # "Enabled"
 
-# AXIS_CIP_DRIVE tags — a single EtherNet/IP servo axis
+# AXIS_CIP_DRIVE tags — single EtherNet/IP servo axis
 axis_tag = project.tags["testServo"]
-axis = axis_tag.axis_parameters   # AxisParameters | None
-print(axis.motion_group)              # "ServosMotionGroup"
-print(axis.motor_catalog_number)      # "VPL-B0631T-C"
-print(axis.conversion_constant)       # 10000.0
-print(axis.position_units)            # "mm"
-print(axis.maximum_speed)             # 226.66667
-print(axis.actuator_type)             # "Screw"
-print(axis.motor_rated_output_power)  # 0.31
-print(axis)  # multi-line summary, similar to `print(project.controller)`
+if isinstance(axis_tag, AxisTag):
+    axis = axis_tag.axis_parameters
+    print(axis.motion_group)  # "ServosMotionGroup"
+    print(axis.motor_catalog_number)  # "VPL-B0631T-C"
+    print(axis.conversion_constant)  # 10000.0
+    print(axis.position_units)  # "mm"
+    print(axis.maximum_speed)  # 226.66667
+    print(axis.actuator_type)  # "Screw"
+    print(axis.motor_rated_output_power)  # 0.31
 ```
 
-Each wrapper exposes the most commonly used attributes as typed properties (with docstrings), plus `extra_attributes`/`attributes` fallbacks for anything not explicitly modeled — `AxisParameters` in particular carries well over a hundred drive/motor/tuning attributes, only the most useful of which get dedicated properties. `tag.data`/`tag.value` are `None` for these tag types since there's no value tree to walk.
-
-The legacy `L5K` mirror some of these `<Data>` sections also export is intentionally ignored throughout — it's a redundant raw-text encoding of the same data already present in the specialty parameter element.
-
-For any tag data type `py_l5x` doesn't yet recognise by name, `tag.special_data_format` reports the `<Data Format="...">` value and `tag.special_data_attributes` returns that element's raw attributes as a fallback:
+Each specialty tag class also has `special_data_format` and `special_data_attributes` properties for unmodeled tag types:
 
 ```python
-tag.special_data_format       # e.g. "Message", "MotionGroup", "Axis", or None for ordinary tags
-tag.special_data_attributes   # dict of the <Data> element's own attributes, or None
+# For any unrecognised specialty tag data type
+if isinstance(tag, UnknownTag):
+    print(tag.special_data_format)  # e.g. "SomeCustomFormat"
+    print(tag.special_data_attributes)  # dict of <Data> element attributes
 ```
+
+Specialty tags do NOT have `.value`, `.members`, or `.elements` — use `isinstance()` to branch and access the appropriate `.message_parameters` / `.motion_group_parameters` / `.axis_parameters` property instead.
 
 ## Programs, routines, and rungs
 
@@ -378,11 +628,12 @@ for prog_name, prog in project.programs.items():
 # MainProgram — MainRoutine
 # PeriodicProgram — main
 # Robot — Main
+# SafetyProgram — Main
 # Unscheduled — Main
 
 prog = project.programs["MainProgram"]
-print(prog.disabled)           # False
-print(prog.test_edits)         # False
+print(prog.disabled)  # False
+print(prog.test_edits)  # False
 
 # Routines
 for rtn_name, rtn in prog.routines.items():
@@ -391,7 +642,7 @@ for rtn_name, rtn in prog.routines.items():
 #   SequenceRoutine (RLL)
 
 rtn = prog.routines["SequenceRoutine"]
-print(rtn.type_)   # "RLL"
+print(rtn.type_)  # "RLL"
 
 # Ladder rungs
 for rung in rtn.rungs:
@@ -400,21 +651,43 @@ for rung in rtn.rungs:
         print(f"    Comment: {rung.comment}")
 
 # Structured Text
-st_rtn = prog.routines["InitRoutine"]
-print(st_rtn.st_code)          # full ST body as a string
+st_rtn = project.programs["AnotherProgram"].routines["StructuredTextRoutine"]
+print(st_rtn.st_code)  # full ST body as a string
 for line in st_rtn.st_lines:
     print(line.number, line.text)
 
-# Pretty-print all logic in a program
+# Executable logic (RLL: each rung's neutral text; ST: code with comments stripped)
+print(rtn.logic[:3])  # ['NOP();', 'NOP();', 'SeqCtrl(sequence,1,0);']
+print(st_rtn.logic[:2])  # ['j := 0;', 'for i:=0 to 31 by 1 do']
+
+# Comments (RLL: rung comments; ST: // and (* ... *) comments)
+print(len(rtn.comments))  # 10
+
+# Pretty-print all logic in a program (print_logic_text() also returns the text)
 prog.print_logic_text()
 
 # Pretty-print a single routine
 rtn.print_text()
 ```
 
+`Routine.as_text()` / `print_text()` and `Program.logic_text()` / `print_logic_text()` render ladder rungs as a header, an optional `Comment` block with the full (possibly multi-line) comment, and a `Logic` block. Rungs are separated by a blank line, and the `Comment` block is omitted when a rung has no comment:
+
+```python
+print(project.programs["AnotherProgram"].routines["io"].as_text())
+# Rung 0 ---------------------------------
+# Logic
+# GenericInput(TestInput,Local:1:I.Pt00.Data);
+#
+# Rung 1 ---------------------------------
+# Comment
+# Example of writing a message to another PLC
+# Logic
+# MSG(message_tag);
+```
+
 ## Tasks
 
-Tasks are executors that schedule programs to run at specified intervals or on specific events. Each task collection holds a collection of programs it is responsible for scheduling and executing. These are the same as the program obejects found in `Project.programs`, just organized by their parent task.
+Tasks are executors that schedule programs to run at specified intervals or on specific events. Each task collection holds a collection of programs it is responsible for scheduling and executing. These are the same as the program objects found in `Project.programs`, just organized by their parent task.
 
 ```python
 for task_name, task in project.tasks.items():
@@ -422,12 +695,13 @@ for task_name, task in project.tasks.items():
 # EventTask EVENT
 # MainTask CONTINUOUS
 # PeriodicTask PERIODIC
+# SafetyTask PERIODIC
 
 task = project.tasks["MainTask"]
-print(task.type_)       # "CONTINUOUS"
-print(task.priority)    # 10
-print(task.rate)        # None  (CONTINUOUS tasks have no fixed rate)
-print(task.watchdog)    # 500
+print(task.type_)  # "CONTINUOUS"
+print(task.priority)  # 10
+print(task.rate)  # None  (CONTINUOUS tasks have no fixed rate)
+print(task.watchdog)  # 500
 
 # Programs scheduled by this task
 for prog_name in task.scheduled_program_names:
@@ -454,9 +728,9 @@ print(project)
 ### Identifying the export type
 
 ```python
-print(project.target_type)      # "Program", "Routine", "DataType", etc.
-print(project.target_name)      # "MainProgram"
-print(project.contains_context) # True for component exports
+print(project.target_type)  # "Program", "Routine", "DataType", etc.
+print(project.target_name)  # "MainProgram"
+print(project.contains_context)  # True for component exports
 ```
 
 ### Accessing the exported object directly
@@ -477,36 +751,36 @@ As a shortcut, `project.target` resolves to the typed wrapper for whichever obje
 ```python
 # DataType export
 p = load("A_UDT_DataType.L5X")
-udt = p.target                    # DataType instance
-print(udt.name)                   # "A_UDT"
+udt = p.target  # DataType instance
+print(udt.name)  # "A_UDT"
 
 # AOI export
 p = load("Debounce_AOI.L5X")
-aoi = p.target                    # AOIDefinition instance
-print(aoi.name, aoi.revision)     # "Debounce" "1.2"
+aoi = p.target  # AOIDefinition instance
+print(aoi.name, aoi.revision)  # Debounce 1.2
 
 # Program export — full collection API still works
 p = load("MainProgram_Program.L5X")
-prog = p.target                   # Program instance
-print(prog.use)                   # "Target"
+prog = p.target  # Program instance
+print(prog.use)  # "Target"
 rtn = p.programs["MainProgram"].routines["SequenceRoutine"]
 
 # Routine export
 p = load("SequenceRoutine_Routine_RLL.L5X")
-rtn = p.target                    # Routine instance
-print(rtn.use)                    # "Target"
-print(len(rtn.rungs))             # number of rungs
+rtn = p.target  # Routine instance
+print(rtn.use)  # "Target"
+print(len(rtn.rungs))  # 10
 
 # Rung export (no TargetName in header; use target.number)
 p = load("Rung2_from_SequenceRoutine.L5X")
-rung = p.target                   # Rung instance
-print(rung.number)                # 2
-print(rung.use)                   # "Target"
-print(rung.text)                  # neutral text for this rung
+rung = p.target  # Rung instance
+print(rung.number)  # 2
+print(rung.use)  # "Target"
+print(rung.text)  # 'SeqCtrl(sequence,1,0);'
 
 # Locate the target rung via the routine directly
 rtn = p.programs["MainProgram"].routines["SequenceRoutine"]
-rung = rtn.target_rung            # Rung | None
+rung = rtn.target_rung  # Rung | None
 ```
 
 > Note that the project may still contain other objects. A program routine may have an AOI definition, for example. The `Project.type` property just shortcuts to the main content of the export.
@@ -517,10 +791,10 @@ The `<Controller>` element in a component export carries `Use="Context"` and omi
 
 ```python
 p = load("Debounce_AOI.L5X")
-print(p.controller.is_context)       # True
-print(p.controller.processor_type)   # None
-print(p.controller.major_rev)        # None
-print(p.controller.name)             # "Example_PLC"  (always present)
+print(p.controller.is_context)  # True
+print(p.controller.processor_type)  # None
+print(p.controller.major_rev)  # None
+print(p.controller.name)  # "Example_PLC"  (always present)
 ```
 
 Dependency data (UDTs, AOIs, tags, etc.) that Studio 5000 exports as context for the target object are accessible through the standard collections (`project.data_types`, `project.aois`, …) even though they carry `Use="Context"` in the XML.
@@ -571,7 +845,9 @@ pytest
 uv build
 ```
 
-This produces a `.whl` and a `.tar.gz` under `dist/`. The wheel can be installed in any Python environment:
+This produces a `.whl` and a `.tar.gz` under `dist/`. Just to be safe, delete the `dist` folder before building a new release to prevent multiple version from being release in the `.whl` file.
+
+The wheel can be installed in any Python environment:
 
 ```bash
 pip install dist/py_l5x-0.1.0-py3-none-any.whl
@@ -589,22 +865,20 @@ uv run ruff check --fix .   # auto-fix where possible
 ## Known Limitation
 
 - Not all L5X components have wrappers/parsers yet. Known top level tags that are currently ignored include:
-  - \<ParameterConnection\>
-  - \<Trends\>
-  - \<QuickWatchList\>
-  - \<CommPorts\>
-  - \<WallClockTime\>
-    > Note that the top level Project object exposes the `Project.root` XML element so you can manually find any extra info you need using Python's build in [XML Element Tree](https://docs.python.org/3/library/xml.etree.elementtree.html).
+    - \<ParameterConnection\>
+    - \<Trends\>
+    - \<QuickWatchList\>
+    - \<CommPorts\>
+    - \<WallClockTime\>
+        > Note that the top level Project object exposes the `Project.root` XML element so you can manually find any extra info you need using Python's build in [XML Element Tree](https://docs.python.org/3/library/xml.etree.elementtree.html).
 - Similarly, some attributes may be missing or hard to find. Attributes for objects can vary wildly, so I've done my best to expose common ones via a little reverse engineering of example files.
-  - As a fallback, all elements (Module, ProgramsCollection, etc.) also include a `_element` property that exposes the top level xml element.
+    - As a fallback, all elements (Module, ProgramsCollection, etc.) also include a `_element` property that exposes the top level xml element.
 - Not all features or specialty tag types are supported. For example:
-  - Alarms
-  - Motion Coordinate Groups
-- There is no write support. `py_l5x` can only read L5X files. It cannnot write back to them.
+    - Alarms
+    - Motion Coordinate Groups
+- There is no write support. `py_l5x` can only read L5X files. It cannot write back to them.
 
 ## Road Map
 
-- [x] Test more special tag types (CIP_AXIS, MESSAGE, etc.)
-- [x] Test safety features (safety network numbers, safety routines, safety tags, etc.)
 - [ ] Implement a write feature to allow for modifying an exported L5X file
 - [ ] Implement a generate component feature to go along with write allowing users to create component imports using python.

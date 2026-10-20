@@ -10,28 +10,21 @@ from __future__ import annotations
 
 from xml.etree import ElementTree as ET
 
-from py_l5x.parsers.base import BaseCollection, BaseElement
+from py_l5x.parsers.base import (
+    BaseCollection,
+    BaseElement,
+    CDataField,
+    bool_attr,
+    str_attr,
+)
 from py_l5x.parsers.routine import RoutinesCollection
 from py_l5x.parsers.tag import TagsCollection, TypeRegistry
-
-_PROGRAM_KNOWN_XML_KEYS: frozenset[str] = frozenset(
-    {"Name", "TestEdits", "MainRoutineName", "Disabled", "UseAsFolder", "Use", "Class"}
-)
-"""Known XML attribute names on ``<Program>`` elements."""
 
 
 class Program(BaseElement):
     """A single ``<Program>`` element from the ``<Programs>`` section.
 
     Attributes:
-        name: Program name.
-        description: Program description text.
-        test_edits: Whether the program has pending test edits.
-        main_routine_name: Name of the program's main routine.
-        disabled: Whether the program is disabled.
-        use_as_folder: Whether the program is used purely as an organizational folder.
-        class_: Program class (``"Standard"`` or ``"Safety"``).
-        is_safety: Whether this is a safety program.
         tags: This program's local tags, keyed by name.
         routines: This program's routines, keyed by routine name.
 
@@ -39,6 +32,31 @@ class Program(BaseElement):
         element: The ``<Program>`` element from a parsed L5X tree.
         type_registry: Used to resolve this program's tags' value tree members.
     """
+
+    name = str_attr("Name", doc="Program name.")
+    use = str_attr(
+        "Use",
+        doc='Export target role for this program. "Target" when this '
+        "program is the exported target in a component export.",
+    )
+    description = CDataField("Description", doc="Program description text.")
+    test_edits = bool_attr(
+        "TestEdits",
+        default=False,
+        doc="Whether the program has pending test edits.",
+    )
+    main_routine_name = str_attr(
+        "MainRoutineName", doc="Name of the program's main routine."
+    )
+    disabled = bool_attr(
+        "Disabled", default=False, doc="Whether the program is disabled."
+    )
+    use_as_folder = bool_attr(
+        "UseAsFolder",
+        default=False,
+        doc="Whether the program is used purely as an organizational folder.",
+    )
+    class_ = str_attr("Class", doc='Program class: "Standard" or "Safety".')
 
     def __init__(self, element: ET.Element, type_registry: TypeRegistry) -> None:
         """Initialise from a ``<Program>`` XML element.
@@ -50,81 +68,6 @@ class Program(BaseElement):
         """
         super().__init__(element)
         self._type_registry = type_registry
-
-    @property
-    def name(self) -> str:
-        """Program name.
-
-        Returns:
-            The program name string.
-        """
-        return self._get("Name")
-
-    @property
-    def use(self) -> str:
-        """Export target role for this program.
-
-        ``"Target"`` when this program is the exported target in a component
-        export; empty string otherwise.
-
-        Returns:
-            The value of the ``Use`` XML attribute, or ``""`` if absent.
-        """
-        return self._get("Use")
-
-    @property
-    def description(self) -> str:
-        """Program description text.
-
-        Returns:
-            The description text string.
-        """
-        return self._get_description()
-
-    @property
-    def test_edits(self) -> bool:
-        """Whether the program has pending test edits.
-
-        Returns:
-            True if the program has pending test edits, False otherwise.
-        """
-        return self._get("TestEdits") == "true"
-
-    @property
-    def main_routine_name(self) -> str:
-        """Name of the program's main routine.
-
-        Returns:
-            The main routine name string.
-        """
-        return self._get("MainRoutineName")
-
-    @property
-    def disabled(self) -> bool:
-        """Whether the program is disabled.
-
-        Returns:
-            True if the program is disabled, False otherwise.
-        """
-        return self._get("Disabled") == "true"
-
-    @property
-    def use_as_folder(self) -> bool:
-        """Whether the program is used purely as an organizational folder.
-
-        Returns:
-            True if the program is a folder, False otherwise.
-        """
-        return self._get("UseAsFolder") == "true"
-
-    @property
-    def class_(self) -> str:
-        """Program class: ``"Standard"`` or ``"Safety"``.
-
-        Returns:
-            The value of the ``Class`` XML attribute.
-        """
-        return self._get("Class")
 
     @property
     def is_safety(self) -> bool:
@@ -157,34 +100,38 @@ class Program(BaseElement):
         """Render this program's routine logic as a quick-reference text block.
 
         Formatting:
-            - Ladder rungs are rendered as two lines per rung::
+            - The first line is ``Program: <name>``.
+            - Each routine is preceded by a blank line and a header line of the
+              form ``Routine: <name> (<type>)``.
+            - The routine body is rendered by :meth:`Routine.as_text`. Ladder
+              (``RLL``) rungs are rendered as a ``Rung N ---`` header (padded
+              with ``-`` to 40 characters), an optional ``Comment`` block with
+              the full comment, and a ``Logic`` block with the rung text. Rungs
+              are separated by a blank line::
 
-                  line_number : comment
-                                     text
+                  Rung 0 ---------------------------------
+                  Comment
+                  <comment, possibly multi-line>
+                  Logic
+                  <rung text>
 
-            - Structured Text routines are rendered line-by-line.
+              and Structured Text (``ST``) routines are rendered line-by-line.
+            - Routines of any other type have no body; they are shown as
+              ``[Unsupported routine type: <type>]`` instead.
 
         Returns:
             A human-readable multi-line string containing all routines in the
             program, in XML order.
         """
         lines: list[str] = [f"Program: {self.name}"]
-        rung_text_indent = " " * 23
 
         for routine in self.routines.values():
             lines.append("")
             lines.append(f"Routine: {routine.name} ({routine.type_})")
-
-            if routine.type_ == "RLL":
-                for rung in routine.rungs:
-                    if rung.comment:
-                        lines.append(f"{rung.number} : {rung.comment}")
-                    else:
-                        lines.append(f"{rung.number} :")
-                    lines.append(f"{rung_text_indent}{rung.text}")
-            elif routine.type_ == "ST":
-                lines.extend(line.text for line in routine.st_lines)
-            else:
+            text = routine.as_text()
+            if text:
+                lines.extend(text.splitlines())
+            elif routine.type_ not in ("RLL", "ST"):
                 lines.append(f"[Unsupported routine type: {routine.type_}]")
 
         return "\n".join(lines)
@@ -198,19 +145,6 @@ class Program(BaseElement):
         text = self.logic_text()
         print(text)
         return text
-
-    @property
-    def extra_attributes(self) -> dict[str, str]:
-        """XML attributes not covered by explicit properties.
-
-        Returns:
-            Dictionary mapping attribute names to their string values.
-        """
-        return {
-            k: v
-            for k, v in self._element.attrib.items()
-            if k not in _PROGRAM_KNOWN_XML_KEYS
-        }
 
     def __repr__(self) -> str:
         """Return a concise representation including the program name.

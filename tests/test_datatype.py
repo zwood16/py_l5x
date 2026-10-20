@@ -356,6 +356,84 @@ class TestDataTypeMemberAttributes:
 
 
 # ---------------------------------------------------------------------------
+# __repr__ / describe()
+# ---------------------------------------------------------------------------
+
+
+class TestDataTypeRepr:
+    """Tests for DataType.__repr__/describe()."""
+
+    def test_header(self, a_udt: DataType) -> None:
+        """First line is the DataType('Name') header."""
+        assert repr(a_udt).splitlines()[0] == "DataType('A_UDT')"
+
+    def test_repr_equals_describe(self, a_udt: DataType) -> None:
+        """__repr__ returns describe()."""
+        assert repr(a_udt) == a_udt.describe()
+
+    def test_key_lines(self, a_udt: DataType) -> None:
+        """Identity lines and the members block are present."""
+        lines = repr(a_udt).splitlines()
+        assert "  family = 'NoFamily'" in lines
+        assert "  class_ = 'User'" in lines
+        assert "  members:" in lines
+        assert "    a_sint: SINT" in lines
+        assert "    a_nested_UDT: simple_udt" in lines
+
+    def test_hidden_host_members_omitted(self, a_udt: DataType) -> None:
+        """Hidden packed-boolean host bytes are not listed."""
+        assert "ZZZZZZZZZZA_UDT0" not in repr(a_udt)
+
+    def test_no_max_length_for_non_string(self, a_udt: DataType) -> None:
+        """max_length is only shown for STRING-family types."""
+        assert "max_length" not in repr(a_udt)
+
+    def test_string_family_shows_max_length(
+        self, data_types: DataTypesCollection
+    ) -> None:
+        """STRING-family types include max_length."""
+        text = repr(data_types["robotString"])
+        assert "  max_length: 100" in text.splitlines()
+        assert "    DATA: SINT" in text.splitlines()
+
+    def test_no_duplicate_lines(self, a_udt: DataType) -> None:
+        """Each describe line appears once."""
+        lines = repr(a_udt).splitlines()
+        assert len(lines) == len(set(lines))
+
+
+class TestDataTypeMemberRepr:
+    """Tests for DataTypeMember.__repr__/describe()."""
+
+    def test_header(self, a_udt: DataType) -> None:
+        """First line is the DataTypeMember('name', 'data_type') header."""
+        member = a_udt.members["a_sint"]
+        assert repr(member).splitlines()[0] == "DataTypeMember('a_sint', 'SINT')"
+
+    def test_repr_equals_describe(self, a_udt: DataType) -> None:
+        """__repr__ returns describe()."""
+        member = a_udt.members["a_sint"]
+        assert repr(member) == member.describe()
+
+    def test_min_max_lines_when_set(self, a_udt: DataType) -> None:
+        """Min/Max are listed when present."""
+        lines = repr(a_udt.members["a_sint_with_props"]).splitlines()
+        assert "  min: 0" in lines
+        assert "  max: 25" in lines
+
+    def test_min_max_omitted_when_absent(self, a_udt: DataType) -> None:
+        """Min/Max lines are omitted when the attributes are absent."""
+        text = repr(a_udt.members["a_sint"])
+        assert "min:" not in text
+        assert "max:" not in text
+
+    def test_no_duplicate_lines(self, a_udt: DataType) -> None:
+        """Each describe line appears once."""
+        lines = repr(a_udt.members["a_sint_with_props"]).splitlines()
+        assert len(lines) == len(set(lines))
+
+
+# ---------------------------------------------------------------------------
 # convert_numeric
 # ---------------------------------------------------------------------------
 
@@ -478,7 +556,7 @@ class TestAddOnParameters:
     def test_datatype_members_excludes_inout(
         self, aoi_types: AddOnDataTypeCollection
     ) -> None:
-        """datatype_members excludes InOut parameters (e.g. FanucAlarmLookup's allowableAlarms)."""
+        """datatype_members excludes InOut params (FanucAlarmLookup allowableAlarms)."""
         alarm_lookup = aoi_types["FanucAlarmLookup"]
         assert "allowableAlarms" in alarm_lookup
         assert "allowableAlarms" not in alarm_lookup.datatype_members
@@ -538,7 +616,7 @@ class TestAddOnParameterMetadata:
         assert debounce["onDelay"].max == 2147483647
 
     def test_engineering_unit(self, debounce: AddOnParameters) -> None:
-        """Engineering unit matches the nested EngineeringUnits/EngineeringUnit CDATA."""
+        """Engineering unit matches the nested EngineeringUnits CDATA."""
         assert debounce["onDelay"].engineering_unit == "ms"
 
     def test_state0(self, debounce: AddOnParameters) -> None:
