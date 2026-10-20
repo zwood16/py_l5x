@@ -100,34 +100,38 @@ class Program(BaseElement):
         """Render this program's routine logic as a quick-reference text block.
 
         Formatting:
-            - Ladder rungs are rendered as two lines per rung::
+            - The first line is ``Program: <name>``.
+            - Each routine is preceded by a blank line and a header line of the
+              form ``Routine: <name> (<type>)``.
+            - The routine body is rendered by :meth:`Routine.as_text`. Ladder
+              (``RLL``) rungs are rendered as a ``Rung N ---`` header (padded
+              with ``-`` to 40 characters), an optional ``Comment`` block with
+              the full comment, and a ``Logic`` block with the rung text. Rungs
+              are separated by a blank line::
 
-                  line_number : comment
-                                     text
+                  Rung 0 ---------------------------------
+                  Comment
+                  <comment, possibly multi-line>
+                  Logic
+                  <rung text>
 
-            - Structured Text routines are rendered line-by-line.
+              and Structured Text (``ST``) routines are rendered line-by-line.
+            - Routines of any other type have no body; they are shown as
+              ``[Unsupported routine type: <type>]`` instead.
 
         Returns:
             A human-readable multi-line string containing all routines in the
             program, in XML order.
         """
         lines: list[str] = [f"Program: {self.name}"]
-        rung_text_indent = " " * 23
 
         for routine in self.routines.values():
             lines.append("")
             lines.append(f"Routine: {routine.name} ({routine.type_})")
-
-            if routine.type_ == "RLL":
-                for rung in routine.rungs:
-                    if rung.comment:
-                        lines.append(f"{rung.number} : {rung.comment}")
-                    else:
-                        lines.append(f"{rung.number} :")
-                    lines.append(f"{rung_text_indent}{rung.text}")
-            elif routine.type_ == "ST":
-                lines.extend(line.text for line in routine.st_lines)
-            else:
+            text = routine.as_text()
+            if text:
+                lines.extend(text.splitlines())
+            elif routine.type_ not in ("RLL", "ST"):
                 lines.append(f"[Unsupported routine type: {routine.type_}]")
 
         return "\n".join(lines)

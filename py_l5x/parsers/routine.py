@@ -22,7 +22,7 @@ from py_l5x.parsers.base import (
     int_attr,
     str_attr,
 )
-from py_l5x.parsers.utils import CDATA_TAG
+from py_l5x.parsers.utils import cdata_text
 
 _ST_COMMENT_RE = re.compile(
     r"'(?:[^']|'')*'"
@@ -31,6 +31,9 @@ _ST_COMMENT_RE = re.compile(
     re.DOTALL,
 )
 """Matches ST string literals (skipped) or comments (captured by group)."""
+
+_RUNG_HEADER_WIDTH = 40
+"""Total width of the ``Rung N ---`` header line in :meth:`Routine.as_text`."""
 
 
 class Rung(BaseElement):
@@ -79,12 +82,7 @@ class StLine(BaseElement):
         Returns:
             The raw ST line text string.
         """
-        cdata_el = self._element.find(CDATA_TAG)
-        if cdata_el is not None and cdata_el.text is not None:
-            return cdata_el.text.strip("\r\n")
-        if self._element.text is not None:
-            return self._element.text.strip("\r\n")
-        return ""
+        return cdata_text(self._element, strip="\r\n")
 
     def __repr__(self) -> str:
         """Return a concise ST line representation.
@@ -169,10 +167,23 @@ class Routine(BaseElement):
     def as_text(self) -> str:
         """Return the routine body as end-user friendly text.
 
-        For RLL routines, each rung is emitted as two lines::
+        For RLL routines, each rung is emitted as a header line followed by an
+        optional ``Comment`` block (the full, possibly multi-line, comment) and
+        a ``Logic`` block with the rung's neutral text. Rungs are separated by
+        one blank line; there is no trailing blank line::
 
-            <line number> : <comment>
-                                   <neutral text>
+            Rung 0 ---------------------------------
+            Comment
+            <comment, possibly multi-line, verbatim>
+            Logic
+            <rung neutral text>
+
+            Rung 1 ---------------------------------
+            Logic
+            <rung neutral text>
+
+        The header is ``Rung <n> `` right-padded with ``-`` to 40 characters.
+        The ``Comment`` block is omitted for rungs without a comment.
 
         For ST routines, lines are joined in order as plain structured text.
 
@@ -180,15 +191,16 @@ class Routine(BaseElement):
             A formatted routine text block suitable for quick inspection.
         """
         if self.type_ == "RLL":
-            lines: list[str] = []
+            blocks: list[str] = []
             for rung in self.rungs:
-                comment = rung.comment.splitlines()[0].strip() if rung.comment else ""
-                first_line = f"{rung.number} : {comment}".rstrip()
-                lines.append(first_line)
-
-                indent = first_line.find(":") + 2 if ":" in first_line else 0
-                lines.append(f"{' ' * indent}{rung.text}")
-            return "\n".join(lines)
+                block = [f"Rung {rung.number} ".ljust(_RUNG_HEADER_WIDTH, "-")]
+                if rung.comment:
+                    block.append("Comment")
+                    block.extend(rung.comment.splitlines())
+                block.append("Logic")
+                block.append(rung.text)
+                blocks.append("\n".join(block))
+            return "\n\n".join(blocks)
 
         if self.type_ == "ST":
             return self.st_code
@@ -212,6 +224,47 @@ class Routine(BaseElement):
         if self.type_ == "ST":
             return self._extract_st_comments(self.st_code)
         return []
+
+    @property
+    def logic(self) -> list[str]:
+        """Return the executable logic of the routine as a list of strings.
+
+        For RLL routines, each rung's neutral text is returned in order,
+        skipping empty rungs. For ST routines, the code is returned with
+        ``//`` and ``(* ... *)`` comments removed; single-quoted string
+        literals are preserved. Blank lines are dropped and leading
+        indentation is kept. Other routine types return an empty list.
+
+        Returns:
+            A list of logic strings, one per rung or ST line.
+        """
+        if self.type_ == "RLL":
+            return [rung.text for rung in self.rungs if rung.text]
+        if self.type_ == "ST":
+            return self._strip_st_comments(self.st_code).splitlines()
+        return []
+
+    @staticmethod
+    def _strip_st_comments(text: str) -> str:
+        """Remove ST comments from source code, keeping string literals.
+
+        Args:
+            text: Full ST source code.
+
+        Returns:
+            The source with comment text removed. Each line is right-stripped
+            and lines that are blank after stripping are dropped; leading
+            indentation is preserved.
+        """
+
+        def _drop_comment(m: re.Match[str]) -> str:
+            if m.group("line") is not None or m.group("block") is not None:
+                return ""
+            return m.group(0)
+
+        cleaned = _ST_COMMENT_RE.sub(_drop_comment, text)
+        lines = (line.rstrip() for line in cleaned.splitlines())
+        return "\n".join(line for line in lines if line)
 
     @staticmethod
     def _extract_st_comments(text: str) -> list[str]:

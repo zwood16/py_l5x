@@ -7,7 +7,23 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
-from py_l5x.parsers.aoi import AOICollection, AOIDefinition, AOILocalTag
+from py_l5x import (
+    AOILocalArrayTag,
+    AOILocalAtomicTag,
+    AOILocalBoolTag,
+    AOILocalDateTimeTag,
+    AOILocalFloatTag,
+    AOILocalIntegerTag,
+    AOILocalStringTag,
+    AOILocalStructTag,
+    AOILocalTimeTag,
+)
+from py_l5x.parsers.aoi import (
+    _AOI_LOCAL_TAG_CLASSES,
+    AOICollection,
+    AOIDefinition,
+    AOILocalTag,
+)
 from py_l5x.parsers.datatype import (
     AddOnDataTypeCollection,
     AddOnParameters,
@@ -15,10 +31,15 @@ from py_l5x.parsers.datatype import (
 )
 from py_l5x.parsers.routine import Routine
 from py_l5x.parsers.tag import (
+    ArrayNode,
+    AtomicNode,
     BoolNode,
+    DateTimeNode,
+    FloatNode,
     IntegerNode,
     StringNode,
     StructNode,
+    TimeNode,
     TypeRegistry,
 )
 
@@ -149,7 +170,7 @@ class TestAoiLocalTags:
 
 
 class TestAOILocalTagTyping:
-    """Tests for AOI local tag node typing and class caching."""
+    """Tests for AOI local tag node typing and static class selection."""
 
     def test_struct_local_tag_isinstance_node(
         self, aoi_definitions: AOICollection
@@ -159,12 +180,12 @@ class TestAOILocalTagTyping:
         timer = debounce.local_tags["debounceOnTimer"]
         assert isinstance(timer, AOILocalTag)
         assert isinstance(timer, StructNode)
-        assert type(timer).__name__ == "AOILocalStructTag"
+        assert type(timer) is AOILocalStructTag
 
-    def test_struct_local_tag_class_caching(
+    def test_struct_local_tag_class_shared(
         self, aoi_definitions: AOICollection
     ) -> None:
-        """Multiple TIMER locals share the same class object (cached)."""
+        """Multiple TIMER locals share the same static class object."""
         debounce = aoi_definitions["Debounce"]
         timer1 = debounce.local_tags["debounceOnTimer"]
         generic_input = aoi_definitions["GenericInput"]
@@ -179,7 +200,7 @@ class TestAOILocalTagTyping:
         lookup = aoi_definitions["FanucAlarmLookup"]
         length = lookup.local_tags["length"]
         assert isinstance(length, IntegerNode)
-        assert type(length).__name__ == "AOILocalIntegerTag"
+        assert type(length) is AOILocalIntegerTag
         assert length.value == 0
         assert length.radix == "Decimal"
         assert length.min is None
@@ -242,6 +263,86 @@ class TestAOILocalTagTyping:
         timer = debounce.local_tags["debounceOnTimer"]
         # The typed local tag IS a StructNode, so it has a value_element
         assert timer.value_element is not timer.element
+
+
+class TestAOILocalTagClasses:
+    """Static AOI local tag classes are exported and selected per node type."""
+
+    @pytest.mark.parametrize(
+        ("aoi_name", "local_name", "expected_cls"),
+        [
+            ("Debounce", "debounceOnTimer", AOILocalStructTag),
+            ("GenericInput", "risingOns", AOILocalBoolTag),
+            ("GenericInput", "debounce", AOILocalStructTag),
+            ("FanucAlarmLookup", "length", AOILocalIntegerTag),
+            ("FanucAlarmLookup", "robotAlarmCode", AOILocalStringTag),
+            ("FanucRobot", "startRobot", AOILocalBoolTag),
+            ("FanucRobot", "alarmLookup", AOILocalStructTag),
+        ],
+    )
+    def test_fixture_local_tag_class(
+        self,
+        aoi_definitions: AOICollection,
+        aoi_name: str,
+        local_name: str,
+        expected_cls: type[AOILocalTag],
+    ) -> None:
+        """Each fixture local tag is an instance of its expected exported class."""
+        local = aoi_definitions[aoi_name].local_tags[local_name]
+        assert type(local) is expected_cls
+        assert isinstance(local, AOILocalTag)
+
+    def test_mapping_covers_node_classes(self) -> None:
+        """Every node class maps to its static AOI local tag class."""
+        assert {
+            BoolNode: AOILocalBoolTag,
+            IntegerNode: AOILocalIntegerTag,
+            FloatNode: AOILocalFloatTag,
+            TimeNode: AOILocalTimeTag,
+            DateTimeNode: AOILocalDateTimeTag,
+            AtomicNode: AOILocalAtomicTag,
+            StringNode: AOILocalStringTag,
+            StructNode: AOILocalStructTag,
+            ArrayNode: AOILocalArrayTag,
+        } == _AOI_LOCAL_TAG_CLASSES
+
+    @pytest.mark.parametrize(
+        ("cls", "node"),
+        [
+            (AOILocalBoolTag, BoolNode),
+            (AOILocalIntegerTag, IntegerNode),
+            (AOILocalFloatTag, FloatNode),
+            (AOILocalTimeTag, TimeNode),
+            (AOILocalDateTimeTag, DateTimeNode),
+            (AOILocalAtomicTag, AtomicNode),
+            (AOILocalStringTag, StringNode),
+            (AOILocalStructTag, StructNode),
+            (AOILocalArrayTag, ArrayNode),
+        ],
+    )
+    def test_class_is_local_tag_and_node(self, cls: type, node: type) -> None:
+        """Each static class combines AOILocalTag with its node class."""
+        assert issubclass(cls, AOILocalTag)
+        assert issubclass(cls, node)
+        assert cls.__name__.startswith("AOILocal")
+
+    def test_classes_exported_from_package(self) -> None:
+        """All nine AOI local tag classes are listed in py_l5x.__all__."""
+        import py_l5x
+
+        for cls in (
+            AOILocalArrayTag,
+            AOILocalAtomicTag,
+            AOILocalBoolTag,
+            AOILocalDateTimeTag,
+            AOILocalFloatTag,
+            AOILocalIntegerTag,
+            AOILocalStringTag,
+            AOILocalStructTag,
+            AOILocalTimeTag,
+        ):
+            assert cls.__name__ in py_l5x.__all__
+            assert getattr(py_l5x, cls.__name__) is cls
 
 
 class TestAoiLogicText:

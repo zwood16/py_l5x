@@ -11,6 +11,7 @@ child parsers as typed properties in a hierarchical structure:
     ├── aois             → AOICollection
     ├── modules          → ModulesCollection
     ├── tags             → ProjectTagsView (merged: controller tags + module I/O tags)
+    ├── controller_tags  → TagsCollection (controller-scoped only, keyed by name)
     ├── programs         → ProgramsCollection
     │   └── tags         → TagsCollection (per-program)
     │   └── routines     → RoutinesCollection (per-program)
@@ -159,19 +160,17 @@ class Project:
     tasks through a hierarchical object model.
 
     Args:
-        file_path: Path to the L5X file to load.
+        root: The root element of the parsed L5X XML document.
 
     Raises:
-        FileNotFoundError: If the file does not exist or cannot be read.
-        ValueError: If the file is not a valid L5X XML document or lacks
-            a ``<Controller>`` element.
+        ValueError: If the document has no ``<Controller>`` element (i.e. it
+            is not a valid L5X file).
 
     Example:
-        >>> project = Project("examples/example.L5X")
-        >>> print(project.controller.name)
-        Example_PLC
-        >>> list(project.data_types)
-        ['A_UDT', 'GenericRobotInputs', ...]
+        >>> from py_l5x import load
+        >>> project = load("tests/fixtures/example.L5X")
+        >>> project.controller.name
+        'Example_PLC'
     """
 
     def __init__(self, root: ET.Element) -> None:
@@ -422,12 +421,27 @@ class Project:
         ``ValveBank:I`` or ``Local:1:C``). Logix tag names cannot contain
         ``':'`` and module global names always do, so the two never collide.
 
+        To iterate only the controller-scoped tags (every value is a ``Tag``),
+        use :attr:`controller_tags`.
+
         Returns:
             A :class:`ProjectTagsView` mapping tag names to either ``Tag``
             instances (controller tags) or :class:`ModuleTagRef` instances
             (module I/O tags).
         """
         return ProjectTagsView(self._tags, self._modules)
+
+    @property
+    def controller_tags(self) -> TagsCollection:
+        """Controller-scoped tags only, keyed by name.
+
+        Unlike :attr:`tags`, this excludes module I/O tags, so every value is a
+        ``Tag`` instance and every key is a plain Logix tag name (no ``':'``).
+
+        Returns:
+            A ``TagsCollection`` mapping controller tag names to ``Tag`` instances.
+        """
+        return self._tags
 
     # ------------------------------------------------------------------
     # Programs
@@ -497,7 +511,7 @@ class Project:
             f"  Data Types:   {len(self._data_types)}",
             f"  Modules:      {len(self._modules)}",
             f"  AOIs:         {len(self._aois)}",
-            f"  Controller Tags: {len(self._tags)}",
+            f"  Controller Tags: {len(self.controller_tags)}",
             f"  Programs:     {len(self._programs)}",
             f"  Tasks:        {len(self._tasks)}",
         ]

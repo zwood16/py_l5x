@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterator, Mapping
 from typing import Any, cast, overload
 from xml.etree import ElementTree as ET
 
-from py_l5x.parsers.utils import CDATA_TAG
+from py_l5x.parsers.utils import CDATA_TAG, cdata_text
 
 
 class XmlAttrMixin:
@@ -37,14 +37,7 @@ class XmlAttrMixin:
             The text content, stripped of surrounding whitespace, or an empty
             string if the element or its text is absent.
         """
-        el = self._element.find(tag)
-        if el is not None:
-            cdata_el = el.find(CDATA_TAG)
-            if cdata_el is not None and cdata_el.text:
-                return cdata_el.text.strip()
-            if el.text:
-                return el.text.strip()
-        return ""
+        return cdata_text(self._element.find(tag))
 
 
 class XmlField[T]:
@@ -405,7 +398,9 @@ class BaseElement(XmlAttrMixin):
     :func:`float_attr`) and CDATA-bearing children as :class:`CDataField`,
     which are collected into a per-class ``_fields`` registry used by
     :meth:`fields` and :meth:`describe`. Unrecognised attributes remain
-    accessible via :attr:`extra_attributes`/:attr:`attributes`.
+    accessible via :attr:`extra_attributes`/:attr:`attributes`. Subclasses
+    with additional summary lines override :meth:`_describe_lines` rather
+    than :meth:`describe`, so those lines precede the extras block.
 
     Attributes:
         _element: The underlying XML element to wrap.
@@ -487,13 +482,28 @@ class BaseElement(XmlAttrMixin):
             else f"{self.__class__.__name__}()"
         )
 
+    def _describe_lines(self) -> list[str]:
+        """Return extra pre-formatted description lines for this element.
+
+        Subclasses override this hook to add lines for properties that are not
+        declared fields. Each line should be indented two spaces (or four, for
+        nested content). The lines are inserted after the declared-field lines
+        and before the ``Extra Attributes:`` block in :meth:`describe`.
+
+        Returns:
+            A list of formatted lines. Empty by default.
+        """
+        return []
+
     def describe(self) -> str:
         """Return a multi-line summary of only this instance's populated fields.
 
         Unlike :meth:`fields` (every field a class *can* have), this shows
         only fields whose value differs from their declared default --
         answering "what actually matters for this particular element?".
-        Attributes not covered by any declared field are listed separately.
+        The output is the header, the populated declared fields, the lines
+        from :meth:`_describe_lines`, and finally any attributes not covered
+        by a declared field under an ``Extra Attributes:`` block.
 
         The first line comes from :meth:`_header` rather than :meth:`__repr__`,
         so subclasses may safely make their ``__repr__`` return the full
@@ -507,6 +517,7 @@ class BaseElement(XmlAttrMixin):
             value = getattr(self, name)
             if value != field.default:
                 lines.append(f"  {name} = {value!r}")
+        lines.extend(self._describe_lines())
         extras = self.extra_attributes
         if extras:
             lines.append("  Extra Attributes:")

@@ -44,8 +44,9 @@ type-definition metadata.
 - ``MessageTag``: MESSAGE type; has ``message_parameters``, no value/members/elements.
 - ``MotionGroupTag``: MOTION_GROUP type; has ``motion_group_parameters``.
 - ``AxisTag``: AXIS_CIP_DRIVE type; has ``axis_parameters``.
-- ``UnknownTag``: Unrecognized specialty type; has ``special_data_format``,
-  ``special_data_attributes``, no value/members/elements.
+- ``UnknownTag``: Unrecognized specialty type, or a tag with no recognised value
+  ``<Data>`` at all; has ``special_data_format`` (``None`` when there is no
+  special ``<Data>``), ``special_data_attributes``, no value/members/elements.
 
 Tags ARE their root value nodes — they directly subclass the corresponding
 node class (e.g., ``IntegerTag`` subclasses both ``Tag`` and ``IntegerNode``),
@@ -123,7 +124,7 @@ from py_l5x.parsers.specialty_tags import (
     MessageParameters,
     MotionGroupParameters,
 )
-from py_l5x.parsers.utils import CDATA_TAG, convert_numeric
+from py_l5x.parsers.utils import cdata_text, convert_numeric
 
 #: A member/parameter definition used for metadata cross-reference. Both
 #: classes expose the same property surface (description/min/max/
@@ -238,24 +239,6 @@ _OVERRIDE_CONTAINERS: dict[str, tuple[str, str]] = {
 }
 
 
-def _cdata_text(element: ET.Element, strip: bool = True) -> str:
-    """Extract CDATA or text content from an element.
-
-    Args:
-        element: The element to extract text from.
-        strip: Whether to strip leading/trailing whitespace.
-
-    Returns:
-        The text content (CDATA preferred over plain text), or empty string.
-    """
-    cdata_el = element.find(CDATA_TAG)
-    if cdata_el is not None and cdata_el.text:
-        text = cdata_el.text
-    else:
-        text = element.text or ""
-    return text.strip() if strip and text else text
-
-
 class _TagOverrides:
     """Per-operand-path metadata overrides collected from a ``<Tag>`` element.
 
@@ -283,7 +266,7 @@ class _TagOverrides:
                 if not operand:
                     continue
                 path = operand.upper()
-                text = _cdata_text(child, strip=True)
+                text = cdata_text(child, strip=True)
                 self._by_path.setdefault(path, {})[key] = text
 
     def get(self, operand_path: str) -> dict[str, str]:
@@ -961,7 +944,7 @@ class StringNode(TagNode):
             source = self._value_element
         if source is None:
             return ""
-        return _cdata_text(source, strip=False)
+        return cdata_text(source, strip=False)
 
     @property
     def value(self) -> str:
@@ -1136,7 +1119,7 @@ def _build_node(
     # A scalar with CDATA/text but no Value (e.g. a STRING's DATA member) is
     # string content, so keep it as an untyped AtomicNode with quotes removed.
     if element.get("Value") is None:
-        text = _cdata_text(element, strip=False)
+        text = cdata_text(element, strip=False)
         if text:
             parsed_text = _parse_string_literal(text)
             return AtomicNode(
@@ -1257,7 +1240,7 @@ def _describe_value_lines(obj: object) -> list[str]:
         obj: A tag or tag-like object (e.g., Tag, AOILocalTag subclass).
 
     Returns:
-        A list of formatted description lines (without leading indentation).
+        A list of formatted description lines, each indented two spaces.
     """
     lines = []
 
@@ -1266,8 +1249,13 @@ def _describe_value_lines(obj: object) -> list[str]:
         TagNode._REPR_SHAPE + TagNode._REPR_META + ("alias_for", "special_data_format")
     )
 
+    # Skip names BaseElement.describe() already emits from the _fields registry
+    declared = getattr(type(obj), "_fields", {})
+
     # Add any metadata attributes that have values
     for name in all_attrs:
+        if name in declared:
+            continue
         if hasattr(obj, name):
             val = getattr(obj, name, None)
             if val is not None and val != "" and val != ():
@@ -1278,9 +1266,7 @@ def _describe_value_lines(obj: object) -> list[str]:
 
     # Element count for arrays
     if isinstance(obj, ArrayNode):
-        elements = obj.elements
-        if elements:
-            lines.append(f"  elements: {len(elements)} items")
+        lines.append(f"  elements: len={len(obj)}")
 
     return lines
 
@@ -1289,12 +1275,30 @@ class _RootMetadataMixin:
     """Mixin for metadata read from identity elements (tag-level Min/Max/etc).
 
     Reads metadata set directly on an identity element: Min/Max/ExternalLogging
-    attributes and un-operanded EngineeringUnits/State0s/State1s entries.
+    attributes and un-operanded EngineeringUnits/State0s/State1s entries. Also
+    supplies the shared ``_DYNAMIC_KEYS`` and ``extra_attributes`` filtering for
+    identity elements (``Tag`` and ``AOILocalTag``).
 
-    Requires ``self._element`` to be defined (the XML element).
+    Requires ``self._element`` to be defined (the XML element) and must precede
+    :class:`BaseElement` in the MRO so ``super().extra_attributes`` resolves.
     """
 
     _element: ET.Element
+
+    #: Attributes backed by a plain @property/facet rather than a declared
+    #: XmlField/CDataField -- still "known", so excluded from extra_attributes.
+    #: "Radix" and "Dimensions" are surfaced by the value-node radix/dimensions
+    #: properties and should not be exposed as extra attributes. Subclasses may
+    #: extend this (see :attr:`Tag._DYNAMIC_KEYS`).
+    _DYNAMIC_KEYS: frozenset[str] = frozenset(
+        {"Min", "Max", "ExternalLogging", "Radix", "Dimensions"}
+    )
+
+    @property
+    def extra_attributes(self) -> dict[str, str]:
+        """XML attributes not covered by declared fields or dynamic properties."""
+        extras = super().extra_attributes  # type: ignore[misc]
+        return {k: v for k, v in extras.items() if k not in self._DYNAMIC_KEYS}
 
     def _meta_override(self, key: str) -> str | None:
         """Return override for a metadata key at the identity element's level.
@@ -1346,7 +1350,7 @@ class _RootMetadataMixin:
         for child in container.findall(child_tag):
             if child.get("Operand"):
                 continue
-            text = _cdata_text(child, strip=True)
+            text = cdata_text(child, strip=True)
             return text if text else ""
         return None
 
@@ -1405,19 +1409,8 @@ class Tag(_RootMetadataMixin, BaseElement):
         "Description", attr_fallback="Description", doc="Tag description text."
     )
 
-    #: Attributes backed by a plain @property/facet rather than a declared
-    #: XmlField/CDataField -- still "known", so excluded from extra_attributes.
-    #: "Radix" and "Dimensions" are surfaced by the value-node radix/dimensions
-    #: properties and should not be exposed as extra attributes.
-    _DYNAMIC_KEYS: frozenset[str] = frozenset(
-        {"Min", "Max", "ExternalLogging", "AliasFor", "Radix", "Dimensions"}
-    )
-
-    @property
-    def extra_attributes(self) -> dict[str, str]:
-        """XML attributes not covered by declared fields or dynamic properties."""
-        extras = super().extra_attributes
-        return {k: v for k, v in extras.items() if k not in self._DYNAMIC_KEYS}
+    #: Adds "AliasFor" (a plain property on alias tags) to the shared keys.
+    _DYNAMIC_KEYS: frozenset[str] = _RootMetadataMixin._DYNAMIC_KEYS | {"AliasFor"}
 
     @property
     def element(self) -> ET.Element:
@@ -1463,17 +1456,18 @@ class Tag(_RootMetadataMixin, BaseElement):
         """
         return self.describe()
 
-    def describe(self) -> str:
-        """Extend :meth:`BaseElement.describe` to include metadata and facets.
+    def _describe_lines(self) -> list[str]:
+        """Return value/member/element lines and produced/consumed facet blocks.
 
-        Includes identity info from super(), then for each metadata attribute
-        that exists on this tag with a non-None/non-empty value, adds a line.
-        For struct/array tags, also includes member/element summaries.
+        For each metadata attribute that exists on this tag with a
+        non-None/non-empty value, a line is added. For struct/array tags,
+        member/element summaries are included. Produced and consumed facets
+        are appended as indented blocks when present.
+
+        Returns:
+            Formatted description lines.
         """
-        lines = [super().describe()]
-
-        # Add value/members/elements lines
-        lines.extend(_describe_value_lines(self))
+        lines = list(_describe_value_lines(self))
 
         # Add facets
         facets = (
@@ -1486,24 +1480,7 @@ class Tag(_RootMetadataMixin, BaseElement):
             lines.append(f"  {label}:")
             lines.extend(f"    {line}" for line in repr(facet).splitlines())
 
-        return "\n".join(lines)
-
-
-def _init_value_root(
-    node: TagNode,
-    value_element: ET.Element,
-    overrides: _TagOverrides,
-    type_registry: TypeRegistry | None,
-) -> None:
-    """Initialize a TagNode that is also a Tag's root value node.
-
-    Args:
-        node: The TagNode instance (also a Tag via MRO).
-        value_element: The value root element.
-        overrides: Collected operand overrides from the Tag.
-        type_registry: Used to resolve members.
-    """
-    TagNode.__init__(node, value_element, None, overrides, "", type_registry)
+        return lines
 
 
 class _ValueTag(Tag):
@@ -1527,11 +1504,17 @@ class _ValueTag(Tag):
             value_element: The ``Data[@Format='Decorated']`` child element, or the
                 ``Data[@Format='String']`` element for STRING tags.
         """
-        # Initialize Tag first (for MRO)
+        # Tag.__init__ sets the identity state. Tag's super() chain doesn't
+        # reach TagNode, so the node base is initialized explicitly below; it
+        # re-sets _overrides/_type_registry to the same values, which is harmless.
         Tag.__init__(self, element, type_registry)
-        # Initialize the node class base
-        _init_value_root(
-            cast(TagNode, self), value_element, self._overrides, type_registry
+        TagNode.__init__(
+            cast(TagNode, self),
+            value_element,
+            None,
+            self._overrides,
+            "",
+            type_registry,
         )
 
 
@@ -1696,6 +1679,8 @@ class UnknownTag(_SpecialDataTag):
 
     For tags with special ``<Data>`` formats py_l5x doesn't yet recognize,
     this tag type provides fallback access to the format name and attributes.
+    It is also the fallback for tags with no recognised value ``<Data>`` at all
+    (see :func:`_make_tag`), in which case ``special_data_format`` is ``None``.
     """
 
 

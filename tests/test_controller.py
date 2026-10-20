@@ -187,8 +187,9 @@ class TestControllerRepr:
         assert "5069-L310ERMS3" in repr(controller)
 
     def test_repr_contains_firmware(self, controller: ControllerInfo) -> None:
-        """Repr string contains the firmware version."""
-        assert "37.11" in repr(controller)
+        """Repr string contains the firmware revision fields."""
+        assert "  major_rev = '37'" in repr(controller)
+        assert "  minor_rev = '11'" in repr(controller)
 
     def test_repr_contains_extra_attributes_header(
         self, controller: ControllerInfo
@@ -200,6 +201,33 @@ class TestControllerRepr:
         """Repr string contains multiple lines."""
         lines = repr(controller).splitlines()
         assert len(lines) > 1
+
+    def test_repr_header(self, controller: ControllerInfo) -> None:
+        """First repr line is the ClassName('Name') header."""
+        assert repr(controller).splitlines()[0] == "ControllerInfo('Example_PLC')"
+
+    def test_repr_equals_describe(self, controller: ControllerInfo) -> None:
+        """__repr__ returns describe()."""
+        assert repr(controller) == controller.describe()
+
+    def test_repr_contains_child_summaries(self, controller: ControllerInfo) -> None:
+        """Notable child elements are summarised on their own lines."""
+        lines = repr(controller).splitlines()
+        assert "  safety_info: SafetyInfo(SafetyLevel='SIL3/PLe')" in lines
+        assert "  time_synchronize: TimeSynchronize(PTPEnable=True)" in lines
+        assert "  opc_ua_enabled_ports: 2" in lines
+        assert "  ethernet_ports: EthernetPorts([1, 2])" in lines
+
+    def test_repr_has_no_duplicate_lines(self, controller: ControllerInfo) -> None:
+        """Each describe line appears once."""
+        lines = repr(controller).splitlines()
+        assert len(lines) == len(set(lines))
+
+    def test_repr_omits_absent_children(self) -> None:
+        """Absent child elements and None-valued fields are not listed."""
+        el = ET.Element("Controller", Name="Ctx", Use="Context")
+        text = repr(ControllerInfo(el))
+        assert text == "ControllerInfo('Ctx')\n  name = 'Ctx'\n  use = 'Context'"
 
 
 # ---------------------------------------------------------------------------
@@ -386,6 +414,17 @@ class TestControllerEthernetPorts:
         ctrl = ControllerInfo(el)
         assert len(ctrl.ethernet_ports) == 0
 
+    def test_len_matches_iteration_with_unparseable_port(self) -> None:
+        """len() skips EthernetPort children whose Port is unparseable, like iter()."""
+        el = ET.Element("Controller", Name="Test", Use="Target")
+        ports = ET.SubElement(el, "EthernetPorts")
+        ET.SubElement(ports, "EthernetPort", Port="1", Label="A1", PortEnabled="true")
+        ET.SubElement(ports, "EthernetPort", Port="bogus", Label="??")
+        ET.SubElement(ports, "EthernetPort", Port="2", Label="A2", PortEnabled="true")
+        mapping = ControllerInfo(el).ethernet_ports
+        assert list(mapping) == [1, 2]
+        assert len(mapping) == len(list(mapping)) == 2
+
 
 # ---------------------------------------------------------------------------
 # OPC UA
@@ -409,3 +448,10 @@ class TestControllerOpcUa:
         ctrl = ControllerInfo(el)
         assert ctrl.opc_ua_enabled is False
         assert ctrl.opc_ua_enabled_ports is None
+
+    @pytest.mark.parametrize("raw", ["", "--1", "abc"])
+    def test_opc_ua_enabled_ports_unparseable(self, raw: str) -> None:
+        """Unparseable EnabledPorts values return None instead of raising."""
+        el = ET.Element("Controller", Name="Test", Use="Target")
+        ET.SubElement(el, "OpcUaInfo", EnabledPorts=raw)
+        assert ControllerInfo(el).opc_ua_enabled_ports is None

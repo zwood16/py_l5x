@@ -1,6 +1,6 @@
 """Miscellaneous helper functions."""
 
-import re
+from xml.etree import ElementTree as ET
 
 from py_l5x.parsers.atomic_types import (
     atomic_info,
@@ -15,16 +15,52 @@ from py_l5x.parsers.atomic_types import (
 CDATA_TAG = "CDataContent"
 
 
-def to_snake(name: str) -> str:
-    """Convert PascalCase/camelCase XML keys to snake_case names.
+def parse_int(value: str | None) -> int | None:
+    """Parse an integer XML attribute value.
 
     Args:
-        name: The PascalCase or camelCase string to convert.
+        value: The raw attribute string, or ``None`` if the attribute is absent.
 
     Returns:
-        The snake_case version of the input string.
+        The parsed integer, or ``None`` if *value* is ``None``, empty, or not
+        a valid integer.
     """
-    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+    if not value:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def cdata_text(element: ET.Element | None, strip: bool | str = True) -> str:
+    """Return the text of an element, preferring its CDATA child.
+
+    A ``<![CDATA[...]]>`` section is stored as a :data:`CDATA_TAG` child
+    element. When that child exists and has non-empty text it is used;
+    otherwise the element's own text is used.
+
+    Args:
+        element: The element to read, or ``None`` if it is absent.
+        strip: How to trim the result. ``True`` (default) removes all
+            surrounding whitespace via :meth:`str.strip`. ``False`` returns the
+            text unchanged. A string removes only those characters, e.g.
+            ``"\\r\\n"`` drops XML-formatting newlines while preserving
+            leading indentation (used for structured text lines).
+
+    Returns:
+        The text, or an empty string if *element* is ``None`` or has no text.
+    """
+    if element is None:
+        return ""
+    cdata_el = element.find(CDATA_TAG)
+    if cdata_el is not None and cdata_el.text:
+        text = cdata_el.text
+    else:
+        text = element.text or ""
+    if isinstance(strip, str):
+        return text.strip(strip)
+    return text.strip() if strip else text
 
 
 def convert_numeric(value: str, data_type: str) -> int | float | str:

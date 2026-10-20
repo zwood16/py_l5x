@@ -8,7 +8,19 @@ Usage:
 """
 
 from py_l5x.parse import load
-from py_l5x.parsers.aoi import AOIDefinition, AOILocalTag
+from py_l5x.parsers.aoi import (
+    AOIDefinition,
+    AOILocalArrayTag,
+    AOILocalAtomicTag,
+    AOILocalBoolTag,
+    AOILocalDateTimeTag,
+    AOILocalFloatTag,
+    AOILocalIntegerTag,
+    AOILocalStringTag,
+    AOILocalStructTag,
+    AOILocalTag,
+    AOILocalTimeTag,
+)
 from py_l5x.parsers.controller import ControllerInfo
 from py_l5x.parsers.datatype import AddOnParameter, DataType, DataTypeMember
 from py_l5x.parsers.module import Module, ModuleTagRef, ModuleTagsView
@@ -48,7 +60,16 @@ from py_l5x.parsers.task import Task
 
 __all__ = [
     "AOIDefinition",
+    "AOILocalArrayTag",
+    "AOILocalAtomicTag",
+    "AOILocalBoolTag",
+    "AOILocalDateTimeTag",
+    "AOILocalFloatTag",
+    "AOILocalIntegerTag",
+    "AOILocalStringTag",
+    "AOILocalStructTag",
     "AOILocalTag",
+    "AOILocalTimeTag",
     "AddOnParameter",
     "AliasTag",
     "ArrayNode",

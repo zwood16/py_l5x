@@ -19,24 +19,7 @@ from py_l5x.parsers.base import (
     int_attr,
     str_attr,
 )
-
-
-def _parse_int(value: str | None) -> int | None:
-    """Parse an integer attribute; return ``None`` for empty/missing values.
-
-    Args:
-        value: The raw attribute string, or ``None`` if absent.
-
-    Returns:
-        The parsed integer, or ``None`` if the value is empty, missing, or
-        not a valid integer.
-    """
-    if not value:
-        return None
-    try:
-        return int(value)
-    except ValueError:
-        return None
+from py_l5x.parsers.utils import parse_int
 
 
 class SafetyInfo(BaseElement):
@@ -129,18 +112,18 @@ class _EthernetPortsView(Mapping[int, EthernetPort]):
 
     def __getitem__(self, port: int) -> EthernetPort:
         for el in self._children():
-            if _parse_int(el.get("Port")) == port:
+            if parse_int(el.get("Port")) == port:
                 return EthernetPort(el)
         raise KeyError(port)
 
     def __iter__(self) -> Iterator[int]:
         for el in self._children():
-            parsed = _parse_int(el.get("Port"))
+            parsed = parse_int(el.get("Port"))
             if parsed is not None:
                 yield parsed
 
     def __len__(self) -> int:
-        return len(self._children())
+        return sum(1 for _ in self)
 
     def __repr__(self) -> str:
         return f"EthernetPorts({list(self)!r})"
@@ -359,32 +342,37 @@ class ControllerInfo(BaseElement):
         el = self._element.find("OpcUaInfo")
         if el is None:
             return None
-        raw = el.get("EnabledPorts")
-        return int(raw) if raw and raw.lstrip("-").isdigit() else None
+        return parse_int(el.get("EnabledPorts"))
 
     # ------------------------------------------------------------------
     # Display
     # ------------------------------------------------------------------
 
     def __repr__(self) -> str:
-        """Return a multi-line string representation of the controller.
-
-        Includes the controller name, processor type, firmware version,
-        creation and modification dates, and any extra attributes.
+        """Return the full :meth:`describe` text for this controller.
 
         Returns:
-            A formatted string suitable for display in debug output.
+            The multi-line description produced by :meth:`describe`.
         """
-        lines = [
-            f"Controller Name:  {self.name}",
-            f"Processor Type:   {self.processor_type or '—'}",
-            f"Firmware:         {self.major_rev or '—'}.{self.minor_rev or '—'}",
-            f"Created:          {self.project_creation_date or '—'}",
-            f"Last Modified:    {self.last_modified_date or '—'}",
-        ]
-        extras = self.extra_attributes
-        if extras:
-            lines.append("Extra Attributes:")
-            for k, v in sorted(extras.items()):
-                lines.append(f"  {k}: {v}")
-        return "\n".join(lines)
+        return self.describe()
+
+    def _describe_lines(self) -> list[str]:
+        """Return summary lines for notable child elements.
+
+        Produces one line each for the safety, time-sync, OPC UA and Ethernet
+        port children when they are present.
+
+        Returns:
+            Formatted description lines, each indented two spaces.
+        """
+        lines: list[str] = []
+        if (safety := self.safety_info) is not None:
+            lines.append(f"  safety_info: {safety!r}")
+        if (time_sync := self.time_synchronize) is not None:
+            lines.append(f"  time_synchronize: {time_sync!r}")
+        if (opc_ports := self.opc_ua_enabled_ports) is not None:
+            lines.append(f"  opc_ua_enabled_ports: {opc_ports!r}")
+        ethernet_ports = self.ethernet_ports
+        if len(ethernet_ports):
+            lines.append(f"  ethernet_ports: {ethernet_ports!r}")
+        return lines

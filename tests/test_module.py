@@ -683,3 +683,74 @@ class TestRealWorldModuleFixtures:
         ref = modules["PointIO_AnalogInput"].tags["PointIO:3:I"]
         assert len(ref.members) > 0
         assert list(ref.members) == list(ref.data.members)
+
+
+class TestModuleTagValueForwarding:
+    """Value-node attributes forward from the ref to its root node."""
+
+    def test_struct_ref_forwards_members(self, modules: ModulesCollection) -> None:
+        """A struct-rooted ref exposes ``members``, not ``elements``/``value``."""
+        ref = modules["ValveBank"].tags["ValveBank:I"]
+        assert "ConnectionFaulted" in ref.members
+        assert list(ref.members) == list(ref.data.members)
+        with pytest.raises(AttributeError, match="ModuleTagRef"):
+            _ = ref.elements  # type: ignore[attr-defined]
+        with pytest.raises(AttributeError, match="ModuleTagRef"):
+            _ = ref.value  # type: ignore[attr-defined]
+
+    def test_config_array_ref_forwards_elements(
+        self, modules: ModulesCollection
+    ) -> None:
+        """A ConfigTag whose data unwraps to an array exposes ``elements``."""
+        ref = modules["ShopRobot"].tags["ShopRobot:C"]
+        assert isinstance(ref.data, ArrayNode)
+        assert len(ref.elements) == len(ref.data.elements) == 400
+        with pytest.raises(AttributeError, match="ModuleTagRef"):
+            _ = ref.members  # type: ignore[attr-defined]
+
+    def test_scalar_ref_forwards_value(self) -> None:
+        """A scalar-rooted ref exposes ``value``; members/elements do not apply."""
+        modules = _build_modules(
+            _LOCAL_CHASSIS_XML
+            + '<Module Name="Scalar" ParentModule="Local" ParentModPortId="1">'
+            '<Ports><Port Id="1" Address="0" Type="5069" Upstream="false"/></Ports>'
+            '<Communications CommMethod="4"><Connections>'
+            '<Connection Name="Cxn" Type="Standard">'
+            '<InputTag ExternalAccess="Read Only">'
+            '<Data Format="Decorated">'
+            '<DataValue DataType="BOOL" Radix="Decimal" Value="1"/>'
+            "</Data></InputTag></Connection></Connections></Communications>"
+            "</Module>"
+        )
+        ref = modules["Scalar"].tags["Scalar:I"]
+        assert ref.value is True
+        assert ref.value == ref.data.value
+        with pytest.raises(AttributeError, match="ModuleTagRef"):
+            _ = ref.members  # type: ignore[attr-defined]
+
+    def test_non_applicable_attribute_error_names_module_tag_ref(
+        self, modules: ModulesCollection
+    ) -> None:
+        """Accessing ``elements`` on a struct-rooted ConfigTag ref reports ModuleTagRef.
+
+        The message must name the ref type, not the wrapped ConfigTag.
+        """
+        ref = modules["Test_Input_Module"].tags["Local:1:C"]
+        assert isinstance(ref.data, StructNode)
+        with pytest.raises(AttributeError) as excinfo:
+            _ = ref.elements  # type: ignore[attr-defined]
+        message = str(excinfo.value)
+        assert "ModuleTagRef" in message
+        assert "ConfigTag" not in message
+        assert "'elements'" in message
+
+    def test_unknown_attribute_error_names_module_tag_ref(
+        self, modules: ModulesCollection
+    ) -> None:
+        """Unknown attributes on a ref raise AttributeError naming ModuleTagRef."""
+        ref = modules["Test_Input_Module"].tags["Local:1:C"]
+        with pytest.raises(AttributeError) as excinfo:
+            _ = ref.does_not_exist  # type: ignore[attr-defined]
+        assert str(excinfo.value) == (
+            "'ModuleTagRef' object has no attribute 'does_not_exist'"
+        )

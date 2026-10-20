@@ -15,8 +15,9 @@ This module parses ``<Modules>`` in an L5X controller export and exposes:
   module's I/O tags keyed by their Studio 5000 *global variable* names (for
   example ``ValveBank:I``, ``Local:1:C``). Each :class:`ModuleTagRef` is a thin
   reference to the underlying tag with back-references to the owning
-  :class:`Module` and :class:`Connection`. Its value node is available directly
-  (``ref.members``, ``ref.elements``, ``ref.value``), as on controller tags.
+  :class:`Module` and :class:`Connection`. Unknown attributes are forwarded to
+  the root value node (``ref.members``, ``ref.elements``, ``ref.value``), then
+  to the wrapped :class:`ModuleDataTag`.
 
 Tag-like value parsing reuses :class:`py_l5x.parsers.tag.TagNode` so nested
 structures and arrays behave the same way as controller/program tag nodes.
@@ -57,26 +58,10 @@ from py_l5x.parsers.tag import (
     _format_member_lines,
     _TagOverrides,
 )
+from py_l5x.parsers.utils import parse_int
 
 #: Upstream port types that are network links rather than chassis backplanes.
 _NETWORK_PORT_TYPES = frozenset({"Ethernet", "ControlNet", "DeviceNet"})
-
-
-def _parse_int(value: str) -> int | None:
-    """Parse an int attribute; return ``None`` for empty/unparseable values.
-
-    Args:
-        value: The string value to parse.
-
-    Returns:
-        The parsed integer, or None if the value is empty or not a valid integer.
-    """
-    if not value:
-        return None
-    try:
-        return int(value)
-    except ValueError:
-        return None
 
 
 def _suffix_from_data_type(data_type: str) -> str | None:
@@ -120,7 +105,7 @@ class Port(BaseElement):
         bus = self._element.find("Bus")
         if bus is None:
             return None
-        return _parse_int(bus.get("Size", ""))
+        return parse_int(bus.get("Size", ""))
 
     def __repr__(self) -> str:
         return f"Port({self.id}, {self.type!r})"
@@ -166,7 +151,7 @@ class PortsView(Mapping[int, Port]):
         """
         for el in self._children():
             raw_id = el.get("Id", "")
-            if _parse_int(raw_id) == port_id:
+            if parse_int(raw_id) == port_id:
                 return Port(el)
         raise KeyError(port_id)
 
@@ -178,7 +163,7 @@ class PortsView(Mapping[int, Port]):
         """
         for el in self._children():
             raw_id = el.get("Id", "")
-            parsed = _parse_int(raw_id)
+            parsed = parse_int(raw_id)
             if parsed is not None:
                 yield parsed
 
@@ -213,6 +198,12 @@ class ModuleDataTag(BaseElement):
     opc_ua_access = str_attr("OpcUaAccess", doc="OPC UA exposure level, if configured.")
 
     def __init__(self, element: ET.Element, type_registry: TypeRegistry) -> None:
+        """Initialize a tag-like data section wrapper.
+
+        Args:
+            element: The ``<ConfigTag>``/``<InputTag>``/``<OutputTag>`` element.
+            type_registry: The type registry used for parsing tag values.
+        """
         super().__init__(element)
         self._type_registry = type_registry
         self._overrides = _TagOverrides(element)
@@ -360,6 +351,12 @@ class Connection(BaseElement):
     )
 
     def __init__(self, element: ET.Element, type_registry: TypeRegistry) -> None:
+        """Initialize a connection wrapper.
+
+        Args:
+            element: The ``<Connection>`` XML element to wrap.
+            type_registry: The type registry used for parsing tag values.
+        """
         super().__init__(element)
         self._type_registry = type_registry
 
@@ -433,6 +430,12 @@ class Communications(BaseElement):
     )
 
     def __init__(self, element: ET.Element, type_registry: TypeRegistry) -> None:
+        """Initialize a communications section wrapper.
+
+        Args:
+            element: The ``<Communications>`` XML element to wrap.
+            type_registry: The type registry used for parsing tag values.
+        """
         super().__init__(element)
         self._type_registry = type_registry
 
@@ -500,6 +503,11 @@ class Module(BaseElement):
         "AutoDiagsEnabled",
         doc="Whether auto diagnostics are enabled, if the attribute exists.",
     )
+    data_exchange_id = str_attr(
+        "DataExchangeId",
+        default=None,
+        doc="Optional data exchange id for data-sharing features.",
+    )
 
     def __init__(
         self,
@@ -520,12 +528,6 @@ class Module(BaseElement):
         super().__init__(element)
         self._type_registry = type_registry
         self._controller_element = controller_element
-
-    data_exchange_id = str_attr(
-        "DataExchangeId",
-        default=None,
-        doc="Optional data exchange id for data-sharing features.",
-    )
 
     @property
     def ekey_state(self) -> str:
@@ -653,10 +655,12 @@ class ModuleTagRef:
     controller/program tag. Instead it exposes identity properties (``name``,
     ``kind``, ``module_name``, ``data_type``, ``class_``, ``is_safety``) plus
     back-references to the owning :class:`Module` and (for connection tags)
-    :class:`Connection`. Value access mirrors controller tags: ``ref.members``,
-    ``ref.elements``, and ``ref.value`` reach the root value node directly.
-    ``ref.data`` remains available as well. Other unknown attributes are
-    looked up on the root value node first, then on the wrapped tag.
+    :class:`Connection`. Value access mirrors controller tags through
+    forwarding: ``ref.members``, ``ref.elements``, and ``ref.value`` are looked
+    up on the root value node (:attr:`data`) first, then on the wrapped
+    :class:`ModuleDataTag`. Attributes present on neither raise
+    ``AttributeError`` naming ``ModuleTagRef``. ``ref.data`` remains available
+    as well.
 
     Args:
         name: The Studio 5000 global tag name (for example ``"ValveBank:I"``).
@@ -758,44 +762,10 @@ class ModuleTagRef:
     def data(self) -> TagNode | None:
         """Root value-tree node, delegating to the wrapped tag's ``.data``.
 
-        Kept for backwards compatibility; prefer the direct accessors
-        (:attr:`members`, :attr:`elements`, :attr:`value`). For config tags this
-        is the unwrapped inner array, the same node those accessors use.
+        For config tags this is the unwrapped inner array. Attribute access such
+        as ``ref.members`` or ``ref.elements`` forwards to this node.
         """
         return self._wrapped.data
-
-    def _value_attr(self, name: str) -> Any:
-        """Return ``name`` from the root value node, or raise AttributeError.
-
-        Args:
-            name: The value-node attribute to read (``members``, ``elements``,
-                or ``value``).
-
-        Returns:
-            The attribute's value from :attr:`data`.
-
-        Raises:
-            AttributeError: If the tag has no root node or it lacks ``name``.
-        """
-        data = self.data
-        if data is None or not hasattr(data, name):
-            raise AttributeError(f"{type(self).__name__!r} has no attribute {name!r}")
-        return getattr(data, name)
-
-    @property
-    def members(self) -> Mapping[str, TagNode]:
-        """Members of a struct/string root node (see :attr:`data`)."""
-        return self._value_attr("members")
-
-    @property
-    def elements(self) -> Any:
-        """Elements of an array root node (see :attr:`data`)."""
-        return self._value_attr("elements")
-
-    @property
-    def value(self) -> Any:
-        """Value of a scalar root node (see :attr:`data`)."""
-        return self._value_attr("value")
 
     def __getattr__(self, item: str) -> Any:
         """Forward unknown public attributes to the root node, then the wrapped tag.
@@ -814,14 +784,18 @@ class ModuleTagRef:
 
         Raises:
             AttributeError: If neither the root node nor the wrapped tag has
-                ``item``.
+                ``item``. The message names ``ModuleTagRef``, not the wrapped type.
         """
         if item.startswith("_"):
             raise AttributeError(item)
         data = self.data
         if data is not None and hasattr(data, item):
             return getattr(data, item)
-        return getattr(self._wrapped, item)
+        if hasattr(self._wrapped, item):
+            return getattr(self._wrapped, item)
+        raise AttributeError(
+            f"{type(self).__name__!r} object has no attribute {item!r}"
+        )
 
     def __repr__(self) -> str:
         """Return a multi-line summary resembling :class:`py_l5x.parsers.tag.Tag`.
@@ -847,14 +821,6 @@ class ModuleTagRef:
 
 class ModuleTagsView(Mapping[str, ModuleTagRef]):
     """Live mapping of one module's I/O tags keyed by Studio 5000 global name.
-
-    Built from the module's ``<Communications>`` section: the optional
-    ``<ConfigTag>`` (suffix ``C``), then each connection's ``<InputTag>`` and
-    ``<OutputTag>``. A tag's suffix comes from its connection's
-    ``InputTagSuffix``/``OutputTagSuffix`` when present, else is derived from
-    the tag's root data type (the second-to-last colon segment, e.g.
-    ``AB:Motion_Diagnostics:S:1`` -> ``S``), falling back to ``I``/``O``. Each
-    is exposed under ``<tag_prefix>:<suffix>`` (see :meth:`Module.tag_prefix`).
 
     Built from the module's ``<Communications>`` section: the optional
     ``<ConfigTag>`` (suffix ``C``), then each connection's ``<InputTag>`` and

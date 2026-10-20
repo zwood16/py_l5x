@@ -9,7 +9,7 @@ import pytest
 from py_l5x import load
 from py_l5x.parsers.module import ModuleTagRef
 from py_l5x.parsers.project import Project, ProjectTagsView
-from py_l5x.parsers.tag import StructNode, Tag
+from py_l5x.parsers.tag import StructNode, Tag, TagsCollection
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 EXAMPLE_L5X = FIXTURES_DIR / "example.L5X"
@@ -186,6 +186,14 @@ class TestMergedTagsView:
         """project.tags returns a ProjectTagsView."""
         assert isinstance(project.tags, ProjectTagsView)
 
+    def test_controller_tags_type_and_names(self, project: Project) -> None:
+        """controller_tags is a TagsCollection of non-module names only."""
+        ctrl = project.controller_tags
+        assert isinstance(ctrl, TagsCollection)
+        assert not any(":" in name for name in ctrl)
+        non_module_keys = {name for name in project.tags if ":" not in name}
+        assert set(ctrl) == non_module_keys
+
     def test_module_tag_resolves_by_global_name(self, project: Project) -> None:
         """A module I/O tag resolves under its Studio 5000 global name."""
         ref = project.tags["ValveBank:I"]
@@ -207,7 +215,7 @@ class TestMergedTagsView:
 
     def test_controller_tags_unchanged_names(self, project: Project) -> None:
         """Every controller tag name is still present in the merged view."""
-        controller_names = set(project._tags)
+        controller_names = set(project.controller_tags)
         merged_names = set(project.tags)
         assert controller_names <= merged_names
 
@@ -230,7 +238,7 @@ class TestMergedTagsView:
 
     def test_controller_tag_names_have_no_colon(self, project: Project) -> None:
         """Controller tag names never contain ':' (so they cannot collide)."""
-        for name in project._tags:
+        for name in project.controller_tags:
             assert ":" not in name
 
     def test_unknown_module_style_name_raises_key_error(self, project: Project) -> None:
@@ -286,7 +294,7 @@ class TestMergedTagsView:
 
     def test_len_includes_module_tags(self, project: Project) -> None:
         """len(project.tags) is the controller tag count plus 32 module I/O tags."""
-        controller_count = len(project._tags)
+        controller_count = len(project.controller_tags)
         assert len(project.tags) == controller_count + 32
 
     @pytest.mark.parametrize(
