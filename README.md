@@ -23,6 +23,8 @@ or
 uv add py_l5x-0.1.0-py3-none-any.whl
 ```
 
+or even add it directly using a link to the `.whl` file on the [Releases](https://github.com/zwood16/py_l5x/releases) page.
+
 ## Quick start
 
 ```python
@@ -837,7 +839,9 @@ pytest
 uv build
 ```
 
-This produces a `.whl` and a `.tar.gz` under `dist/`. The wheel can be installed in any Python environment:
+This produces a `.whl` and a `.tar.gz` under `dist/`. Just to be safe, delete the `dist` folder before building a new release to prevent multiple version from being release in the `.whl` file.
+
+The wheel can be installed in any Python environment:
 
 ```bash
 pip install dist/py_l5x-0.1.0-py3-none-any.whl
@@ -855,22 +859,20 @@ uv run ruff check --fix .   # auto-fix where possible
 ## Known Limitation
 
 - Not all L5X components have wrappers/parsers yet. Known top level tags that are currently ignored include:
-  - \<ParameterConnection\>
-  - \<Trends\>
-  - \<QuickWatchList\>
-  - \<CommPorts\>
-  - \<WallClockTime\>
-    > Note that the top level Project object exposes the `Project.root` XML element so you can manually find any extra info you need using Python's build in [XML Element Tree](https://docs.python.org/3/library/xml.etree.elementtree.html).
+    - \<ParameterConnection\>
+    - \<Trends\>
+    - \<QuickWatchList\>
+    - \<CommPorts\>
+    - \<WallClockTime\>
+        > Note that the top level Project object exposes the `Project.root` XML element so you can manually find any extra info you need using Python's build in [XML Element Tree](https://docs.python.org/3/library/xml.etree.elementtree.html).
 - Similarly, some attributes may be missing or hard to find. Attributes for objects can vary wildly, so I've done my best to expose common ones via a little reverse engineering of example files.
-  - As a fallback, all elements (Module, ProgramsCollection, etc.) also include a `_element` property that exposes the top level xml element.
+    - As a fallback, all elements (Module, ProgramsCollection, etc.) also include a `_element` property that exposes the top level xml element.
 - Not all features or specialty tag types are supported. For example:
-  - Alarms
-  - Motion Coordinate Groups
+    - Alarms
+    - Motion Coordinate Groups
 - There is no write support. `py_l5x` can only read L5X files. It cannot write back to them.
 
 ## Road Map
 
-- [x] Test more special tag types (CIP_AXIS, MESSAGE, etc.)
-- [x] Test safety features (safety network numbers, safety routines, safety tags, etc.)
 - [ ] Implement a write feature to allow for modifying an exported L5X file
 - [ ] Implement a generate component feature to go along with write allowing users to create component imports using python.
