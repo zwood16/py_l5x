@@ -38,9 +38,9 @@ from collections.abc import Iterator, Mapping
 from typing import TYPE_CHECKING, Union
 from xml.etree import ElementTree as ET
 
-from py_l5x.parsers.aoi import AOICollection, AOIDefinition
+from py_l5x.parsers.aoi import AOICollection, AOIDataTypesCollection, AOIDefinition
 from py_l5x.parsers.controller import ControllerInfo
-from py_l5x.parsers.datatype import AddOnDataTypeCollection, DataTypesCollection
+from py_l5x.parsers.datatype import DataTypesCollection
 from py_l5x.parsers.module import Module, ModulesCollection, ModuleTagRef
 from py_l5x.parsers.program import Program, ProgramsCollection
 from py_l5x.parsers.routine import Routine, Rung
@@ -195,7 +195,7 @@ class Project:
 
         # Build collections that don't depend on TypeRegistry first.
         self._data_types = DataTypesCollection(self._controller_element)
-        self._aoi_types = AddOnDataTypeCollection(self._controller_element)
+        self._aoi_types = AOIDataTypesCollection(self._controller_element)
 
         # Build the shared TypeRegistry (glue for tag value parsing).
         self._type_registry = TypeRegistry(self._data_types, self._aoi_types)

@@ -8,7 +8,8 @@ from xml.etree import ElementTree as ET
 import pytest
 
 import py_l5x
-from py_l5x.parsers.datatype import AddOnDataTypeCollection, DataTypesCollection
+from py_l5x.parsers.aoi import AOIDataTypesCollection
+from py_l5x.parsers.datatype import DataTypesCollection
 from py_l5x.parsers.program import Program, ProgramsCollection
 from py_l5x.parsers.specialty_tags import AxisParameters, MotionGroupParameters
 from py_l5x.parsers.tag import (
@@ -60,7 +61,7 @@ def type_registry(controller_element: ET.Element) -> TypeRegistry:
     """Build a TypeRegistry from the example L5X's UDT and AOI collections."""
     return TypeRegistry(
         DataTypesCollection(controller_element),
-        AddOnDataTypeCollection(controller_element),
+        AOIDataTypesCollection(controller_element),
     )
 
 

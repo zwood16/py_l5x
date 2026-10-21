@@ -13,7 +13,7 @@ This module provides rich AOI inspection surfaces similar to program parsing:
   like ``.members``, ``.value``, ``.elements`` without a ``.data`` indirection.
 
 AOI routines reuse :class:`py_l5x.parsers.routine.RoutinesCollection`.
-AOI parameters reuse :class:`py_l5x.parsers.datatype.AddOnParameters`.
+AOI parameters reuse :class:`py_l5x.parsers.aoi.AOIParametersCollection`.
 """
 
 from __future__ import annotations
@@ -28,7 +28,6 @@ from py_l5x.parsers.base import (
     bool_attr,
     str_attr,
 )
-from py_l5x.parsers.datatype import AddOnParameters
 from py_l5x.parsers.routine import RoutinesCollection
 from py_l5x.parsers.tag import (
     ArrayNode,
@@ -47,9 +46,116 @@ from py_l5x.parsers.tag import (
     _RootMetadataMixin,
     _TagOverrides,
 )
+from py_l5x.parsers.utils import convert_numeric
 
 
-class AOILocalTag(_RootMetadataMixin, BaseElement):
+class _AOIDefinitionTag(_RootMetadataMixin, BaseElement):
+    """Identity base shared by AOI ``<LocalTag>`` and ``<Parameter>`` elements.
+
+    Both elements share the same XML shape: a Name/DataType/ExternalAccess
+    identity, a Description, and operand-qualified ``Comments``/
+    ``EngineeringUnits``/``State0s``/``State1s`` metadata. Metadata hooks come
+    from :class:`~py_l5x.parsers.tag._RootMetadataMixin`, which reads the
+    un-operanded entries on the element itself.
+
+    Args:
+        element: The ``<LocalTag>`` or ``<Parameter>`` XML element.
+        type_registry: Shared type registry for resolving data type metadata.
+    """
+
+    name = str_attr("Name", doc="Name of the AOI local tag or parameter.")
+    data_type = str_attr(
+        "DataType", doc="Data type name of the AOI local tag or parameter."
+    )
+    constant = bool_attr(
+        "Constant",
+        default=False,
+        doc="Whether the AOI local tag or parameter is constant.",
+    )
+    external_access = str_attr(
+        "ExternalAccess",
+        doc='External access level (e.g. "Read/Write", "Read Only", "None").',
+    )
+    description = CDataField(
+        "Description",
+        attr_fallback="Description",
+        doc="Description text of the AOI local tag or parameter.",
+    )
+
+    def __init__(
+        self, element: ET.Element, type_registry: TypeRegistry | None = None
+    ) -> None:
+        """Initialize the AOI identity wrapper.
+
+        Args:
+            element: The ``<LocalTag>`` or ``<Parameter>`` XML element.
+            type_registry: Shared type registry for resolving data type metadata.
+        """
+        super().__init__(element)
+        self._type_registry = type_registry
+        self._overrides = _TagOverrides(element)
+
+    @property
+    def element(self) -> ET.Element:
+        """The wrapped XML element (``<LocalTag>`` or ``<Parameter>``)."""
+        return self._element
+
+    def _header(self) -> str:
+        """Return the single-line identity header for :meth:`describe`.
+
+        Extends :meth:`BaseElement._header` to also include the data type, so
+        the element stays identifiable in :meth:`describe` just as it is in
+        :meth:`__repr__`.
+        """
+        return f"{type(self).__name__}({self.name!r}, {self.data_type!r})"
+
+    def __repr__(self) -> str:
+        """Return the full :meth:`describe` text for this element."""
+        return self.describe()
+
+    def _describe_lines(self) -> list[str]:
+        """Return value, member and element lines for value-tree elements.
+
+        Returns:
+            Formatted description lines (empty for identity-only elements).
+        """
+        return _describe_value_lines(self)
+
+
+def _init_aoi_value_node(
+    tag: _AOIDefinitionTag,
+    element: ET.Element,
+    type_registry: TypeRegistry,
+    value_element: ET.Element,
+) -> None:
+    """Initialise an AOI identity wrapper that is also its own value node.
+
+    Shared by every AOI class that carries a value tree (local tags, and
+    parameters once they gain typed value subclasses). The identity state is set
+    first; the node base is then initialised explicitly, because the identity
+    ``super()`` chain stops at :class:`BaseElement` and never reaches
+    :class:`TagNode`. The node base re-uses the identity's ``_overrides``.
+
+    Args:
+        tag: The instance being initialised (identity base + node base).
+        element: The ``<LocalTag>``/``<Parameter>`` element.
+        type_registry: Used to resolve value tree members.
+        value_element: The ``DefaultData[@Format='Decorated']`` child element,
+            or the ``DefaultData[@Format='String']`` element for STRING-family
+            tags.
+    """
+    _AOIDefinitionTag.__init__(tag, element, type_registry)
+    TagNode.__init__(
+        cast(TagNode, tag),
+        value_element,
+        None,
+        tag._overrides,
+        "",
+        type_registry,
+    )
+
+
+class AOILocalTag(_AOIDefinitionTag):
     """A single ``<LocalTag>`` under an AOI definition (identity base).
 
     An identity base providing name, data_type, constant, external_access,
@@ -59,56 +165,6 @@ class AOILocalTag(_RootMetadataMixin, BaseElement):
         element: The XML ``<LocalTag>`` element.
         type_registry: Shared type registry for resolving data type metadata.
     """
-
-    name = str_attr("Name", doc="Local tag name.")
-    data_type = str_attr("DataType", doc="The local tag's data type name.")
-    constant = bool_attr(
-        "Constant", default=False, doc="Whether the local tag is constant."
-    )
-    external_access = str_attr(
-        "ExternalAccess",
-        doc='External access level (commonly "None" for AOI locals).',
-    )
-    description = CDataField(
-        "Description", attr_fallback="Description", doc="Local tag description text."
-    )
-
-    def __init__(self, element: ET.Element, type_registry: TypeRegistry) -> None:
-        """Initialize an AOI local tag identity wrapper.
-
-        Args:
-            element: The XML ``<LocalTag>`` element.
-            type_registry: Shared type registry for resolving data type metadata.
-        """
-        super().__init__(element)
-        self._type_registry = type_registry
-        self._overrides = _TagOverrides(element)
-
-    @property
-    def element(self) -> ET.Element:
-        """The wrapped ``<LocalTag>`` XML element."""
-        return self._element
-
-    def _header(self) -> str:
-        """Return the single-line identity header for :meth:`describe`.
-
-        Extends :meth:`BaseElement._header` to also include the data type, so a
-        local tag stays identifiable in :meth:`describe` just as it is in
-        :meth:`__repr__`.
-        """
-        return f"{type(self).__name__}({self.name!r}, {self.data_type!r})"
-
-    def __repr__(self) -> str:
-        """Return the full :meth:`describe` text for this local tag."""
-        return self.describe()
-
-    def _describe_lines(self) -> list[str]:
-        """Return value, member and element lines for value-tree local tags.
-
-        Returns:
-            Formatted description lines (empty for identity-only local tags).
-        """
-        return _describe_value_lines(self)
 
 
 class _AOILocalValueTag(AOILocalTag):
@@ -133,18 +189,7 @@ class _AOILocalValueTag(AOILocalTag):
                 element, or the ``DefaultData[@Format='String']`` element for
                 STRING-family local tags.
         """
-        # AOILocalTag.__init__ sets the identity state. Its super() chain doesn't
-        # reach TagNode, so the node base is initialized explicitly below; it
-        # re-sets _overrides/_type_registry to the same values, which is harmless.
-        AOILocalTag.__init__(self, element, type_registry)
-        TagNode.__init__(
-            cast(TagNode, self),
-            value_element,
-            None,
-            self._overrides,
-            "",
-            type_registry,
-        )
+        _init_aoi_value_node(self, element, type_registry, value_element)
 
 
 class AOILocalBoolTag(_AOILocalValueTag, BoolNode):
@@ -290,13 +335,13 @@ class AOIDefinition(BaseElement):
         self._type_registry = type_registry
 
     @property
-    def parameters(self) -> AddOnParameters:
+    def parameters(self) -> AOIParametersCollection:
         """AOI parameters keyed by name.
 
         Returns:
-            An :class:`AddOnParameters` instance containing all AOI parameters.
+            An :class:`AOIParametersCollection` instance containing all AOI parameters.
         """
-        return AddOnParameters(self._element)
+        return AOIParametersCollection(self._element, self._type_registry)
 
     @property
     def local_tags(self) -> AOILocalTagsCollection:
@@ -369,4 +414,161 @@ class AOICollection(BaseCollection[AOIDefinition]):
             "AddOnInstructionDefinitions/AddOnInstructionDefinition",
             AOIDefinition,
             item_args=(type_registry,),
+        )
+
+
+# ------------------------------------------------------------------
+# AOI parameters
+# ------------------------------------------------------------------
+
+# Similar to data types, but derrived from non-InOut parameters
+# Note: actual AOI definitions include all params, not just those that
+# appear in the tag browser
+
+
+class AOIParameter(_AOIDefinitionTag):
+    """A single ``<Parameter>`` element within an ``<AddOnInstructionDefinition>``.
+
+    Shares its identity, description and metadata hooks with
+    :class:`AOILocalTag` via :class:`_AOIDefinitionTag`. Adds the parameter-only
+    usage/radix/required/visible/external-logging attributes.
+
+    Args:
+        element: The ``<Parameter>`` element from a parsed L5X tree.
+        type_registry: Shared type registry for resolving data type metadata.
+    """
+
+    usage = str_attr(
+        "Usage", doc='Usage of the parameter (e.g., "Input", "Output", "InOut").'
+    )
+    radix = str_attr("Radix", doc="Display radix.")
+    required = bool_attr(
+        "Required", default=False, doc="Whether the parameter is required."
+    )
+    visible = bool_attr(
+        "Visible",
+        default=False,
+        doc="Whether the parameter is visible in Logix Designer.",
+    )
+    external_logging = bool_attr(
+        "ExternalLogging",
+        doc="Whether external logging is enabled for this parameter.",
+    )
+
+    @property
+    def is_inout(self) -> bool:
+        """Whether this parameter uses InOut usage."""
+        return self.usage == "InOut"
+
+    # ------------------------------------------------------------------
+    # Metadata
+    # ------------------------------------------------------------------
+    # Like tags, the parameter's own Min/Max and un-operanded
+    # EngineeringUnits/State0s/State1s entries describe the parameter as a
+    # whole. Operand-qualified entries (per-bit/per-member) are excluded here.
+
+    @property
+    def min(self) -> int | float | str | None:
+        """User-specified minimum value, if any.
+
+        Returns:
+            The ``Min`` XML attribute converted to ``int``/``float`` based on
+            :attr:`data_type`, or ``None`` if the attribute is absent.
+        """
+        value = self._meta_override("min")
+        return None if value is None else convert_numeric(value, self.data_type)
+
+    @property
+    def max(self) -> int | float | str | None:
+        """User-specified maximum value, if any.
+
+        Returns:
+            The ``Max`` XML attribute converted to ``int``/``float`` based on
+            :attr:`data_type`, or ``None`` if the attribute is absent.
+        """
+        value = self._meta_override("max")
+        return None if value is None else convert_numeric(value, self.data_type)
+
+    @property
+    def engineering_unit(self) -> str:
+        """User-specified engineering unit (e.g. ``"ms"``).
+
+        Returns:
+            The un-operanded ``EngineeringUnits/EngineeringUnit`` CDATA text, or
+            an empty string if absent.
+        """
+        return self._root_metadata("EngineeringUnits", "EngineeringUnit") or ""
+
+    @property
+    def state0(self) -> str:
+        """Description of the boolean parameter's zero state.
+
+        Returns:
+            The ``State0s/State0`` CDATA text, or an empty string if absent.
+        """
+        return self._root_metadata("State0s", "State0") or ""
+
+    @property
+    def state1(self) -> str:
+        """Description of the boolean parameter's one state.
+
+        Returns:
+            The ``State1s/State1`` CDATA text, or an empty string if absent.
+        """
+        return self._root_metadata("State1s", "State1") or ""
+
+
+class AOIParametersCollection(BaseCollection[AOIParameter]):
+    """A collection of parameters for a specific AOI definition.
+
+    Args:
+        aoi_element: The ``<AddOnInstructionDefinition>`` element.
+        type_registry: Shared type registry passed to each parameter. Optional;
+            parameter identity and metadata do not require it.
+    """
+
+    def __init__(
+        self, aoi_element: ET.Element, type_registry: TypeRegistry | None = None
+    ) -> None:
+        super().__init__(
+            aoi_element,
+            "Parameters/Parameter",
+            AOIParameter,
+            item_args=(type_registry,),
+        )
+
+    @property
+    def datatype_members(self) -> dict[str, AOIParameter]:
+        """Input and Output parameters of the AOI, excluding InOut usage.
+
+        These are the tags that appear as the tags members of the AOI instance
+        in the Logix Tag Browser - excludes InOut parameters.
+
+        Returns:
+            Dictionary mapping parameter names to ``AOIParameter``.
+        """
+        return {name: p for name, p in self.items() if not p.is_inout}
+
+
+class AOIDataTypesCollection(BaseCollection[AOIParametersCollection]):
+    """A ``Mapping`` over every ``<AddOnInstructionDefinition>``'s parameters.
+
+    Args:
+        controller_element: The ``<Controller>`` element whose
+            ``AddOnInstructionDefinitions/AddOnInstructionDefinition`` children form
+            this collection.
+    """
+
+    def __init__(self, controller_element: ET.Element) -> None:
+        """Initialise from a root XML element.
+
+        Args:
+            controller_element: The ``<Controller>`` element whose
+                ``AddOnInstructionDefinitions/AddOnInstructionDefinition`` children form
+                this collection.
+        """
+        super().__init__(
+            controller_element,
+            "AddOnInstructionDefinitions/AddOnInstructionDefinition",
+            AOIParametersCollection,
         )

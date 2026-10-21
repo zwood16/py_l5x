@@ -8,9 +8,15 @@ from xml.etree import ElementTree as ET
 import pytest
 
 from py_l5x import load
-from py_l5x.parsers.aoi import AOIDefinition, AOILocalTag, _make_aoi_local_tag
+from py_l5x.parsers.aoi import (
+    AOIDataTypesCollection,
+    AOIDefinition,
+    AOILocalTag,
+    AOIParameter,
+    _make_aoi_local_tag,
+)
 from py_l5x.parsers.controller import ControllerInfo
-from py_l5x.parsers.datatype import AddOnDataTypeCollection, DataTypesCollection
+from py_l5x.parsers.datatype import DataTypesCollection
 from py_l5x.parsers.tag import (
     ArrayTag,
     AtomicNode,
@@ -53,7 +59,7 @@ def type_registry(controller_element: ET.Element) -> TypeRegistry:
     """Build a TypeRegistry from the example L5X."""
     return TypeRegistry(
         DataTypesCollection(controller_element),
-        AddOnDataTypeCollection(controller_element),
+        AOIDataTypesCollection(controller_element),
     )
 
 
@@ -114,6 +120,75 @@ class TestAOILocalRootMetadata:
             frozenset({"Min", "Max", "ExternalLogging", "Radix", "Dimensions"})
             == _RootMetadataMixin._DYNAMIC_KEYS
         )
+
+
+class TestAOIParameterOperandMetadata:
+    """Parameter EU/State text comes only from un-operanded entries."""
+
+    _PARAM = '<Parameter Name="p" DataType="BOOL" Usage="Input">{body}</Parameter>'
+
+    def _param(self, body: str) -> AOIParameter:
+        return AOIParameter(ET.fromstring(self._PARAM.format(body=body)))
+
+    def test_unoperanded_entries_win_over_operanded_first(self) -> None:
+        """An Operand=".0" entry before the plain entry is skipped."""
+        param = self._param(
+            "<EngineeringUnits>"
+            '<EngineeringUnit Operand=".0"><CDataContent>bad</CDataContent>'
+            "</EngineeringUnit>"
+            "<EngineeringUnit><CDataContent>ms</CDataContent></EngineeringUnit>"
+            "</EngineeringUnits>"
+            "<State0s>"
+            '<State0 Operand=".0"><CDataContent>wrong0</CDataContent></State0>'
+            "<State0><CDataContent>off</CDataContent></State0>"
+            "</State0s>"
+            "<State1s>"
+            '<State1 Operand=".0"><CDataContent>wrong1</CDataContent></State1>'
+            "<State1><CDataContent>on</CDataContent></State1>"
+            "</State1s>"
+        )
+        assert param.engineering_unit == "ms"
+        assert param.state0 == "off"
+        assert param.state1 == "on"
+
+    def test_only_operanded_entries_return_empty(self) -> None:
+        """With only per-bit entries, the parameter-level text is empty."""
+        param = self._param(
+            "<EngineeringUnits>"
+            '<EngineeringUnit Operand=".0"><CDataContent>bad</CDataContent>'
+            "</EngineeringUnit>"
+            "</EngineeringUnits>"
+            "<State0s>"
+            '<State0 Operand=".0"><CDataContent>wrong0</CDataContent></State0>'
+            "</State0s>"
+            "<State1s>"
+            '<State1 Operand=".0"><CDataContent>wrong1</CDataContent></State1>'
+            "</State1s>"
+        )
+        assert param.engineering_unit == ""
+        assert param.state0 == ""
+        assert param.state1 == ""
+        assert "engineering_unit" not in param.describe()
+
+    def test_operand_override_still_in_overrides(self) -> None:
+        """The operanded per-bit state text is kept as a path override."""
+        param = self._param(
+            "<State0s>"
+            '<State0 Operand=".0"><CDataContent>wrong0</CDataContent></State0>'
+            "</State0s>"
+        )
+        assert param._overrides.get(".0") == {"state0": "wrong0"}
+
+    def test_min_max_and_absent_metadata(self) -> None:
+        """Min/Max convert by DataType; absent Min/Max are None."""
+        param = AOIParameter(
+            ET.fromstring(
+                '<Parameter Name="p" DataType="DINT" Usage="Input" Min="-5" Max="7"/>'
+            )
+        )
+        assert (param.min, param.max) == (-5, 7)
+        bare = AOIParameter(ET.fromstring('<Parameter Name="q" DataType="DINT"/>'))
+        assert (bare.min, bare.max) == (None, None)
 
 
 class TestNodeRepr:

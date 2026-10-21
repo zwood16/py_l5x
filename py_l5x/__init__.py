@@ -20,9 +20,10 @@ from py_l5x.parsers.aoi import (
     AOILocalStructTag,
     AOILocalTag,
     AOILocalTimeTag,
+    AOIParameter,
 )
 from py_l5x.parsers.controller import ControllerInfo
-from py_l5x.parsers.datatype import AddOnParameter, DataType, DataTypeMember
+from py_l5x.parsers.datatype import DataType, DataTypeMember
 from py_l5x.parsers.module import Module, ModuleTagRef, ModuleTagsView
 from py_l5x.parsers.program import Program
 from py_l5x.parsers.project import Project, ProjectTagsView
@@ -70,7 +71,7 @@ __all__ = [
     "AOILocalStructTag",
     "AOILocalTag",
     "AOILocalTimeTag",
-    "AddOnParameter",
+    "AOIParameter",
     "AliasTag",
     "ArrayNode",
     "ArrayTag",

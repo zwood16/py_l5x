@@ -95,7 +95,7 @@ Value-tree nodes (members, array elements, bits) are organized in a typed hierar
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, Sequence
-from typing import cast, overload
+from typing import TYPE_CHECKING, cast, overload
 from xml.etree import ElementTree as ET
 
 from py_l5x.parsers.atomic_types import (
@@ -114,8 +114,6 @@ from py_l5x.parsers.base import (
     str_attr,
 )
 from py_l5x.parsers.datatype import (
-    AddOnDataTypeCollection,
-    AddOnParameter,
     DataTypeMember,
     DataTypesCollection,
 )
@@ -126,10 +124,15 @@ from py_l5x.parsers.specialty_tags import (
 )
 from py_l5x.parsers.utils import cdata_text, convert_numeric
 
-#: A member/parameter definition used for metadata cross-reference. Both
-#: classes expose the same property surface (description/min/max/
-#: engineering_unit/state0/state1/radix/external_access).
-MemberDef = DataTypeMember | AddOnParameter
+if TYPE_CHECKING:
+    from py_l5x.parsers.aoi import AOIDataTypesCollection, AOIParameter
+
+    #: A member/parameter definition used for metadata cross-reference. Both
+    #: classes expose the same property surface (description/min/max/
+    #: engineering_unit/state0/state1/radix/external_access). Defined only for
+    #: type checking: AOIParameter lives in aoi.py, which imports this module
+    #: at runtime, and every use is in a string annotation.
+    MemberDef = DataTypeMember | AOIParameter
 
 #: ``Data`` element ``Format`` values that carry a normal value tree. ``L5K``
 #: is a legacy, redundant raw-text mirror of the same data present in the
@@ -152,17 +155,17 @@ class TypeRegistry:
 
     Args:
         data_types: The controller's UDT collection.
-        aoi_types: The controller's AOI parameter collection.
+        aoi_types: The controller's AOI data types collection.
     """
 
     def __init__(
-        self, data_types: DataTypesCollection, aoi_types: AddOnDataTypeCollection
+        self, data_types: DataTypesCollection, aoi_types: AOIDataTypesCollection
     ) -> None:
         """Initialise from the controller's UDT and AOI collections.
 
         Args:
             data_types: The controller's UDT collection.
-            aoi_types: The controller's AOI parameter collection.
+            aoi_types: The controller's AOI data types collection.
         """
         self._data_types = data_types
         self._aoi_types = aoi_types
@@ -1277,7 +1280,7 @@ class _RootMetadataMixin:
     Reads metadata set directly on an identity element: Min/Max/ExternalLogging
     attributes and un-operanded EngineeringUnits/State0s/State1s entries. Also
     supplies the shared ``_DYNAMIC_KEYS`` and ``extra_attributes`` filtering for
-    identity elements (``Tag`` and ``AOILocalTag``).
+    identity elements (``Tag``, ``AOILocalTag`` and ``AOIParameter``).
 
     Requires ``self._element`` to be defined (the XML element) and must precede
     :class:`BaseElement` in the MRO so ``super().extra_attributes`` resolves.

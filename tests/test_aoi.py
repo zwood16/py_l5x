@@ -21,14 +21,14 @@ from py_l5x import (
 from py_l5x.parsers.aoi import (
     _AOI_LOCAL_TAG_CLASSES,
     AOICollection,
+    AOIDataTypesCollection,
     AOIDefinition,
     AOILocalTag,
+    AOIParameter,
+    AOIParametersCollection,
+    _AOIDefinitionTag,
 )
-from py_l5x.parsers.datatype import (
-    AddOnDataTypeCollection,
-    AddOnParameters,
-    DataTypesCollection,
-)
+from py_l5x.parsers.datatype import DataTypesCollection
 from py_l5x.parsers.routine import Routine
 from py_l5x.parsers.tag import (
     ArrayNode,
@@ -66,7 +66,7 @@ def type_registry(controller_element: ET.Element) -> TypeRegistry:
     """Build a TypeRegistry from the example L5X's UDT and AOI collections."""
     return TypeRegistry(
         DataTypesCollection(controller_element),
-        AddOnDataTypeCollection(controller_element),
+        AOIDataTypesCollection(controller_element),
     )
 
 
@@ -76,6 +76,60 @@ def aoi_definitions(
 ) -> AOICollection:
     """AOI definitions collection."""
     return AOICollection(controller_element, type_registry)
+
+
+@pytest.fixture
+def aoi_xml_elements(example_tree: ET.ElementTree) -> list[ET.Element]:
+    """Extract all <AddOnInstructionDefinition> elements from the example L5X."""
+    root = example_tree.getroot()
+    defs = root.findall(".//AddOnInstructionDefinition")
+    assert len(defs) > 0, "No AddOnInstructionDefinition elements found in example.L5X"
+    return defs
+
+
+@pytest.fixture
+def debounce_aoi(aoi_xml_elements: list[ET.Element]) -> ET.Element:
+    """The Debounce AOI definition."""
+    for el in aoi_xml_elements:
+        if el.get("Name") == "Debounce":
+            return el
+    pytest.fail("Debounce AOI not found in example.L5X")
+
+
+@pytest.fixture
+def generic_input_aoi(aoi_xml_elements: list[ET.Element]) -> ET.Element:
+    """The GenericInput AOI definition."""
+    for el in aoi_xml_elements:
+        if el.get("Name") == "GenericInput":
+            return el
+    pytest.fail("GenericInput AOI not found in example.L5X")
+
+
+@pytest.fixture
+def fanuc_robot_aoi(aoi_xml_elements: list[ET.Element]) -> ET.Element:
+    """The FanucRobot AOI definition."""
+    for el in aoi_xml_elements:
+        if el.get("Name") == "FanucRobot":
+            return el
+    pytest.fail("FanucRobot AOI not found in example.L5X")
+
+
+@pytest.fixture
+def aoi_types(controller_element: ET.Element) -> AOIDataTypesCollection:
+    """Create an AOIDataTypesCollection instance from the example L5X."""
+    return AOIDataTypesCollection(controller_element)
+
+
+@pytest.fixture
+def debounce(aoi_types: AOIDataTypesCollection) -> AOIParametersCollection:
+    """The Debounce AOI's parameters."""
+    return aoi_types["Debounce"]
+
+
+@pytest.fixture
+def generic_input(aoi_types: AOIDataTypesCollection) -> AOIParametersCollection:
+    """The GenericInput AOI's parameters."""
+    return aoi_types["GenericInput"]
 
 
 class TestAoiCollection:
@@ -108,12 +162,12 @@ class TestAoiIdentity:
 class TestAoiParametersAndRoutines:
     """Tests for reused parameter and routine parser surfaces."""
 
-    def test_parameters_property_reuses_addonparameters(
+    def test_parameters_property_reuses_aoi_parameters_collection(
         self, aoi_definitions: AOICollection
     ) -> None:
-        """AOI.parameters returns AddOnParameters."""
+        """AOI.parameters returns AOIParametersCollection."""
         debounce = aoi_definitions["Debounce"]
-        assert isinstance(debounce.parameters, AddOnParameters)
+        assert isinstance(debounce.parameters, AOIParametersCollection)
         assert debounce.parameters["onDelay"].data_type == "DINT"
 
     def test_routines_property_reuses_shared_routine_parser(
@@ -368,3 +422,284 @@ class TestAoiLogicText:
         returned = debounce.print_logic_text()
         out = capsys.readouterr().out
         assert returned in out
+
+
+# ---------------------------------------------------------------------------
+# AOI parameters
+# ---------------------------------------------------------------------------
+
+
+class TestAOIParameterParsing:
+    """Tests for AOIParameter and AOIParametersCollection parsing."""
+
+    def test_parameter_identity(self, debounce_aoi: ET.Element) -> None:
+        """Basic parameter properties are correctly extracted."""
+        params = AOIParametersCollection(debounce_aoi)
+        param = params["onDelay"]
+        assert param.name == "onDelay"
+        assert param.data_type == "DINT"
+        assert param.usage == "Input"
+        assert param.radix == "Decimal"
+        assert param.required is False
+        assert param.visible is True
+
+    def test_parameter_description(self, debounce_aoi: ET.Element) -> None:
+        """Parameter description is extracted from CDATA."""
+        params = AOIParametersCollection(debounce_aoi)
+        assert (
+            "milliseconds before output bit turns ON" in params["onDelay"].description
+        )
+
+    def test_parameter_inout_detection(self, fanuc_robot_aoi: ET.Element) -> None:
+        """InOut usage is correctly identified."""
+        params = AOIParametersCollection(fanuc_robot_aoi)
+        # allowableAlarms is InOut in FanucRobot
+        assert params["allowableAlarms"].is_inout is True
+        # robotUI is InOut in FanucRobot
+        assert params["robotUI"].is_inout is True
+
+    def test_filtered_parameters(self, fanuc_robot_aoi: ET.Element) -> None:
+        """datatype_members excludes InOut parameters."""
+        params = AOIParametersCollection(fanuc_robot_aoi)
+        filtered = params.datatype_members
+        assert "allowableAlarms" not in filtered
+        assert "robotUI" not in filtered
+        assert "robotUO" not in filtered
+
+    def test_fanuc_robot_constant_is_declared_field(
+        self, fanuc_robot_aoi: ET.Element
+    ) -> None:
+        """Constant is a declared field on parameters, not an extra attribute."""
+        params = AOIParametersCollection(fanuc_robot_aoi)
+        param = params["allowableAlarms"]
+        assert param.constant is False
+        assert "Constant" not in param.extra_attributes
+
+
+# ---------------------------------------------------------------------------
+# AOIDataTypesCollection mapping protocol
+# ---------------------------------------------------------------------------
+
+
+class TestAOIDataTypesCollection:
+    """Tests for the AOIDataTypesCollection mapping protocol."""
+
+    def test_contains_debounce(self, aoi_types: AOIDataTypesCollection) -> None:
+        """Debounce is present in the collection."""
+        assert "Debounce" in aoi_types
+
+    def test_contains_fanuc_robot(self, aoi_types: AOIDataTypesCollection) -> None:
+        """FanucRobot is present in the collection."""
+        assert "FanucRobot" in aoi_types
+
+    def test_getitem_returns_parameters(
+        self, aoi_types: AOIDataTypesCollection
+    ) -> None:
+        """Indexing returns an AOIParametersCollection instance."""
+        assert isinstance(aoi_types["Debounce"], AOIParametersCollection)
+
+    def test_missing_key_raises(self, aoi_types: AOIDataTypesCollection) -> None:
+        """Missing AOI name raises KeyError."""
+        with pytest.raises(KeyError):
+            aoi_types["NoSuchAOI"]
+
+
+# ---------------------------------------------------------------------------
+# AOIParametersCollection mapping protocol / datatype_members filtering
+# ---------------------------------------------------------------------------
+
+
+class TestAOIParametersCollection:
+    """Tests for the AOIParametersCollection mapping and InOut filtering."""
+
+    def test_contains_state_param(self, debounce: AOIParametersCollection) -> None:
+        """The state parameter is present."""
+        assert "state" in debounce
+
+    def test_getitem_returns_parameter(self, debounce: AOIParametersCollection) -> None:
+        """Indexing returns an AOIParameter instance."""
+        assert isinstance(debounce["state"], AOIParameter)
+
+    def test_datatype_members_excludes_inout(
+        self, aoi_types: AOIDataTypesCollection
+    ) -> None:
+        """datatype_members excludes InOut params (FanucAlarmLookup allowableAlarms)."""
+        alarm_lookup = aoi_types["FanucAlarmLookup"]
+        assert "allowableAlarms" in alarm_lookup
+        assert "allowableAlarms" not in alarm_lookup.datatype_members
+
+    def test_datatype_members_includes_input_output(
+        self, generic_input: AOIParametersCollection
+    ) -> None:
+        """datatype_members includes Input/Output parameters."""
+        assert "state" in generic_input.datatype_members
+        assert "onDelay" in generic_input.datatype_members
+
+
+# ---------------------------------------------------------------------------
+# AOIParameter identity / metadata
+# ---------------------------------------------------------------------------
+
+
+class TestAOIParameterIdentity:
+    """Tests for AOIParameter identity properties."""
+
+    def test_name(self, debounce: AOIParametersCollection) -> None:
+        """Name matches the Name attribute."""
+        assert debounce["state"].name == "state"
+
+    def test_data_type(self, debounce: AOIParametersCollection) -> None:
+        """Data type matches the DataType attribute."""
+        assert debounce["onDelay"].data_type == "DINT"
+
+    def test_usage_input(self, debounce: AOIParametersCollection) -> None:
+        """onDelay is an Input parameter."""
+        assert debounce["onDelay"].usage == "Input"
+
+    def test_usage_output(self, debounce: AOIParametersCollection) -> None:
+        """state is an Output parameter."""
+        assert debounce["state"].usage == "Output"
+
+    def test_is_inout(self, aoi_types: AOIDataTypesCollection) -> None:
+        """allowableAlarms uses InOut usage."""
+        assert aoi_types["FanucAlarmLookup"]["allowableAlarms"].is_inout is True
+
+    def test_description(self, debounce: AOIParametersCollection) -> None:
+        """Description text matches the Description CDATA."""
+        assert (
+            debounce["onDelay"].description == "milliseconds before output bit turns ON"
+        )
+
+
+class TestAOIParameterMetadata:
+    """Tests for AOIParameter min/max/engineering_unit/state0/state1."""
+
+    def test_min(self, debounce: AOIParametersCollection) -> None:
+        """Min matches the Min attribute, converted to int."""
+        assert debounce["onDelay"].min == 0
+
+    def test_max(self, debounce: AOIParametersCollection) -> None:
+        """Max matches the Max attribute, converted to int."""
+        assert debounce["onDelay"].max == 2147483647
+
+    def test_engineering_unit(self, debounce: AOIParametersCollection) -> None:
+        """Engineering unit matches the nested EngineeringUnits CDATA."""
+        assert debounce["onDelay"].engineering_unit == "ms"
+
+    def test_state0(self, debounce: AOIParametersCollection) -> None:
+        """State0 matches the nested State0s/State0 CDATA."""
+        assert debounce["state"].state0 == "off"
+
+    def test_state1(self, debounce: AOIParametersCollection) -> None:
+        """State1 matches the nested State1s/State1 CDATA."""
+        assert debounce["state"].state1 == "on"
+
+    def test_min_max_absent_returns_none(
+        self, generic_input: AOIParametersCollection
+    ) -> None:
+        """Min/max are None when not specified."""
+        assert generic_input["state"].min is None
+        assert generic_input["state"].max is None
+
+    def test_engineering_unit_absent_returns_empty(
+        self, generic_input: AOIParametersCollection
+    ) -> None:
+        """Engineering unit is empty string when not specified."""
+        assert generic_input["state"].engineering_unit == ""
+
+
+# ---------------------------------------------------------------------------
+# AOIParameter shares its identity base with AOILocalTag
+# ---------------------------------------------------------------------------
+
+_PARAM_XML = (
+    '<Parameter Name="p" TagType="Base" DataType="REAL" Usage="Input" '
+    'Radix="Float" Required="false" Visible="true" ExternalAccess="Read/Write" '
+    'Description="from attr" Min="0.5" Max="9.5" ExternalLogging="true" '
+    'Foo="1">'
+    '<DefaultData Format="Decorated">'
+    '<DataValue DataType="REAL" Radix="Float" Value="1.0"/>'
+    "</DefaultData></Parameter>"
+)
+
+
+class TestAOIParameterSharedBase:
+    """Parameters and local tags share the _AOIDefinitionTag identity base."""
+
+    def test_parameter_and_local_tag_share_base(self) -> None:
+        """Both AOI parameters and AOI local tags derive from _AOIDefinitionTag."""
+        assert issubclass(AOIParameter, _AOIDefinitionTag)
+        assert issubclass(AOILocalTag, _AOIDefinitionTag)
+
+    def test_description_attr_fallback(self) -> None:
+        """A bare Description attribute is read for parameters, as for tags."""
+        param = AOIParameter(ET.fromstring(_PARAM_XML))
+        assert param.description == "from attr"
+        assert "Description" not in param.extra_attributes
+
+    def test_extra_attributes_exclude_known_keys(self) -> None:
+        """Min/Max/ExternalLogging/Radix are not reported as extra attributes."""
+        param = AOIParameter(ET.fromstring(_PARAM_XML))
+        assert param.extra_attributes == {"TagType": "Base", "Foo": "1"}
+
+    def test_repr_is_describe_with_header(self) -> None:
+        """repr matches describe(); the header includes name and data type."""
+        param = AOIParameter(ET.fromstring(_PARAM_XML))
+        assert repr(param) == param.describe()
+        assert param.describe().splitlines()[0] == "AOIParameter('p', 'REAL')"
+
+    def test_describe_lists_metadata_once(self) -> None:
+        """Min/Max appear once each in describe(); declared fields are not repeated."""
+        param = AOIParameter(ET.fromstring(_PARAM_XML))
+        lines = param.describe().splitlines()
+        assert lines.count("  min: 0.5") == 1
+        assert lines.count("  max: 9.5") == 1
+        assert sum(line.strip().startswith("external_logging") for line in lines) == 1
+        assert sum(line.strip().startswith("description") for line in lines) == 1
+
+    def test_constant_is_declared(self) -> None:
+        """Constant on a parameter is a declared field read as a bool."""
+        param = AOIParameter(ET.fromstring(_PARAM_XML))
+        assert param.constant is False
+        const = AOIParameter(
+            ET.fromstring(_PARAM_XML.replace('Foo="1"', 'Constant="true"'))
+        )
+        assert const.constant is True
+        assert "  constant = True" in const.describe().splitlines()
+
+    def test_describe_uses_debounce_metadata(
+        self, debounce: AOIParametersCollection
+    ) -> None:
+        """Debounce's state parameter describes its description and states."""
+        text = debounce["state"].describe()
+        assert "  description = 'debounced output'" in text
+        assert "  state0: 'off'" in text
+        assert "  state1: 'on'" in text
+        assert "engineering_unit" not in text
+
+    def test_describe_uses_debounce_units_and_limits(
+        self, debounce: AOIParametersCollection
+    ) -> None:
+        """Debounce's onDelay describes its engineering unit and min/max."""
+        text = debounce["onDelay"].describe()
+        assert "  min: 0" in text.splitlines()
+        assert "  max: 2147483647" in text.splitlines()
+        assert "  engineering_unit: 'ms'" in text.splitlines()
+
+
+class TestAOIParameterOverrides:
+    """Operand-qualified parameter metadata is kept as overrides."""
+
+    def test_seqctrl_state_overrides_contain_running(
+        self, aoi_types: AOIDataTypesCollection
+    ) -> None:
+        """SeqCtrl's state parameter has a '.0' comment override of 'running'."""
+        state = aoi_types["SeqCtrl"]["state"]
+        assert state._overrides.get(".0") == {"comment": "running"}
+
+    def test_parameter_gets_registry_from_definition(
+        self, aoi_definitions: AOICollection, type_registry: TypeRegistry
+    ) -> None:
+        """AOIDefinition.parameters passes its type registry to each parameter."""
+        params = aoi_definitions["Debounce"].parameters
+        assert params["onDelay"]._type_registry is type_registry
