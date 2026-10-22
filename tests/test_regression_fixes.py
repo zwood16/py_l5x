@@ -14,6 +14,7 @@ from py_l5x.parsers.aoi import (
     AOILocalTag,
     AOIParameter,
     _make_aoi_local_tag,
+    _make_aoi_parameter,
 )
 from py_l5x.parsers.controller import ControllerInfo
 from py_l5x.parsers.datatype import DataTypesCollection
@@ -123,12 +124,20 @@ class TestAOILocalRootMetadata:
 
 
 class TestAOIParameterOperandMetadata:
-    """Parameter EU/State text comes only from un-operanded entries."""
+    """Parameter EU/State text comes only from un-operanded entries.
 
-    _PARAM = '<Parameter Name="p" DataType="BOOL" Usage="Input">{body}</Parameter>'
+    The synthetic parameters carry a ``DefaultData`` value, so they dispatch to
+    typed classes (BOOL -> ``AOIParameterBoolTag``) that expose the metadata.
+    """
+
+    _PARAM = (
+        '<Parameter Name="p" DataType="BOOL" Usage="Input">{body}'
+        '<DefaultData Format="Decorated">'
+        '<DataValue DataType="BOOL" Value="0"/></DefaultData></Parameter>'
+    )
 
     def _param(self, body: str) -> AOIParameter:
-        return AOIParameter(ET.fromstring(self._PARAM.format(body=body)))
+        return _make_aoi_parameter(ET.fromstring(self._PARAM.format(body=body)), None)
 
     def test_unoperanded_entries_win_over_operanded_first(self) -> None:
         """An Operand=".0" entry before the plain entry is skipped."""
@@ -181,13 +190,25 @@ class TestAOIParameterOperandMetadata:
 
     def test_min_max_and_absent_metadata(self) -> None:
         """Min/Max convert by DataType; absent Min/Max are None."""
-        param = AOIParameter(
+        dint_value = (
+            '<DefaultData Format="Decorated">'
+            '<DataValue DataType="DINT" Value="0"/></DefaultData>'
+        )
+        param = _make_aoi_parameter(
             ET.fromstring(
-                '<Parameter Name="p" DataType="DINT" Usage="Input" Min="-5" Max="7"/>'
-            )
+                '<Parameter Name="p" DataType="DINT" Usage="Input" Min="-5" Max="7">'
+                f"{dint_value}</Parameter>"
+            ),
+            None,
         )
         assert (param.min, param.max) == (-5, 7)
-        bare = AOIParameter(ET.fromstring('<Parameter Name="q" DataType="DINT"/>'))
+        bare = _make_aoi_parameter(
+            ET.fromstring(
+                '<Parameter Name="q" DataType="DINT" Usage="Input">'
+                f"{dint_value}</Parameter>"
+            ),
+            None,
+        )
         assert (bare.min, bare.max) == (None, None)
 
 
@@ -400,3 +421,154 @@ class TestDescribeExtrasLast:
         assert text.splitlines().index("  value: 5") < text.splitlines().index(
             "  Extra Attributes:"
         )
+
+
+_SYNTH_AOI_CONTROLLER = """<Controller Name="synth">
+<DataTypes>
+<DataType Name="OUTER" Family="NoFamily" Class="User">
+<Members>
+<Member Name="an_aoi" DataType="SYNTH_AOI" Dimension="0"
+  Hidden="false" ExternalAccess="Read/Write"/>
+</Members>
+</DataType>
+</DataTypes>
+<AddOnInstructionDefinitions>
+<AddOnInstructionDefinition Name="SYNTH_AOI" Revision="1.0">
+<Parameters>
+<Parameter Name="flags" TagType="Base" DataType="DINT" Usage="Output"
+  Radix="Decimal" ExternalAccess="Read/Write">
+<Description><![CDATA[flags desc]]></Description>
+<Comments>
+<Comment Operand=".0"><![CDATA[p0]]></Comment>
+<Comment Operand=".1"><![CDATA[p1]]></Comment>
+</Comments>
+<State0s><State0 Operand=".2"><![CDATA[off2]]></State0></State0s>
+<State1s><State1 Operand=".2"><![CDATA[on2]]></State1></State1s>
+</Parameter>
+</Parameters>
+</AddOnInstructionDefinition>
+</AddOnInstructionDefinitions>
+</Controller>"""
+
+
+def _synth_flags(registry: TypeRegistry) -> IntegerNode:
+    """The ``flags`` parameter node under ``OUTER.an_aoi`` (synthetic XML)."""
+    tag = _make_tag(
+        ET.fromstring(
+            '<Tag Name="o" TagType="Base" DataType="OUTER">'
+            '<Data Format="Decorated"><Structure DataType="OUTER">'
+            '<StructureMember Name="an_aoi" DataType="SYNTH_AOI">'
+            '<DataValueMember Name="flags" DataType="DINT" '
+            'Radix="Decimal" Value="5"/>'
+            "</StructureMember>"
+            "</Structure></Data></Tag>"
+        ),
+        registry,
+    )
+    flags = tag.members["an_aoi"].members["flags"]
+    assert isinstance(flags, IntegerNode)
+    return flags
+
+
+class TestAOIParameterDefinitionScopes:
+    """AOI parameter operand metadata applies to every instance's member bits.
+
+    Lookup order for a node's metadata: the instance tag's operand entry, then
+    the enclosing AOI parameter definition's operand entry (relative to the
+    parameter), then the member definition's own value.
+    """
+
+    _STATE_TEXT = [
+        "running",
+        "complete",
+        "pausing",
+        "paused",
+        "restarting",
+        "aborting",
+        "aborted",
+    ]
+
+    @pytest.fixture
+    def sequence_state(self) -> IntegerNode:
+        """SeqCtrl instance's ``state`` (DINT AOI parameter) from example.L5X."""
+        tag = load(EXAMPLE_L5X).programs["MainProgram"].tags["sequence"]
+        node = tag.members["state"]
+        assert isinstance(node, IntegerNode)
+        return node
+
+    @pytest.fixture
+    def synth_registry(self) -> TypeRegistry:
+        """Registry with a synthetic UDT ``OUTER`` holding AOI ``SYNTH_AOI``."""
+        el = ET.fromstring(_SYNTH_AOI_CONTROLLER)
+        return TypeRegistry(DataTypesCollection(el), AOIDataTypesCollection(el))
+
+    def test_definition_bit_descriptions(self, sequence_state: IntegerNode) -> None:
+        """Bits 0..6 show the SeqCtrl ``state`` parameter's per-bit comments."""
+        got = [sequence_state.bit(n).description for n in range(7)]
+        assert got == self._STATE_TEXT
+
+    def test_undefined_bit_is_empty(self, sequence_state: IntegerNode) -> None:
+        """A bit with no definition comment falls back to an empty description."""
+        assert sequence_state.bit(7).description == ""
+
+    def test_bits_property_descriptions(self, sequence_state: IntegerNode) -> None:
+        """``.bits`` carries the same per-bit descriptions across all 32 bits."""
+        descs = [b.description for b in sequence_state.bits]
+        assert len(descs) == 32
+        assert descs[:7] == self._STATE_TEXT
+        assert set(descs[7:]) == {""}
+
+    def test_parameter_description_unchanged(self, sequence_state: IntegerNode) -> None:
+        """The member's own description still comes from the parameter."""
+        assert sequence_state.description == (
+            "Bit address state indicator for certain more limited HMIs"
+        )
+
+    def test_instance_operand_wins_over_definition(
+        self, type_registry: TypeRegistry
+    ) -> None:
+        """An instance ``.STATE.0`` comment overrides the definition's bit 0 only."""
+        tag = _make_tag(
+            ET.fromstring(
+                '<Tag Name="seq" TagType="Base" DataType="SeqCtrl">'
+                "<Comments>"
+                '<Comment Operand=".STATE.0"><![CDATA[instance text]]></Comment>'
+                "</Comments>"
+                '<Data Format="Decorated">'
+                '<Structure DataType="SeqCtrl">'
+                '<DataValueMember Name="state" DataType="DINT" Value="3"/>'
+                "</Structure></Data></Tag>"
+            ),
+            type_registry,
+        )
+        state = tag.members["state"]
+        assert state.bit(0).description == "instance text"
+        assert state.bit(1).description == "complete"
+        assert state.description == (
+            "Bit address state indicator for certain more limited HMIs"
+        )
+
+    def test_definition_state_text_on_bits(self, synth_registry: TypeRegistry) -> None:
+        """Per-bit State0/State1 definition entries resolve on instance bits."""
+        flags = _synth_flags(synth_registry)
+        assert flags.bit(2).state0 == "off2"
+        assert flags.bit(2).state1 == "on2"
+        assert flags.bit(2).description == ""
+        assert flags.bit(0).state0 == ""
+
+    def test_nested_aoi_member_bit_comment(self, synth_registry: TypeRegistry) -> None:
+        """An AOI parameter inside a UDT member scopes its bit comments."""
+        flags = _synth_flags(synth_registry)
+        assert flags.operand_path == ".AN_AOI.FLAGS"
+        assert [flags.bit(0).description, flags.bit(1).description] == ["p0", "p1"]
+        assert flags.description == "flags desc"
+
+    def test_untyped_parameter_member_def_bounds(
+        self, synth_registry: TypeRegistry
+    ) -> None:
+        """A base (untyped) AOIParameter member_def yields None bounds, not errors."""
+        flags = _synth_flags(synth_registry)
+        assert type(flags._member_def) is AOIParameter
+        assert flags.min is None
+        assert flags.max is None
+        assert flags.engineering_unit == ""

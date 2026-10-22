@@ -21,6 +21,12 @@ from py_l5x.parsers.aoi import (
     AOILocalTag,
     AOILocalTimeTag,
     AOIParameter,
+    AOIParameterAtomicTag,
+    AOIParameterBoolTag,
+    AOIParameterDateTimeTag,
+    AOIParameterFloatTag,
+    AOIParameterIntegerTag,
+    AOIParameterTimeTag,
 )
 from py_l5x.parsers.controller import ControllerInfo
 from py_l5x.parsers.datatype import DataType, DataTypeMember
@@ -72,6 +78,12 @@ __all__ = [
     "AOILocalTag",
     "AOILocalTimeTag",
     "AOIParameter",
+    "AOIParameterAtomicTag",
+    "AOIParameterBoolTag",
+    "AOIParameterDateTimeTag",
+    "AOIParameterFloatTag",
+    "AOIParameterIntegerTag",
+    "AOIParameterTimeTag",
     "AliasTag",
     "ArrayNode",
     "ArrayTag",

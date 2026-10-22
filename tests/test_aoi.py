@@ -7,6 +7,7 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
+import py_l5x
 from py_l5x import (
     AOILocalArrayTag,
     AOILocalAtomicTag,
@@ -17,9 +18,16 @@ from py_l5x import (
     AOILocalStringTag,
     AOILocalStructTag,
     AOILocalTimeTag,
+    AOIParameterAtomicTag,
+    AOIParameterBoolTag,
+    AOIParameterDateTimeTag,
+    AOIParameterFloatTag,
+    AOIParameterIntegerTag,
+    AOIParameterTimeTag,
 )
 from py_l5x.parsers.aoi import (
     _AOI_LOCAL_TAG_CLASSES,
+    _AOI_PARAMETER_TAG_CLASSES,
     AOICollection,
     AOIDataTypesCollection,
     AOIDefinition,
@@ -27,6 +35,8 @@ from py_l5x.parsers.aoi import (
     AOIParameter,
     AOIParametersCollection,
     _AOIDefinitionTag,
+    _AOIParameterValueTag,
+    _make_aoi_parameter,
 )
 from py_l5x.parsers.datatype import DataTypesCollection
 from py_l5x.parsers.routine import Routine
@@ -598,8 +608,8 @@ class TestAOIParameterMetadata:
         self, generic_input: AOIParametersCollection
     ) -> None:
         """Min/max are None when not specified."""
-        assert generic_input["state"].min is None
-        assert generic_input["state"].max is None
+        assert generic_input["holdTime"].min is None
+        assert generic_input["holdTime"].max is None
 
     def test_engineering_unit_absent_returns_empty(
         self, generic_input: AOIParametersCollection
@@ -638,9 +648,10 @@ class TestAOIParameterSharedBase:
         assert "Description" not in param.extra_attributes
 
     def test_extra_attributes_exclude_known_keys(self) -> None:
-        """Min/Max/ExternalLogging/Radix are not reported as extra attributes."""
+        """Min/Max/ExternalLogging/Radix/TagType are not extra attributes."""
         param = AOIParameter(ET.fromstring(_PARAM_XML))
-        assert param.extra_attributes == {"TagType": "Base", "Foo": "1"}
+        assert param.extra_attributes == {"Foo": "1"}
+        assert param.tag_type == "Base"
 
     def test_repr_is_describe_with_header(self) -> None:
         """repr matches describe(); the header includes name and data type."""
@@ -650,7 +661,7 @@ class TestAOIParameterSharedBase:
 
     def test_describe_lists_metadata_once(self) -> None:
         """Min/Max appear once each in describe(); declared fields are not repeated."""
-        param = AOIParameter(ET.fromstring(_PARAM_XML))
+        param = _make_aoi_parameter(ET.fromstring(_PARAM_XML), None)
         lines = param.describe().splitlines()
         assert lines.count("  min: 0.5") == 1
         assert lines.count("  max: 9.5") == 1
@@ -703,3 +714,467 @@ class TestAOIParameterOverrides:
         """AOIDefinition.parameters passes its type registry to each parameter."""
         params = aoi_definitions["Debounce"].parameters
         assert params["onDelay"]._type_registry is type_registry
+
+
+# ---------------------------------------------------------------------------
+# Typed AOI parameters
+# ---------------------------------------------------------------------------
+
+_TYPED_PARAM_CLASSES = (
+    AOIParameterBoolTag,
+    AOIParameterIntegerTag,
+    AOIParameterFloatTag,
+    AOIParameterTimeTag,
+    AOIParameterDateTimeTag,
+    AOIParameterAtomicTag,
+)
+
+
+def _synthetic_param(
+    attrs: str, data_value: str, *, body: str = "", fmt: str = "Decorated"
+) -> ET.Element:
+    """Build a ``<Parameter>`` element with an optional body and one value child.
+
+    Args:
+        attrs: Attribute text placed on the ``<Parameter>`` start tag.
+        data_value: Child markup placed inside ``DefaultData``.
+        body: Extra child markup placed before ``DefaultData``.
+        fmt: The ``DefaultData`` Format attribute.
+    """
+    return ET.fromstring(
+        f"<Parameter {attrs}>{body}"
+        f'<DefaultData Format="{fmt}">{data_value}</DefaultData>'
+        "</Parameter>"
+    )
+
+
+_REAL_INPUT_ATTRS = (
+    'Name="speed" TagType="Base" DataType="REAL" Usage="Input" Radix="Float" '
+    'Required="false" Visible="true" ExternalAccess="Read/Write" '
+    'Min="0.5" Max="9.5" ExternalLogging="true"'
+)
+_REAL_INPUT_VALUE = '<DataValue DataType="REAL" Radix="Float" Value="1.5"/>'
+
+
+class TestAOIParameterDispatch:
+    """_make_aoi_parameter picks the typed class from usage and value node."""
+
+    @pytest.mark.parametrize(
+        ("aoi_name", "param_name", "expected"),
+        [
+            ("Debounce", "state", AOIParameterBoolTag),
+            ("Debounce", "onDelay", AOIParameterIntegerTag),
+            ("Debounce", "EnableIn", AOIParameter),  # no DefaultData value
+            ("GenericInput", "holdTime", AOIParameterIntegerTag),
+            ("SeqCtrl", "mode", AOIParameterBoolTag),
+            ("SeqCtrl", "state", AOIParameterIntegerTag),
+            ("FanucRobot", "progNumber", AOIParameterIntegerTag),  # SINT
+            ("FanucRobot", "seq", AOIParameter),  # InOut
+            ("FanucRobot", "robotUI", AOIParameter),  # InOut UDT
+            ("FanucAlarmLookup", "allowableAlarms", AOIParameter),  # InOut
+            ("FanucPNS", "UO", AOIParameter),  # InOut
+        ],
+    )
+    def test_fixture_parameter_class(
+        self,
+        aoi_types: AOIDataTypesCollection,
+        aoi_name: str,
+        param_name: str,
+        expected: type[AOIParameter],
+    ) -> None:
+        """Selected fixture parameters dispatch to their exact class."""
+        assert type(aoi_types[aoi_name][param_name]) is expected
+
+    def test_every_fixture_parameter(self, aoi_types: AOIDataTypesCollection) -> None:
+        """All fixture parameters dispatch consistently with usage and data type."""
+        by_type = {
+            "BOOL": AOIParameterBoolTag,
+            "DINT": AOIParameterIntegerTag,
+            "SINT": AOIParameterIntegerTag,
+        }
+        seen: set[type[AOIParameter]] = set()
+        for aoi_name in aoi_types:
+            for name, param in aoi_types[aoi_name].items():
+                where = f"{aoi_name}.{name}"
+                if param.is_inout:
+                    assert type(param) is AOIParameter, where
+                elif isinstance(param, _AOIParameterValueTag):
+                    assert type(param) is by_type[param.data_type], where
+                else:
+                    assert type(param) is AOIParameter, where
+                    assert param._element.find("DefaultData") is None, where
+                seen.add(type(param))
+        assert {AOIParameterBoolTag, AOIParameterIntegerTag, AOIParameter} <= seen
+
+    def test_default_collection_is_typed(self, debounce_aoi: ET.Element) -> None:
+        """AOIParametersCollection with no registry still builds typed params."""
+        params = AOIParametersCollection(debounce_aoi)
+        assert type(params["onDelay"]) is AOIParameterIntegerTag
+        assert type(params["state"]) is AOIParameterBoolTag
+
+    def test_real_input_is_float(self) -> None:
+        """A synthetic REAL Input dispatches to AOIParameterFloatTag."""
+        param = _make_aoi_parameter(
+            _synthetic_param(_REAL_INPUT_ATTRS, _REAL_INPUT_VALUE), None
+        )
+        assert type(param) is AOIParameterFloatTag
+        assert isinstance(param, FloatNode)
+
+    @pytest.mark.parametrize(
+        ("data_type", "value", "expected"),
+        [
+            ("LREAL", "2.25", AOIParameterFloatTag),
+            ("TIME", "T#250ms", AOIParameterTimeTag),
+            ("DT", "DT#2020-01-01-00:00:00.000_000Z", AOIParameterDateTimeTag),
+            ("BOOL", "1", AOIParameterBoolTag),
+            ("UDINT", "7", AOIParameterIntegerTag),
+        ],
+    )
+    def test_atomic_input_families(
+        self, data_type: str, value: str, expected: type[AOIParameter]
+    ) -> None:
+        """Input parameters of each supported family dispatch to their class."""
+        xml = (
+            f'Name="p" DataType="{data_type}" Usage="Input"',
+            f'<DataValue DataType="{data_type}" Value="{value}"/>',
+        )
+        param = _make_aoi_parameter(_synthetic_param(*xml), None)
+        assert type(param) is expected
+
+    def test_inout_stays_base_even_with_value(self) -> None:
+        """InOut parameters never get a typed class, even with a value tree."""
+        param = _make_aoi_parameter(
+            _synthetic_param(
+                'Name="p" DataType="DINT" Usage="InOut"',
+                '<DataValue DataType="DINT" Value="3"/>',
+            ),
+            None,
+        )
+        assert type(param) is AOIParameter
+        assert param.is_inout is True
+
+    @pytest.mark.parametrize(
+        "xml",
+        [
+            # String value root (no typed class for STRING parameters)
+            '<Parameter Name="s" DataType="STRING" Usage="Input">'
+            '<DefaultData Format="String"><String Length="0"/></DefaultData>'
+            "</Parameter>",
+            # Structure value root
+            '<Parameter Name="t" DataType="TIMER" Usage="Input">'
+            '<DefaultData Format="Decorated">'
+            '<Structure DataType="TIMER"><DataValueMember Name="PRE" '
+            'DataType="DINT" Value="0"/></Structure>'
+            "</DefaultData></Parameter>",
+            # Array value root
+            '<Parameter Name="a" DataType="DINT" Usage="Input">'
+            '<DefaultData Format="Decorated">'
+            '<Array DataType="DINT" Dimensions="2"/>'
+            "</DefaultData></Parameter>",
+            # No DefaultData at all
+            '<Parameter Name="n" DataType="BOOL" Usage="Input"/>',
+            # Only the legacy L5K mirror
+            '<Parameter Name="l" DataType="DINT" Usage="Input">'
+            '<DefaultData Format="L5K">$0</DefaultData></Parameter>',
+        ],
+    )
+    def test_non_atomic_or_missing_value_is_base(self, xml: str) -> None:
+        """Strings, structures, arrays, and missing values stay plain parameters."""
+        param = _make_aoi_parameter(ET.fromstring(xml), None)
+        assert type(param) is AOIParameter
+
+
+class TestAOIParameterMappingAndExports:
+    """Mapping contents, class hierarchy, and public exports."""
+
+    def test_mapping_contents(self) -> None:
+        """Each node class maps to its typed parameter class; no others."""
+        assert {
+            BoolNode: AOIParameterBoolTag,
+            IntegerNode: AOIParameterIntegerTag,
+            FloatNode: AOIParameterFloatTag,
+            TimeNode: AOIParameterTimeTag,
+            DateTimeNode: AOIParameterDateTimeTag,
+            AtomicNode: AOIParameterAtomicTag,
+        } == _AOI_PARAMETER_TAG_CLASSES
+        for excluded in (StringNode, StructNode, ArrayNode):
+            assert excluded not in _AOI_PARAMETER_TAG_CLASSES
+
+    @pytest.mark.parametrize(
+        ("cls", "node_cls"),
+        [
+            (AOIParameterBoolTag, BoolNode),
+            (AOIParameterIntegerTag, IntegerNode),
+            (AOIParameterFloatTag, FloatNode),
+            (AOIParameterTimeTag, TimeNode),
+            (AOIParameterDateTimeTag, DateTimeNode),
+            (AOIParameterAtomicTag, AtomicNode),
+        ],
+    )
+    def test_subclass_relationships(
+        self, cls: type[AOIParameter], node_cls: type[AtomicNode]
+    ) -> None:
+        """Typed parameters are AOIParameter value tags, not local tags."""
+        assert issubclass(cls, _AOIParameterValueTag)
+        assert issubclass(cls, AOIParameter)
+        assert issubclass(cls, node_cls)
+        assert not issubclass(cls, AOILocalTag)
+
+    def test_base_is_not_value_tag(self) -> None:
+        """The plain AOIParameter carries no value tree."""
+        assert not issubclass(AOIParameter, _AOIParameterValueTag)
+
+    @pytest.mark.parametrize(
+        "cls",
+        [
+            AOIParameterAtomicTag,
+            AOIParameterBoolTag,
+            AOIParameterDateTimeTag,
+            AOIParameterFloatTag,
+            AOIParameterIntegerTag,
+            AOIParameterTimeTag,
+        ],
+    )
+    def test_exported_from_package(self, cls: type[AOIParameter]) -> None:
+        """Typed parameter classes are exported from py_l5x and listed in __all__."""
+        assert cls.__name__ in py_l5x.__all__
+        assert getattr(py_l5x, cls.__name__) is cls
+
+
+# ---------------------------------------------------------------------------
+# Typed parameter values and metadata
+# ---------------------------------------------------------------------------
+
+
+class TestAOIParameterValues:
+    """Value defaults from DataValue and typed min/max/radix/logging."""
+
+    def test_value_defaults(self, aoi_types: AOIDataTypesCollection) -> None:
+        """Defaults come from each parameter's DataValue."""
+        assert aoi_types["SeqCtrl"]["mode"].value is False
+        assert aoi_types["SeqCtrl"]["state"].value == 0
+        assert aoi_types["Debounce"]["onDelay"].value == 0
+        assert aoi_types["GenericInput"]["holdTime"].value == 500
+
+    def test_integer_min_max_are_int(self, debounce: AOIParametersCollection) -> None:
+        """Integer parameter min/max are ints, not the base str|int fallback."""
+        onDelay = debounce["onDelay"]
+        assert onDelay.min == 0
+        assert type(onDelay.min) is int
+        assert onDelay.max == 2147483647
+        assert type(onDelay.max) is int
+
+    def test_integer_min_max_absent_is_none(
+        self, generic_input: AOIParametersCollection
+    ) -> None:
+        """Absent Min/Max on an integer parameter are None."""
+        assert generic_input["holdTime"].min is None
+        assert generic_input["holdTime"].max is None
+
+    def test_integer_unparseable_min_is_none(self) -> None:
+        """An unparseable integer Min is None (the node contract), not a str."""
+        param = _make_aoi_parameter(
+            ET.fromstring(
+                '<Parameter Name="p" DataType="DINT" Usage="Input" Min="oops">'
+                '<DefaultData Format="Decorated">'
+                '<DataValue DataType="DINT" Value="1"/></DefaultData></Parameter>'
+            ),
+            None,
+        )
+        assert type(param) is AOIParameterIntegerTag
+        assert param.min is None
+
+    def test_real_min_max_are_float(self) -> None:
+        """REAL parameter min/max are floats."""
+        param = _make_aoi_parameter(
+            _synthetic_param(
+                'Name="speed" DataType="REAL" Usage="Input" Min="0" Max="9"',
+                _REAL_INPUT_VALUE,
+            ),
+            None,
+        )
+        assert type(param.min) is float
+        assert type(param.max) is float
+        assert (param.min, param.max) == (0.0, 9.0)
+
+    def test_real_value_and_metadata(self) -> None:
+        """Synthetic REAL Input: value, min/max, radix, logging, tag type, EU."""
+        param = _make_aoi_parameter(
+            _synthetic_param(
+                _REAL_INPUT_ATTRS,
+                _REAL_INPUT_VALUE,
+                body=(
+                    "<EngineeringUnits><EngineeringUnit>mm/s</EngineeringUnit>"
+                    "</EngineeringUnits>"
+                ),
+            ),
+            None,
+        )
+        assert type(param) is AOIParameterFloatTag
+        assert param.value == 1.5
+        assert type(param.value) is float
+        assert (param.min, param.max) == (0.5, 9.5)
+        assert param.radix == "Float"
+        assert param.external_logging is True
+        assert param.tag_type == "Base"
+        assert param.engineering_unit == "mm/s"
+
+
+class TestAOIParameterOperandAndDescribe:
+    """Per-bit descriptions, radix/logging parity, and describe() output."""
+
+    def test_seqctrl_state_bit_descriptions(
+        self, aoi_types: AOIDataTypesCollection
+    ) -> None:
+        """SeqCtrl state bits 0-6 have comments; bit 7 has none."""
+        state = aoi_types["SeqCtrl"]["state"]
+        assert [state.bit(i).description for i in range(7)] == [
+            "running",
+            "complete",
+            "pausing",
+            "paused",
+            "restarting",
+            "aborting",
+            "aborted",
+        ]
+        assert state.bit(6).description == "aborted"
+        assert state.bit(7).description == ""
+
+    def test_bits_work_without_registry(
+        self, aoi_types: AOIDataTypesCollection
+    ) -> None:
+        """Bit access on a typed param needs no registry (collection built without)."""
+        state = aoi_types["SeqCtrl"]["state"]
+        assert state._type_registry is None
+        assert state.bit(0).value is False
+        assert state.bit(0).description == "running"
+
+    def test_bit_out_of_range_raises(self, aoi_types: AOIDataTypesCollection) -> None:
+        """bit(n) rejects positions outside the DINT's 32 bits."""
+        state = aoi_types["SeqCtrl"]["state"]
+        with pytest.raises(IndexError):
+            state.bit(32)
+        with pytest.raises(IndexError):
+            state.bit(-1)
+
+    def test_fixture_radix_matches_datavalue(
+        self, aoi_types: AOIDataTypesCollection
+    ) -> None:
+        """Typed params report the Parameter's Radix, matching their DataValue."""
+        checked = 0
+        for aoi_name in aoi_types:
+            for param in aoi_types[aoi_name].values():
+                if isinstance(param, _AOIParameterValueTag):
+                    assert param.radix == param.value_element.get("Radix")
+                    checked += 1
+        assert checked > 0
+
+    def test_external_logging_absent_is_none(
+        self, debounce: AOIParametersCollection
+    ) -> None:
+        """Fixture params have no ExternalLogging, so the value is None."""
+        assert debounce["onDelay"].external_logging is None
+        assert debounce["onDelay"].radix == "Decimal"
+
+    @pytest.mark.parametrize(
+        ("logging_xml", "expected"),
+        [("true", True), ("false", False), (None, None)],
+    )
+    def test_external_logging_values(
+        self, logging_xml: str | None, expected: bool | None
+    ) -> None:
+        """ExternalLogging converts "true"/"false" and is None when absent."""
+        attrs = 'Name="p" DataType="BOOL" Usage="Input"'
+        if logging_xml is not None:
+            attrs += f' ExternalLogging="{logging_xml}"'
+        param = _make_aoi_parameter(
+            _synthetic_param(attrs, '<DataValue DataType="BOOL" Value="1"/>'), None
+        )
+        assert param.external_logging is expected
+
+    def test_describe_includes_value_once(
+        self, debounce: AOIParametersCollection
+    ) -> None:
+        """describe() shows value once and each declared field at most once."""
+        lines = debounce["onDelay"].describe().splitlines()
+        assert lines[0] == "AOIParameterIntegerTag('onDelay', 'DINT')"
+        assert sum(line.startswith("  value:") for line in lines) == 1
+        assert sum(line.startswith("  min:") for line in lines) == 1
+        assert sum(line.startswith("  max:") for line in lines) == 1
+        assert sum(line.startswith("  radix") for line in lines) == 1
+        assert "  radix = 'Decimal'" in lines
+        assert not any(line.startswith("  radix:") for line in lines)
+        assert sum(line.startswith("  name") for line in lines) == 1
+        assert "  tag_type = 'Base'" in lines
+
+    def test_repr_is_describe(self, debounce: AOIParametersCollection) -> None:
+        """repr of a typed parameter is its describe() text."""
+        param = debounce["onDelay"]
+        assert repr(param) == param.describe()
+
+    def test_bool_describe_shows_states(
+        self, debounce: AOIParametersCollection
+    ) -> None:
+        """A typed BOOL parameter's describe() shows its value and state text."""
+        lines = debounce["state"].describe().splitlines()
+        assert lines[0] == "AOIParameterBoolTag('state', 'BOOL')"
+        assert "  value: False" in lines
+        assert "  state0: 'off'" in lines
+        assert "  state1: 'on'" in lines
+
+
+class TestAOIParameterMetadataSurface:
+    """Value metadata exists only on typed classes, not on the base parameter."""
+
+    _VALUE_METADATA = ("min", "max", "engineering_unit", "state0", "state1")
+
+    def test_base_inout_has_no_value_metadata(
+        self, fanuc_robot_aoi: ET.Element
+    ) -> None:
+        """A base InOut AOIParameter has no min/max/EU/state attributes."""
+        seq = AOIParametersCollection(fanuc_robot_aoi)["seq"]
+        assert type(seq) is AOIParameter
+        assert not hasattr(seq, "min")
+        assert not hasattr(seq, "state0")
+        for name in self._VALUE_METADATA:
+            assert not hasattr(seq, name), name
+
+    def test_base_without_value_tree_has_no_value_metadata(
+        self, debounce: AOIParametersCollection
+    ) -> None:
+        """EnableIn (no DefaultData) is a base AOIParameter without metadata."""
+        enable_in = debounce["EnableIn"]
+        assert type(enable_in) is AOIParameter
+        for name in self._VALUE_METADATA:
+            assert not hasattr(enable_in, name), name
+
+    def test_integer_has_min_max_and_eu_but_no_state(
+        self, debounce: AOIParametersCollection
+    ) -> None:
+        """AOIParameterIntegerTag exposes min/max/engineering_unit, not state0."""
+        onDelay = debounce["onDelay"]
+        assert isinstance(onDelay, AOIParameterIntegerTag)
+        assert hasattr(onDelay, "min") and hasattr(onDelay, "max")
+        assert hasattr(onDelay, "engineering_unit")
+        assert not hasattr(onDelay, "state0")
+        assert not hasattr(onDelay, "state1")
+
+    def test_bool_has_state_and_eu_but_no_min(
+        self, debounce: AOIParametersCollection
+    ) -> None:
+        """AOIParameterBoolTag exposes state0/state1/engineering_unit, not min."""
+        state = debounce["state"]
+        assert isinstance(state, AOIParameterBoolTag)
+        assert hasattr(state, "state0") and hasattr(state, "state1")
+        assert hasattr(state, "engineering_unit")
+        assert not hasattr(state, "min")
+        assert not hasattr(state, "max")
+
+    def test_float_has_min_max_but_no_state(self) -> None:
+        """A synthetic REAL param exposes min/max, not state0/state1."""
+        param = _make_aoi_parameter(
+            _synthetic_param(_REAL_INPUT_ATTRS, _REAL_INPUT_VALUE), None
+        )
+        assert isinstance(param, AOIParameterFloatTag)
+        assert hasattr(param, "min") and hasattr(param, "max")
+        assert not hasattr(param, "state0")

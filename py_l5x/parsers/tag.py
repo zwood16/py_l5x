@@ -21,6 +21,22 @@ DINT tag) via ``<Comments>``, ``<Maxes>``, ``<Mins>``, ``<EngineeringUnits>``,
 :class:`TagNode` and its subclasses resolve them with priority over the
 type-definition metadata.
 
+AOI ``<Parameter>`` definitions can carry the same operand-qualified containers,
+relative to the parameter (e.g. ``.6`` for a bit of a DINT parameter). Those
+apply to every instance of the parameter, so a node below an AOI parameter
+falls back to them after the instance's own entries. For a node's metadata key
+the resolution order is:
+
+1. the owning instance tag's entry at the node's full operand path;
+2. the entry on each enclosing AOI parameter definition, innermost first, at
+   the path relative to that parameter;
+3. the node's own member/parameter definition (e.g. the parameter's
+   ``Description``).
+
+For example, the ``SeqCtrl`` AOI ``state`` parameter's ``.6`` comment
+(``aborted``) is shown for bit 6 of every ``SeqCtrl`` instance's ``.STATE``
+member, unless the instance itself comments ``.STATE.6``.
+
 **Typed Tag classes and root-metadata behavior**
 
 :class:`Tag` subclasses returned by :class:`TagsCollection` are dispatched via
@@ -94,7 +110,7 @@ Value-tree nodes (members, array elements, bits) are organized in a typed hierar
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import TYPE_CHECKING, cast, overload
 from xml.etree import ElementTree as ET
 
@@ -287,6 +303,26 @@ class _TagOverrides:
         return self._by_path.get(operand_path.upper(), {})
 
 
+def _relative_operand(operand_path: str, anchor: str) -> str | None:
+    """Return *operand_path* relative to *anchor*, or None if it is outside it.
+
+    The remainder is upper-cased like the keys in :class:`_TagOverrides`.
+
+    Args:
+        operand_path: The node's full operand path (e.g. ``".STATE.0"``).
+        anchor: The operand path of the definition's owning node (``".STATE"``).
+
+    Returns:
+        The remainder (``".0"``; ``""`` when equal to *anchor*), or None if
+        *operand_path* does not start with *anchor*.
+    """
+    path = operand_path.upper()
+    prefix = anchor.upper()
+    if not path.startswith(prefix):
+        return None
+    return path[len(prefix) :]
+
+
 def _parse_string_literal(text: str) -> str:
     """Strip the single-quote wrapping Logix uses for exported string text.
 
@@ -379,12 +415,14 @@ class _StructureMembers(Mapping):
         for child in node._value_element:
             if child.get("Name") == name:
                 path = f"{node._operand_path}.{name.upper()}"
+                member_def = member_defs.get(name)
                 return _build_node(
                     child,
-                    member_defs.get(name),
+                    member_def,
                     node._overrides,
                     path,
                     node._type_registry,
+                    def_scopes=_child_def_scopes(node._def_scopes, member_def, path),
                 )
         raise KeyError(name)
 
@@ -467,6 +505,7 @@ class _ArrayElements(Sequence):
             node._type_registry,
             data_type=node._value_element.get("DataType") or None,
             radix=node._value_element.get("Radix") or None,
+            def_scopes=node._def_scopes,
         )
 
     @overload
@@ -517,6 +556,11 @@ class TagNode:
 
     This is the public surface only with minimal methods that apply to all nodes.
     Subclasses add type-specific behavior and properties.
+
+    Metadata lookups go through :meth:`_meta_override`, which consults the
+    owning instance's operand overrides first, then the definition-scoped
+    overrides of any enclosing AOI parameter (``_def_scopes``), and finally the
+    node's own member definition (:meth:`_meta_default`).
     """
 
     def __init__(
@@ -530,6 +574,7 @@ class TagNode:
         data_type: str | None = None,
         radix: str | None = None,
         raw_text: str | None = None,
+        def_scopes: tuple[tuple[_TagOverrides, str], ...] = (),
     ) -> None:
         """Initialize a TagNode.
 
@@ -542,6 +587,10 @@ class TagNode:
             data_type: Overridden data type (for special cases).
             radix: Overridden radix (for special cases).
             raw_text: Pre-extracted text (for CDATA-based members).
+            def_scopes: Enclosing AOI parameter definitions, outermost first,
+                as ``(definition_overrides, anchor_operand_path)`` pairs. Each
+                anchor is the path of the parameter node the definition's
+                operand paths are relative to.
         """
         self._value_element = element
         self._member_def = member_def
@@ -551,6 +600,7 @@ class TagNode:
         self._data_type_override = data_type
         self._radix_override = radix
         self._raw_text = raw_text
+        self._def_scopes = def_scopes
 
     @property
     def value_element(self) -> ET.Element | None:
@@ -581,8 +631,29 @@ class TagNode:
         return self._member_def.external_access if self._member_def else ""
 
     def _meta_override(self, key: str) -> str | None:
-        """Return override for a metadata key at this node's operand path."""
-        return self._overrides.get(self._operand_path).get(key)
+        """Return the operand override for a metadata key, or None.
+
+        Checked in order, first hit wins:
+
+        1. The owning instance tag's entry at this node's full operand path.
+        2. Each enclosing AOI parameter definition's entry at this node's path
+           relative to that parameter, innermost first. A parameter's own
+           path yields the empty remainder, which has no entries.
+
+        Returns None when neither has an entry, so the caller can fall back to
+        :meth:`_meta_default` (the member definition's own value).
+        """
+        override = self._overrides.get(self._operand_path).get(key)
+        if override is not None:
+            return override
+        for definition, anchor in reversed(self._def_scopes):
+            rest = _relative_operand(self._operand_path, anchor)
+            if rest is None:
+                continue
+            override = definition.get(rest).get(key)
+            if override is not None:
+                return override
+        return None
 
     def _meta_default(self, key: str) -> str | None:
         """Return default metadata value from member_def."""
@@ -665,6 +736,33 @@ class TagNode:
 
 class AtomicNode(TagNode):
     """A scalar node with a value (integer, float, bool, string, or fallback)."""
+
+    def _numeric_meta[N: (int, float)](
+        self, key: str, conv: Callable[[int | float | str], N]
+    ) -> N | None:
+        """Return a ``min``/``max`` bound converted with *conv*, or ``None``.
+
+        Resolves the operand override chain first, then the member definition
+        (via :meth:`_meta_default`, so definitions without the attribute -- e.g.
+        an InOut or untyped AOI parameter -- simply yield ``None``).
+
+        Args:
+            key: The metadata key (``"min"`` or ``"max"``).
+            conv: ``int`` or ``float``, applied after literal conversion.
+
+        Returns:
+            The converted bound, or ``None`` if unset or unparseable.
+        """
+        raw = self._meta_override(key)
+        if raw is None:
+            default = self._meta_default(key)
+            raw = None if default is None else str(default)
+        if raw is None:
+            return None
+        try:
+            return conv(convert_numeric(raw, self.data_type))
+        except (ValueError, TypeError):
+            return None
 
     @property
     def raw_value(self) -> str | None:
@@ -770,18 +868,7 @@ class IntegerNode(AtomicNode):
             The declared minimum, or ``None`` if no minimum was set in the
             XML (the natural range of the atomic type is *not* assumed).
         """
-        override = self._meta_override("min")
-        if override is not None:
-            try:
-                return int(convert_numeric(override, self.data_type))
-            except (ValueError, TypeError):
-                return None
-        if self._member_def and self._member_def.min is not None:
-            try:
-                return int(convert_numeric(str(self._member_def.min), self.data_type))
-            except (ValueError, TypeError):
-                return None
-        return None
+        return self._numeric_meta("min", int)
 
     @property
     def max(self) -> int | None:
@@ -791,18 +878,7 @@ class IntegerNode(AtomicNode):
             The declared maximum, or ``None`` if no maximum was set in the
             XML (the natural range of the atomic type is *not* assumed).
         """
-        override = self._meta_override("max")
-        if override is not None:
-            try:
-                return int(convert_numeric(override, self.data_type))
-            except (ValueError, TypeError):
-                return None
-        if self._member_def and self._member_def.max is not None:
-            try:
-                return int(convert_numeric(str(self._member_def.max), self.data_type))
-            except (ValueError, TypeError):
-                return None
-        return None
+        return self._numeric_meta("max", int)
 
     def bit(self, n: int) -> BoolNode:
         """Access bit *n* as a :class:`BoolNode`.
@@ -827,6 +903,7 @@ class IntegerNode(AtomicNode):
             f"{self._operand_path}.{n}",
             data_type="BOOL",
             raw_text=raw,
+            def_scopes=self._def_scopes,
         )
 
     @property
@@ -857,34 +934,12 @@ class FloatNode(AtomicNode):
     @property
     def min(self) -> float | None:
         """Minimum value, from override or member def."""
-        override = self._meta_override("min")
-        if override is not None:
-            try:
-                return float(convert_numeric(override, self.data_type))
-            except (ValueError, TypeError):
-                return None
-        if self._member_def and self._member_def.min is not None:
-            try:
-                return float(convert_numeric(str(self._member_def.min), self.data_type))
-            except (ValueError, TypeError):
-                return None
-        return None
+        return self._numeric_meta("min", float)
 
     @property
     def max(self) -> float | None:
         """Maximum value, from override or member def."""
-        override = self._meta_override("max")
-        if override is not None:
-            try:
-                return float(convert_numeric(override, self.data_type))
-            except (ValueError, TypeError):
-                return None
-        if self._member_def and self._member_def.max is not None:
-            try:
-                return float(convert_numeric(str(self._member_def.max), self.data_type))
-            except (ValueError, TypeError):
-                return None
-        return None
+        return self._numeric_meta("max", float)
 
 
 class TimeNode(AtomicNode):
@@ -988,7 +1043,14 @@ class StringNode(TagNode):
         path = f"{self._operand_path}.LEN"
         len_el = self._child("LEN")
         if len_el is not None:
-            return _build_node(len_el, None, self._overrides, path, self._type_registry)
+            return _build_node(
+                len_el,
+                None,
+                self._overrides,
+                path,
+                self._type_registry,
+                def_scopes=self._def_scopes,
+            )
         return IntegerNode(
             None,
             None,
@@ -996,6 +1058,7 @@ class StringNode(TagNode):
             path,
             data_type="DINT",
             raw_text=str(self.len),
+            def_scopes=self._def_scopes,
         )
 
     def _data_member(self) -> TagNode:
@@ -1009,6 +1072,7 @@ class StringNode(TagNode):
             f"{self._operand_path}.DATA",
             data_type=data_type or self.data_type,
             raw_text=self.value,
+            def_scopes=self._def_scopes,
         )
 
 
@@ -1075,6 +1139,31 @@ _ATOMIC_NODE_CLASSES: dict[str, type[AtomicNode]] = {
 }
 
 
+def _child_def_scopes(
+    parent_scopes: tuple[tuple[_TagOverrides, str], ...],
+    member_def: MemberDef | None,
+    child_path: str,
+) -> tuple[tuple[_TagOverrides, str], ...]:
+    """Return the definition scopes for a structure member's node.
+
+    An AOI parameter (a :class:`_RootMetadataMixin` with its own operand
+    overrides) adds a scope anchored at the member's path, so operand entries
+    on the parameter definition apply to the member and everything below it.
+    Other definitions (UDT members) add nothing.
+
+    Args:
+        parent_scopes: The enclosing structure node's definition scopes.
+        member_def: The member's definition, or None.
+        child_path: The member node's operand path (the scope's anchor).
+
+    Returns:
+        *parent_scopes* extended with the member's scope, if it has one.
+    """
+    if isinstance(member_def, _RootMetadataMixin):
+        return (*parent_scopes, (member_def._overrides, child_path))
+    return parent_scopes
+
+
 def _build_node(
     element: ET.Element,
     member_def: MemberDef | None,
@@ -1084,6 +1173,7 @@ def _build_node(
     *,
     data_type: str | None = None,
     radix: str | None = None,
+    def_scopes: tuple[tuple[_TagOverrides, str], ...] = (),
 ) -> TagNode:
     """Build the appropriate node subclass for an element.
 
@@ -1100,6 +1190,8 @@ def _build_node(
             ``DataType`` attribute (array ``<Element>`` children inherit the
             parent array's type this way).
         radix: Radix to use for such a scalar, likewise inherited.
+        def_scopes: Definition scopes to attach to the node, as built by
+            :func:`_child_def_scopes`. See :class:`TagNode`.
     """
     # Use _classify_node to determine the node class
     node_cls, resolved_dt = _classify_node(
@@ -1108,15 +1200,36 @@ def _build_node(
 
     # Arrays
     if node_cls is ArrayNode:
-        return ArrayNode(element, member_def, overrides, operand_path, type_registry)
+        return ArrayNode(
+            element,
+            member_def,
+            overrides,
+            operand_path,
+            type_registry,
+            def_scopes=def_scopes,
+        )
 
     # Structures
     if node_cls is StructNode:
-        return StructNode(element, member_def, overrides, operand_path, type_registry)
+        return StructNode(
+            element,
+            member_def,
+            overrides,
+            operand_path,
+            type_registry,
+            def_scopes=def_scopes,
+        )
 
     # StringNodes
     if node_cls is StringNode:
-        return StringNode(element, member_def, overrides, operand_path, type_registry)
+        return StringNode(
+            element,
+            member_def,
+            overrides,
+            operand_path,
+            type_registry,
+            def_scopes=def_scopes,
+        )
 
     # Scalars (AtomicNode and subclasses)
     # A scalar with CDATA/text but no Value (e.g. a STRING's DATA member) is
@@ -1134,6 +1247,7 @@ def _build_node(
                 data_type=resolved_dt,
                 radix=radix,
                 raw_text=parsed_text,
+                def_scopes=def_scopes,
             )
 
     # Otherwise use the typed class chosen by _classify_node.
@@ -1146,6 +1260,7 @@ def _build_node(
         data_type=resolved_dt,
         radix=radix,
         raw_text=None,
+        def_scopes=def_scopes,
     )
 
 
@@ -1287,6 +1402,7 @@ class _RootMetadataMixin:
     """
 
     _element: ET.Element
+    _overrides: _TagOverrides
 
     #: Attributes backed by a plain @property/facet rather than a declared
     #: XmlField/CDataField -- still "known", so excluded from extra_attributes.

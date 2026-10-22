@@ -11,6 +11,12 @@ This module provides rich AOI inspection surfaces similar to program parsing:
   ``AOILocalIntegerTag`` for ``IntegerNode``), mirroring the ``Tag`` subclasses
   in :mod:`py_l5x.parsers.tag`. This allows direct access to node properties
   like ``.members``, ``.value``, ``.elements`` without a ``.data`` indirection.
+- ``AOIParameter`` for AOI ``<Parameter>`` elements. Input/Output parameters
+  with a value tree are typed by static subclasses (``AOIParameterBoolTag``,
+  ``AOIParameterIntegerTag``, ``AOIParameterFloatTag``, ``AOIParameterTimeTag``,
+  ``AOIParameterDateTimeTag``, ``AOIParameterAtomicTag``) that mirror the
+  ``AOILocal*Tag`` classes. InOut parameters have no value tree and remain
+  plain ``AOIParameter`` instances.
 
 AOI routines reuse :class:`py_l5x.parsers.routine.RoutinesCollection`.
 AOI parameters reuse :class:`py_l5x.parsers.aoi.AOIParametersCollection`.
@@ -46,7 +52,6 @@ from py_l5x.parsers.tag import (
     _RootMetadataMixin,
     _TagOverrides,
 )
-from py_l5x.parsers.utils import convert_numeric
 
 
 class _AOIDefinitionTag(_RootMetadataMixin, BaseElement):
@@ -125,7 +130,7 @@ class _AOIDefinitionTag(_RootMetadataMixin, BaseElement):
 def _init_aoi_value_node(
     tag: _AOIDefinitionTag,
     element: ET.Element,
-    type_registry: TypeRegistry,
+    type_registry: TypeRegistry | None,
     value_element: ET.Element,
 ) -> None:
     """Initialise an AOI identity wrapper that is also its own value node.
@@ -433,11 +438,18 @@ class AOIParameter(_AOIDefinitionTag):
     :class:`AOILocalTag` via :class:`_AOIDefinitionTag`. Adds the parameter-only
     usage/radix/required/visible/external-logging attributes.
 
+    Input/Output parameters with a value tree are created as typed subclasses
+    (see :func:`_make_aoi_parameter`); this class is also used directly for
+    InOut parameters and for any parameter without a usable value tree.
+
     Args:
         element: The ``<Parameter>`` element from a parsed L5X tree.
         type_registry: Shared type registry for resolving data type metadata.
     """
 
+    tag_type = str_attr(
+        "TagType", doc='Tag kind of the parameter (e.g. "Base"), as exported.'
+    )
     usage = str_attr(
         "Usage", doc='Usage of the parameter (e.g., "Input", "Output", "InOut").'
     )
@@ -460,62 +472,123 @@ class AOIParameter(_AOIDefinitionTag):
         """Whether this parameter uses InOut usage."""
         return self.usage == "InOut"
 
-    # ------------------------------------------------------------------
-    # Metadata
-    # ------------------------------------------------------------------
-    # Like tags, the parameter's own Min/Max and un-operanded
-    # EngineeringUnits/State0s/State1s entries describe the parameter as a
-    # whole. Operand-qualified entries (per-bit/per-member) are excluded here.
+
+class _AOIParameterValueTag(AOIParameter):
+    """Base for AOI parameters that are also their root value node (private).
+
+    Mirrors :class:`_AOILocalValueTag`: the identity comes from
+    :class:`AOIParameter`, and the concrete subclass mixes in the node class
+    that provides the value tree.
+    """
+
+    def __init__(
+        self,
+        element: ET.Element,
+        type_registry: TypeRegistry | None,
+        value_element: ET.Element,
+    ) -> None:
+        """Initialize an AOI parameter with a value node.
+
+        Args:
+            element: The ``<Parameter>`` element.
+            type_registry: Used to resolve value tree members.
+            value_element: The ``DefaultData[@Format='Decorated']`` child element.
+        """
+        _init_aoi_value_node(self, element, type_registry, value_element)
+
+
+class AOIParameterBoolTag(_AOIParameterValueTag, BoolNode):
+    """An AOI Input/Output parameter whose value is BOOL."""
+
+
+class AOIParameterIntegerTag(_AOIParameterValueTag, IntegerNode):
+    """An AOI Input/Output parameter whose value is an integer type."""
+
+    # AOIParameter.min/max precede IntegerNode in the MRO, so they would shadow
+    # the node versions. Calling the node property's getter here restores the
+    # typed int | None contract (the base version may return a raw str).
 
     @property
-    def min(self) -> int | float | str | None:
-        """User-specified minimum value, if any.
-
-        Returns:
-            The ``Min`` XML attribute converted to ``int``/``float`` based on
-            :attr:`data_type`, or ``None`` if the attribute is absent.
-        """
-        value = self._meta_override("min")
-        return None if value is None else convert_numeric(value, self.data_type)
+    def min(self) -> int | None:
+        """Declared minimum as an ``int``, or ``None`` if not set."""
+        return IntegerNode.min.__get__(self)
 
     @property
-    def max(self) -> int | float | str | None:
-        """User-specified maximum value, if any.
+    def max(self) -> int | None:
+        """Declared maximum as an ``int``, or ``None`` if not set."""
+        return IntegerNode.max.__get__(self)
 
-        Returns:
-            The ``Max`` XML attribute converted to ``int``/``float`` based on
-            :attr:`data_type`, or ``None`` if the attribute is absent.
-        """
-        value = self._meta_override("max")
-        return None if value is None else convert_numeric(value, self.data_type)
 
-    @property
-    def engineering_unit(self) -> str:
-        """User-specified engineering unit (e.g. ``"ms"``).
+class AOIParameterFloatTag(_AOIParameterValueTag, FloatNode):
+    """An AOI Input/Output parameter whose value is REAL or LREAL."""
 
-        Returns:
-            The un-operanded ``EngineeringUnits/EngineeringUnit`` CDATA text, or
-            an empty string if absent.
-        """
-        return self._root_metadata("EngineeringUnits", "EngineeringUnit") or ""
+    # Same MRO shadowing as AOIParameterIntegerTag; keeps the float | None type.
 
     @property
-    def state0(self) -> str:
-        """Description of the boolean parameter's zero state.
-
-        Returns:
-            The ``State0s/State0`` CDATA text, or an empty string if absent.
-        """
-        return self._root_metadata("State0s", "State0") or ""
+    def min(self) -> float | None:
+        """Declared minimum as a ``float``, or ``None`` if not set."""
+        return FloatNode.min.__get__(self)
 
     @property
-    def state1(self) -> str:
-        """Description of the boolean parameter's one state.
+    def max(self) -> float | None:
+        """Declared maximum as a ``float``, or ``None`` if not set."""
+        return FloatNode.max.__get__(self)
 
-        Returns:
-            The ``State1s/State1`` CDATA text, or an empty string if absent.
-        """
-        return self._root_metadata("State1s", "State1") or ""
+
+class AOIParameterTimeTag(_AOIParameterValueTag, TimeNode):
+    """An AOI Input/Output parameter whose value is a TIME-family literal."""
+
+
+class AOIParameterDateTimeTag(_AOIParameterValueTag, DateTimeNode):
+    """An AOI Input/Output parameter whose value is a DT/LDT literal."""
+
+
+class AOIParameterAtomicTag(_AOIParameterValueTag, AtomicNode):
+    """An AOI Input/Output parameter whose atomic type has no specific node."""
+
+
+# Mapping from node class to AOI parameter value tag class. STRING, structure
+# and array values are intentionally absent: only InOut parameters may carry
+# them, and InOut parameters never get a typed value class.
+_AOI_PARAMETER_TAG_CLASSES: dict[type[TagNode], type[_AOIParameterValueTag]] = {
+    BoolNode: AOIParameterBoolTag,
+    IntegerNode: AOIParameterIntegerTag,
+    FloatNode: AOIParameterFloatTag,
+    TimeNode: AOIParameterTimeTag,
+    DateTimeNode: AOIParameterDateTimeTag,
+    AtomicNode: AOIParameterAtomicTag,
+}
+
+
+def _make_aoi_parameter(
+    element: ET.Element, type_registry: TypeRegistry | None
+) -> AOIParameter:
+    """Factory function to create the appropriate AOI parameter subclass.
+
+    InOut parameters, parameters without a value root, and parameters whose
+    value node has no entry in ``_AOI_PARAMETER_TAG_CLASSES`` are returned as
+    a plain :class:`AOIParameter`.
+
+    Args:
+        element: The ``<Parameter>`` element.
+        type_registry: Used to resolve value tree members. Optional; atomic
+            value nodes do not need it.
+
+    Returns:
+        An instance of the appropriate AOI parameter subclass.
+    """
+    if element.get("Usage") == "InOut":
+        return AOIParameter(element, type_registry)
+
+    root = _find_value_root(element, "DefaultData", type_registry)
+    if root is None:
+        return AOIParameter(element, type_registry)
+
+    node_cls, value_el = root
+    tag_cls = _AOI_PARAMETER_TAG_CLASSES.get(node_cls)
+    if tag_cls is None:
+        return AOIParameter(element, type_registry)
+    return tag_cls(element, type_registry, value_el)
 
 
 class AOIParametersCollection(BaseCollection[AOIParameter]):
@@ -533,7 +606,7 @@ class AOIParametersCollection(BaseCollection[AOIParameter]):
         super().__init__(
             aoi_element,
             "Parameters/Parameter",
-            AOIParameter,
+            _make_aoi_parameter,
             item_args=(type_registry,),
         )
 
