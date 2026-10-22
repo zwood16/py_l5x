@@ -419,6 +419,151 @@ class TestOverrideLayering:
         assert member.min == 0
 
 
+class TestOperandMetadata:
+    """Public per-operand metadata: ``operand_metadata`` and ``operand_comments``."""
+
+    def test_comments_dict_for_commented_dint(
+        self, main_program_tags: TagsCollection
+    ) -> None:
+        """a_commented_dint exposes exactly its three bit comments."""
+        commented = main_program_tags["a_commented_dint"]
+        assert commented.operand_comments == {
+            ".0": "this is bit 0",
+            ".1": "this is bit 1",
+            ".10": "this is bit 10",
+        }
+
+    def test_operand_metadata_keeps_all_keys(
+        self, main_program_tags: TagsCollection
+    ) -> None:
+        """Bit 1 has its comment plus EU, states and external logging as raw text."""
+        commented = main_program_tags["a_commented_dint"]
+        assert commented.operand_metadata[".1"] == {
+            "comment": "this is bit 1",
+            "engineering_unit": "mm",
+            "state0": "off",
+            "state1": "on",
+            "external_logging": "false",
+        }
+
+    def test_udt_operand_metadata(self, main_program_tags: TagsCollection) -> None:
+        """Member overrides on a UDT instance are keyed by member operand."""
+        udt = main_program_tags["a_simple_udt_with_overrides"]
+        assert udt.operand_metadata == {
+            ".BOOL1": {
+                "comment": "the first boolean",
+                "state0": "false",
+                "state1": "true",
+            },
+            ".BOOL2": {"comment": "just a comment"},
+            ".DINT": {
+                "comment": "this dint has extended properties",
+                "engineering_unit": "ms",
+                "max": "2147483647",
+                "min": "0",
+                "external_logging": "true",
+            },
+        }
+
+    def test_udt_operand_comments_exclude_other_keys(
+        self, main_program_tags: TagsCollection
+    ) -> None:
+        """operand_comments holds only the comment text, not the other keys."""
+        udt = main_program_tags["a_simple_udt_with_overrides"]
+        assert udt.operand_comments == {
+            ".BOOL1": "the first boolean",
+            ".BOOL2": "just a comment",
+            ".DINT": "this dint has extended properties",
+        }
+
+    def test_original_operand_case_is_preserved(
+        self, type_registry: TypeRegistry
+    ) -> None:
+        """Operands keep their exported spelling; the first-seen spelling wins."""
+        tag = Tag(
+            ET.fromstring(
+                '<Tag Name="t" TagType="Base" DataType="UDT_X">'
+                "<Comments>"
+                '<Comment Operand=".bool1"><![CDATA[lower]]></Comment>'
+                '<Comment Operand=".Dint"><![CDATA[mixed]]></Comment>'
+                "</Comments>"
+                "<Maxes>"
+                '<Max Operand=".BOOL1">5</Max>'
+                "</Maxes>"
+                "</Tag>"
+            ),
+            type_registry,
+        )
+        assert tag.operand_metadata == {
+            ".bool1": {"comment": "lower", "max": "5"},
+            ".Dint": {"comment": "mixed"},
+        }
+        assert tag.operand_comments == {".bool1": "lower", ".Dint": "mixed"}
+        # Lookups stay case-insensitive regardless of the exported spelling.
+        assert tag._overrides.get(".BOOL1") == {"comment": "lower", "max": "5"}
+        assert tag._overrides.get(".DINT") == {"comment": "mixed"}
+
+    def test_empty_when_no_overrides(self, type_registry: TypeRegistry) -> None:
+        """A tag with no override containers has empty metadata and comments."""
+        tag = Tag(
+            ET.fromstring('<Tag Name="plain" TagType="Base" DataType="DINT"/>'),
+            type_registry,
+        )
+        assert tag.operand_metadata == {}
+        assert tag.operand_comments == {}
+
+    def test_returned_dicts_are_copies(self, main_program_tags: TagsCollection) -> None:
+        """Mutating a returned dict (including nested) does not change the tag."""
+        commented = main_program_tags["a_commented_dint"]
+        comments = commented.operand_comments
+        comments[".0"] = "changed"
+        comments.clear()
+        metadata = commented.operand_metadata
+        metadata[".1"]["comment"] = "changed"
+        metadata.pop(".0")
+        assert commented.operand_comments[".0"] == "this is bit 0"
+        assert commented.operand_metadata[".1"]["comment"] == "this is bit 1"
+        assert ".0" in commented.operand_metadata
+
+    def test_describe_includes_operand_comments_block(
+        self, main_program_tags: TagsCollection
+    ) -> None:
+        """describe() lists operand comments once, as an indented block."""
+        lines = main_program_tags["a_commented_dint"].describe().splitlines()
+        assert sum(line == "  operand_comments:" for line in lines) == 1
+        start = lines.index("  operand_comments:")
+        assert lines[start + 1 : start + 4] == [
+            "    '.0': 'this is bit 0'",
+            "    '.1': 'this is bit 1'",
+            "    '.10': 'this is bit 10'",
+        ]
+
+    def test_describe_omits_block_without_comments(
+        self, type_registry: TypeRegistry
+    ) -> None:
+        """A tag with no operand comments has no operand_comments block."""
+        tag = Tag(
+            ET.fromstring('<Tag Name="plain" TagType="Base" DataType="DINT"/>'),
+            type_registry,
+        )
+        assert "operand_comments" not in tag.describe()
+
+    def test_repr_is_describe_with_comments(
+        self, main_program_tags: TagsCollection
+    ) -> None:
+        """repr still equals describe() for a tag with operand comments."""
+        commented = main_program_tags["a_commented_dint"]
+        assert repr(commented) == commented.describe()
+
+    def test_definition_comments_are_not_merged(
+        self, main_program_tags: TagsCollection
+    ) -> None:
+        """Instance metadata omits SeqCtrl definition comments, unlike bits."""
+        sequence = main_program_tags["sequence"]
+        assert sequence.operand_comments == {}
+        assert sequence.members["state"].bit(0).description == "running"
+
+
 # ---------------------------------------------------------------------------
 # Program-scoped tags
 # ---------------------------------------------------------------------------

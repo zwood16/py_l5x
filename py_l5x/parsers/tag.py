@@ -21,6 +21,12 @@ DINT tag) via ``<Comments>``, ``<Maxes>``, ``<Mins>``, ``<EngineeringUnits>``,
 :class:`TagNode` and its subclasses resolve them with priority over the
 type-definition metadata.
 
+The raw entries on a root element are public too: ``operand_metadata`` gives
+every override keyed by operand (as exported), and ``operand_comments`` gives
+just the comments. Both are available on tags, AOI local tags, and AOI
+parameters, and reflect only that element's own containers. Use them for
+operands with no value tree to drill into, such as an InOut AOI parameter.
+
 AOI ``<Parameter>`` definitions can carry the same operand-qualified containers,
 relative to the parameter (e.g. ``.6`` for a bit of a DINT parameter). Those
 apply to every instance of the parameter, so a node below an AOI parameter
@@ -276,6 +282,8 @@ class _TagOverrides:
             tag_element: The ``<Tag>`` element to scan.
         """
         self._by_path: dict[str, dict[str, str]] = {}
+        # Upper-cased path -> operand text as first exported (for display).
+        self._display: dict[str, str] = {}
         for container_tag, (child_tag, key) in _OVERRIDE_CONTAINERS.items():
             container = tag_element.find(container_tag)
             if container is None:
@@ -287,6 +295,22 @@ class _TagOverrides:
                 path = operand.upper()
                 text = cdata_text(child, strip=True)
                 self._by_path.setdefault(path, {})[key] = text
+                self._display.setdefault(path, operand)
+
+    def as_dict(self) -> dict[str, dict[str, str]]:
+        """Return a copy of every override, keyed by the operand as exported.
+
+        Keys keep the spelling of the first entry seen for that operand. Entries
+        are ordered by first appearance while scanning containers in
+        ``_OVERRIDE_CONTAINERS`` order (``Comments`` first, then ``Maxes``, ...),
+        which is document order within each container. Lookups via :meth:`get`
+        remain case-insensitive regardless of the spelling returned here.
+
+        Returns:
+            A new nested dict on each call. Mutating it does not affect this
+            object.
+        """
+        return {self._display[path]: dict(meta) for path, meta in self._by_path.items()}
 
     def get(self, operand_path: str) -> dict[str, str]:
         """Return the override dict for an operand path.
@@ -1386,6 +1410,14 @@ def _describe_value_lines(obj: object) -> list[str]:
     if isinstance(obj, ArrayNode):
         lines.append(f"  elements: len={len(obj)}")
 
+    # Operand comments exported on the identity element (comments only, to
+    # keep the block readable; see operand_metadata for the rest)
+    if isinstance(obj, _RootMetadataMixin):
+        comments = obj.operand_comments
+        if comments:
+            lines.append("  operand_comments:")
+            lines.extend(f"    {op!r}: {text!r}" for op, text in comments.items())
+
     return lines
 
 
@@ -1418,6 +1450,56 @@ class _RootMetadataMixin:
         """XML attributes not covered by declared fields or dynamic properties."""
         extras = super().extra_attributes  # type: ignore[misc]
         return {k: v for k, v in extras.items() if k not in self._DYNAMIC_KEYS}
+
+    @property
+    def operand_metadata(self) -> dict[str, dict[str, str]]:
+        """Per-operand metadata exported on this element's own containers.
+
+        Maps each operand exactly as exported (e.g. ``".0"``, ``".FAULT.0"``,
+        ``".A_SINT_WITH_PROPS"``) to a dict of its metadata. Keys are
+        ``"comment"``, ``"min"``, ``"max"``, ``"engineering_unit"``,
+        ``"state0"``, ``"state1"`` and ``"external_logging"``; a key is present
+        only where the element sets it. Values are the raw exported text, with
+        no numeric or boolean conversion.
+
+        This is instance-only. It reflects this element's own override
+        containers and does not merge definition-level entries (for example,
+        an AOI parameter's comments, which apply to every instance). For
+        resolved values, use node accessors such as
+        ``tag.members["x"].bit(3).description``.
+
+        Returns:
+            A new dict on each call. Mutating it does not affect the element.
+
+        Example:
+            >>> dint = programs["MainProgram"].tags["a_commented_dint"]
+            >>> dint.operand_metadata[".0"]
+            {'comment': 'this is bit 0'}
+        """
+        return self._overrides.as_dict()
+
+    @property
+    def operand_comments(self) -> dict[str, str]:
+        """Operand comments exported on this element's own containers.
+
+        A subset of :attr:`operand_metadata` mapping each operand to its
+        ``Comment`` text. Operands with no comment, or an empty one, are
+        omitted. Scoping and text handling match :attr:`operand_metadata`
+        (instance-only, raw text).
+
+        Returns:
+            A new dict on each call. Mutating it does not affect the element.
+
+        Example:
+            >>> dint = programs["MainProgram"].tags["a_commented_dint"]
+            >>> dint.operand_comments
+            {'.0': 'this is bit 0', '.1': 'this is bit 1', '.10': 'this is bit 10'}
+        """
+        return {
+            operand: meta["comment"]
+            for operand, meta in self._overrides.as_dict().items()
+            if meta.get("comment")
+        }
 
     def _meta_override(self, key: str) -> str | None:
         """Return override for a metadata key at the identity element's level.

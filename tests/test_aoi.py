@@ -716,6 +716,87 @@ class TestAOIParameterOverrides:
         assert params["onDelay"]._type_registry is type_registry
 
 
+class TestAOIOperandComments:
+    """Operand comments on AOI parameters, incl. InOut params with no value tree."""
+
+    def test_inout_seq_operand_comments(
+        self, aoi_types: AOIDataTypesCollection
+    ) -> None:
+        """FanucRobot's InOut ``seq`` exposes its .FAULT.n comments."""
+        seq = aoi_types["FanucRobot"]["seq"]
+        assert type(seq) is AOIParameter
+        assert seq.operand_comments == {
+            ".FAULT.0": "Robot fault did not reset when running",
+            ".FAULT.1": "Robot did not stop (cstopi)",
+            ".FAULT.2": "CMD Enable not on",
+            ".FAULT.3": "System Ready not on",
+            ".FAULT.4": "Prog Num Select took too long",
+            ".FAULT.5": "Program Number Echo did not match",
+            ".FAULT.6": "Program already running",
+            ".FAULT.7": "Robot did not reset fault during restart",
+            ".FAULT.8": "Robot did not restart",
+            ".FAULT.9": "Robot aborted itself",
+            ".FAULT.10": "Robot alarm not recoverable. Robot aborted",
+            ".FAULT.11": "Robot did not Hold (pause)",
+        }
+
+    def test_inout_seq_operand_metadata(
+        self, aoi_types: AOIDataTypesCollection
+    ) -> None:
+        """A base InOut parameter's operand_metadata holds comments only."""
+        seq = aoi_types["FanucRobot"]["seq"]
+        assert seq.operand_metadata[".FAULT.0"] == {
+            "comment": "Robot fault did not reset when running"
+        }
+        assert set(seq.operand_metadata) == set(seq.operand_comments)
+
+    def test_seqctrl_state_operand_comments(
+        self, aoi_types: AOIDataTypesCollection
+    ) -> None:
+        """SeqCtrl's state parameter exposes its .0..6 bit comments."""
+        state = aoi_types["SeqCtrl"]["state"]
+        assert state.operand_comments == {
+            ".0": "running",
+            ".1": "complete",
+            ".2": "pausing",
+            ".3": "paused",
+            ".4": "restarting",
+            ".5": "aborting",
+            ".6": "aborted",
+        }
+
+    def test_parameter_without_comments_is_empty(self) -> None:
+        """A parameter with no override containers has empty metadata."""
+        param = _make_aoi_parameter(
+            _synthetic_param(_REAL_INPUT_ATTRS, _REAL_INPUT_VALUE), None
+        )
+        assert param.operand_metadata == {}
+        assert param.operand_comments == {}
+        assert "operand_comments" not in param.describe()
+
+    def test_returned_dict_is_copy(self, aoi_types: AOIDataTypesCollection) -> None:
+        """Mutating the returned comments does not affect later calls."""
+        seq = aoi_types["FanucRobot"]["seq"]
+        seq.operand_comments.clear()
+        assert len(seq.operand_comments) == 12
+
+    def test_describe_block_for_inout_seq(
+        self, aoi_types: AOIDataTypesCollection
+    ) -> None:
+        """describe() shows the operand_comments block once, and repr matches it."""
+        seq = aoi_types["FanucRobot"]["seq"]
+        lines = seq.describe().splitlines()
+        assert lines[0] == "AOIParameter('seq', 'SeqCtrl')"
+        assert sum(line == "  operand_comments:" for line in lines) == 1
+        start = lines.index("  operand_comments:")
+        assert (
+            lines[start + 1]
+            == "    '.FAULT.0': 'Robot fault did not reset when running'"
+        )
+        assert len(lines) - start - 1 == 12
+        assert repr(seq) == seq.describe()
+
+
 # ---------------------------------------------------------------------------
 # Typed AOI parameters
 # ---------------------------------------------------------------------------
