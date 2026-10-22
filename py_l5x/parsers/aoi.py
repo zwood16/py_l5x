@@ -19,7 +19,10 @@ This module provides rich AOI inspection surfaces similar to program parsing:
   plain ``AOIParameter`` instances.
 
 AOI routines reuse :class:`py_l5x.parsers.routine.RoutinesCollection`.
-AOI parameters reuse :class:`py_l5x.parsers.aoi.AOIParametersCollection`.
+``AOIParametersCollection`` maps one AOI's parameters by name, and
+``AOIDataTypesCollection`` maps every AOI name to its parameters; the latter
+feeds the :class:`~py_l5x.parsers.tag.TypeRegistry` used to resolve AOI-typed
+tag members.
 """
 
 from __future__ import annotations
@@ -633,7 +636,7 @@ class AOIDataTypesCollection(BaseCollection[AOIParametersCollection]):
     """
 
     def __init__(self, controller_element: ET.Element) -> None:
-        """Initialise from a root XML element.
+        """Initialise from a ``<Controller>`` XML element.
 
         Args:
             controller_element: The ``<Controller>`` element whose

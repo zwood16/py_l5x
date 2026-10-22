@@ -95,7 +95,7 @@ print(tag)
 print(IntegerTag.fields()["data_type"])  # "DataType"
 ```
 
-Attributes that are present in the XML but not modeled by a field are listed under `Extra Attributes:`.
+Attributes that are present in the XML but not modeled by a field are listed under `Extra Attributes:`. Tags, AOI local tags, and AOI parameters also print an `operand_comments:` block when they have per-operand comments (see [Per-operand metadata](#per-operand-metadata)).
 
 ## Controller metadata
 
@@ -226,6 +226,34 @@ print(step.value)  # 0
 # AOI routines (same API as program routines — see below)
 logic = aoi.routines["Logic"]
 print(logic.as_text())
+```
+
+### Parameters
+
+`aoi.parameters` is an `AOIParametersCollection` of `AOIParameter` objects. Input and Output parameters that have default data are created as typed subclasses: `AOIParameterBoolTag`, `AOIParameterIntegerTag`, `AOIParameterFloatTag`, `AOIParameterTimeTag`, `AOIParameterDateTimeTag`, or `AOIParameterAtomicTag` (the fallback). Each subclasses `AOIParameter` and the matching node class, so `.value`, `.bit(n)`, `.min`/`.max` (int/float), `.engineering_unit`, and `.state0`/`.state1` (bool) work as they do on tags:
+
+```python
+from py_l5x import AOIParameter, AOIParameterIntegerTag
+
+state = project.aois["SeqCtrl"].parameters["state"]
+print(isinstance(state, AOIParameterIntegerTag))  # True
+print(isinstance(state, AOIParameter))  # True
+print(state.value)  # 0
+print(state.bit(0).description)  # "running"
+print(state.bit(6).description)  # "aborted"
+```
+
+InOut parameters, and EnableIn/EnableOut (which have no default data), are plain `AOIParameter` objects that expose identity only: `name`, `data_type`, `usage`, `required`, `visible`, `description`, `tag_type`, and `is_inout`. Per Logix rules, STRING, UDT, and array parameters must be InOut, so they are always plain `AOIParameter` objects. Their per-operand comments are still available through `operand_comments`:
+
+```python
+seq = project.aois["FanucRobot"].parameters["seq"]
+print(type(seq).__name__)  # "AOIParameter"
+print(seq.is_inout)  # True
+for operand, comment in seq.operand_comments.items():
+    print(f"{operand}: {comment}")
+# .FAULT.0: Robot fault did not reset when running
+# .FAULT.1: Robot did not stop (cstopi)
+# ...
 ```
 
 ## Modules
@@ -501,6 +529,38 @@ for name, child in nested_node.members.items():
 ```
 
 Use `isinstance(node, StructNode)` to check if a member is itself a structure before accessing `.members`.
+
+### Per-operand metadata
+
+Bit and member metadata (comments, engineering units, state labels, min/max, external logging) is stored per operand, keyed by the operand as Studio 5000 exports it (`.0` for bit 0, `.BOOL1` for a member). Tags, AOI local tags, and AOI parameters expose it through two read-only properties:
+
+- `operand_comments`: operand → comment.
+- `operand_metadata`: operand → the raw exported text for each key (`comment`, `min`, `max`, `engineering_unit`, `state0`, `state1`, `external_logging`).
+
+Both are instance-only: they reflect the element's own entries and do not merge in entries from the AOI definition.
+
+```python
+dint_tag = project.programs["MainProgram"].tags["a_commented_dint"]
+print(dint_tag.operand_comments)
+# {'.0': 'this is bit 0', '.1': 'this is bit 1', '.10': 'this is bit 10'}
+print(dint_tag.operand_metadata[".1"])
+# {'comment': 'this is bit 1', 'engineering_unit': 'mm', 'state0': 'off', 'state1': 'on', 'external_logging': 'false'}
+
+udt_tag = project.programs["MainProgram"].tags["a_simple_udt_with_overrides"]
+print(udt_tag.operand_metadata[".DINT"]["max"])  # "2147483647"
+```
+
+**AOI instance inheritance.** Bit and member metadata written on an AOI parameter definition applies to every instance of that AOI. When a value is looked up, the first match wins:
+
+1. The instance tag's own operand entry.
+2. The AOI parameter definition's operand entry.
+3. The parameter's own description/metadata.
+
+```python
+sequence = project.programs["MainProgram"].tags["sequence"]
+print(sequence.operand_comments)  # {} (only the instance's own entries)
+print(sequence.members["state"].bit(0).description)  # "running" (from SeqCtrl)
+```
 
 ### Arrays
 
