@@ -547,6 +547,9 @@ IntegerNode('DINT', path='.LEN')
   value: 5
 ```
 
+> [!Note]
+> The L5X file does not store `DATA` as an array of `SINT` like it is represented in Studio 5000, so accessing DATA also returns a string value. Accessing the `.value` of a string tag is suggested over looking at the DATA member. Use string slicing to access individual characters if needed.
+
 ### Specialty Tags: MESSAGE, MOTION_GROUP, AXIS_CIP_DRIVE
 
 A few tag data types don't carry a normal scalar/structure/array value — Logix exports a single configuration block instead. Specialty tags do NOT have `.value`, `.members`, or `.elements`.
@@ -891,7 +894,9 @@ DataTypeMember('a_Bool', 'BIT')
 ```
 
 > [!NOTE]
-> At this time, nested UDT's cannot be drilled down into like tags. You cannot see `a_nested_UDT`'s members from within `A_UDT`.
+> At this time, nested structures cannot be drilled down into like tags. You cannot see `a_nested_UDT`'s members from within `A_UDT`. Same goes for nested AOI's or built-in structs like `TIMER`. This is a limitation of how L5X files stores UDT's without the child tag's members.
+>
+> As a workaround, either drill down in a tag instance or seach through `data_types` and `aois` for the member's tag type. Built-in type definitions can't be found anywhere in an L5X other than tag instances.
 
 ### Hidden Tags
 
