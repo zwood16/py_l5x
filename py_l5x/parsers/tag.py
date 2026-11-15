@@ -123,8 +123,13 @@ from xml.etree import ElementTree as ET
 from py_l5x.parsers.atomic_types import (
     ATOMIC_TYPES,
     atomic_info,
+    format_float_literal,
+    format_integer_literal,
+    format_string_literal,
+    format_time_literal,
     parse_float_literal,
     parse_integer_literal,
+    parse_string_literal,
 )
 from py_l5x.parsers.base import (
     BaseCollection,
@@ -139,12 +144,13 @@ from py_l5x.parsers.datatype import (
     DataTypeMember,
     DataTypesCollection,
 )
+from py_l5x.parsers.schema import remove_child
 from py_l5x.parsers.specialty_tags import (
     AxisParameters,
     MessageParameters,
     MotionGroupParameters,
 )
-from py_l5x.parsers.utils import cdata_text, convert_numeric
+from py_l5x.parsers.utils import CDATA_TAG, cdata_text, convert_numeric
 
 if TYPE_CHECKING:
     from py_l5x.parsers.aoi import AOIDataTypesCollection, AOIParameter
@@ -271,6 +277,13 @@ class _TagOverrides:
     upper case regardless of the actual member's casing, so lookups are
     always matched case-insensitively.
 
+    Every node of a tag shares one instance, so :attr:`owner` is how a node
+    finds the element that holds its ``Data``/``DefaultData`` children.
+
+    Attributes:
+        owner: The owning ``<Tag>``/``<Parameter>``/``<LocalTag>`` (or module
+            tag) element.
+
     Args:
         tag_element: The ``<Tag>`` element to scan for override containers.
     """
@@ -281,6 +294,7 @@ class _TagOverrides:
         Args:
             tag_element: The ``<Tag>`` element to scan.
         """
+        self.owner = tag_element
         self._by_path: dict[str, dict[str, str]] = {}
         # Upper-cased path -> operand text as first exported (for display).
         self._display: dict[str, str] = {}
@@ -345,22 +359,6 @@ def _relative_operand(operand_path: str, anchor: str) -> str | None:
     if not path.startswith(prefix):
         return None
     return path[len(prefix) :]
-
-
-def _parse_string_literal(text: str) -> str:
-    """Strip the single-quote wrapping Logix uses for exported string text.
-
-    Args:
-        text: The raw CDATA text (e.g. ``"'SRVO-003'"``).
-
-    Returns:
-        The text with a single layer of surrounding single quotes removed,
-        or the original text unchanged if it isn't quoted.
-    """
-    text = text.strip()
-    if len(text) >= 2 and text[0] == "'" and text[-1] == "'":
-        return text[1:-1]
-    return text
 
 
 def _find_special_data_element(
@@ -631,6 +629,35 @@ class TagNode:
         """The wrapped XML element (None for synthetic nodes like bits)."""
         return self._value_element
 
+    def _require_element(self) -> ET.Element:
+        """Return the backing element, or fail for a non-writable node.
+
+        Returns:
+            The wrapped value element.
+
+        Raises:
+            TypeError: If the node has no backing element (a bit or a
+                synthetic ``LEN``/``DATA`` member).
+        """
+        if self._value_element is None:
+            raise TypeError(
+                f"{self._operand_path or 'node'} has no backing XML element "
+                "(bit or synthetic member) and cannot be written"
+            )
+        return self._value_element
+
+    def _drop_stale_l5k(self) -> None:
+        """Remove the owner's ``Format="L5K"`` ``Data``/``DefaultData`` siblings.
+
+        The reader ignores L5K, but Studio would import it instead of the
+        decorated value that was just written, so it must go after any write.
+        """
+        owner = self._overrides.owner
+        for tag in ("Data", "DefaultData"):
+            for child in owner.findall(tag):
+                if child.get("Format") == "L5K":
+                    remove_child(owner, child)
+
     @property
     def operand_path(self) -> str:
         """This node's operand path (for override lookup)."""
@@ -814,6 +841,43 @@ class AtomicNode(TagNode):
             return None
         return convert_numeric(text, self.data_type)
 
+    def _format_value(self, new_value: object) -> str:
+        """Validate *new_value* and return the ``Value`` text to store.
+
+        Subclasses override this; the fallback type is not writable.
+
+        Args:
+            new_value: The value being assigned.
+
+        Returns:
+            The text for the ``Value`` attribute.
+
+        Raises:
+            TypeError: Always, for this generic node.
+        """
+        raise TypeError(f"values of type {self.data_type!r} are not writable")
+
+    def _write_value(self, new_value: object) -> None:
+        """Store *new_value* in the element and drop the stale L5K data.
+
+        Args:
+            new_value: The value being assigned.
+
+        Raises:
+            TypeError: If the node is not writable or the type is wrong.
+            ValueError: If the value is out of range or malformed.
+        """
+        element = self._require_element()
+        text = self._format_value(new_value)
+        element.set("Value", text)
+        self._raw_text = None
+        self._drop_stale_l5k()
+
+    @value.setter
+    def value(self, new_value: object) -> None:
+        """Write the value (not supported for the fallback atomic type)."""
+        self._write_value(new_value)
+
 
 class BoolNode(AtomicNode):
     """A BOOL (1-bit) atomic node."""
@@ -833,6 +897,39 @@ class BoolNode(AtomicNode):
             return bool(parse_integer_literal(text, ATOMIC_TYPES["BOOL"]))
         except ValueError:
             return text
+
+    @value.setter
+    def value(self, new_value: bool | int) -> None:
+        """Write the value to the ``Value`` attribute.
+
+        Args:
+            new_value: The new value.
+
+        Raises:
+            TypeError: If the node is not writable or *new_value* has the
+                wrong type.
+            ValueError: If *new_value* is out of range.
+        """
+        self._write_value(new_value)
+
+    def _format_value(self, new_value: object) -> str:
+        """Validate *new_value* and return the ``Value`` text to store.
+
+        Args:
+            new_value: The value being assigned.
+
+        Returns:
+            The text for the ``Value`` attribute.
+        """
+        if isinstance(new_value, bool):
+            return "1" if new_value else "0"
+        if isinstance(new_value, int):
+            if new_value in (0, 1):
+                return str(new_value)
+            raise ValueError(f"BOOL value must be 0 or 1, not {new_value}")
+        raise TypeError(
+            f"BOOL value must be a bool or 0/1, not {type(new_value).__name__}"
+        )
 
     @property
     def state0(self) -> str:
@@ -871,6 +968,34 @@ class IntegerNode(AtomicNode):
             return parse_integer_literal(text, ATOMIC_TYPES[self.data_type.upper()])
         except (ValueError, KeyError):
             return text
+
+    @value.setter
+    def value(self, new_value: int) -> None:
+        """Write the value to the ``Value`` attribute.
+
+        Args:
+            new_value: The new value.
+
+        Raises:
+            TypeError: If the node is not writable or *new_value* has the
+                wrong type.
+            ValueError: If *new_value* is out of range.
+        """
+        self._write_value(new_value)
+
+    def _format_value(self, new_value: object) -> str:
+        """Validate *new_value* and return the ``Value`` text to store.
+
+        Args:
+            new_value: The value being assigned.
+
+        Returns:
+            The text for the ``Value`` attribute.
+        """
+        info = atomic_info(self.data_type)
+        if info is None:
+            raise TypeError(f"{self.data_type!r} is not a writable integer type")
+        return format_integer_literal(new_value, info, self.radix)  # type: ignore[arg-type]
 
     @property
     def bit_width(self) -> int:
@@ -955,6 +1080,31 @@ class FloatNode(AtomicNode):
         except ValueError:
             return text
 
+    @value.setter
+    def value(self, new_value: float | int) -> None:
+        """Write the value to the ``Value`` attribute.
+
+        Args:
+            new_value: The new value.
+
+        Raises:
+            TypeError: If the node is not writable or *new_value* has the
+                wrong type.
+            ValueError: If *new_value* is out of range.
+        """
+        self._write_value(new_value)
+
+    def _format_value(self, new_value: object) -> str:
+        """Validate *new_value* and return the ``Value`` text to store.
+
+        Args:
+            new_value: The value being assigned.
+
+        Returns:
+            The text for the ``Value`` attribute.
+        """
+        return format_float_literal(new_value, self.data_type, self.radix)  # type: ignore[arg-type]
+
     @property
     def min(self) -> float | None:
         """Minimum value, from override or member def."""
@@ -974,6 +1124,31 @@ class TimeNode(AtomicNode):
         """The time literal (e.g. 'T#0us')."""
         return self.raw_value
 
+    @value.setter
+    def value(self, new_value: str) -> None:
+        """Write the value to the ``Value`` attribute.
+
+        Args:
+            new_value: The new value.
+
+        Raises:
+            TypeError: If the node is not writable or *new_value* has the
+                wrong type.
+            ValueError: If *new_value* is out of range.
+        """
+        self._write_value(new_value)
+
+    def _format_value(self, new_value: object) -> str:
+        """Validate *new_value* and return the ``Value`` text to store.
+
+        Args:
+            new_value: The value being assigned.
+
+        Returns:
+            The text for the ``Value`` attribute.
+        """
+        return format_time_literal(new_value, self.data_type)  # type: ignore[arg-type]
+
     @property
     def unit(self) -> str | None:
         """The time unit (us or ns)."""
@@ -988,6 +1163,31 @@ class DateTimeNode(AtomicNode):
     def value(self) -> str | None:
         """The datetime literal (e.g. 'DT#1970-01-01-00:00:00.000_000Z')."""
         return self.raw_value
+
+    @value.setter
+    def value(self, new_value: str) -> None:
+        """Write the value to the ``Value`` attribute.
+
+        Args:
+            new_value: The new value.
+
+        Raises:
+            TypeError: If the node is not writable or *new_value* has the
+                wrong type.
+            ValueError: If *new_value* is out of range.
+        """
+        self._write_value(new_value)
+
+    def _format_value(self, new_value: object) -> str:
+        """Validate *new_value* and return the ``Value`` text to store.
+
+        Args:
+            new_value: The value being assigned.
+
+        Returns:
+            The text for the ``Value`` attribute.
+        """
+        return format_time_literal(new_value, self.data_type)  # type: ignore[arg-type]
 
     @property
     def unit(self) -> str | None:
@@ -1031,7 +1231,45 @@ class StringNode(TagNode):
     @property
     def value(self) -> str:
         """The string text, with Logix's surrounding single quotes removed."""
-        return _parse_string_literal(self._raw_data_text())
+        return parse_string_literal(self._raw_data_text())
+
+    @value.setter
+    def value(self, new_value: str) -> None:
+        """Write the string text.
+
+        Updates the root ``Length`` attribute and CDATA literal (for
+        ``Format="String"``), or the ``LEN`` value and ``DATA`` CDATA (for a
+        decorated structure). An empty nested string is written as empty
+        CDATA; an empty root string is written as ``''``.
+
+        Args:
+            new_value: The new text.
+
+        Raises:
+            TypeError: If *new_value* is not a ``str`` or the node has no
+                backing element or recognised string layout.
+            ValueError: If the text is longer than :attr:`max_length` or has
+                characters outside Latin-1.
+        """
+        element = self._require_element()
+        literal = format_string_literal(new_value)
+        limit = self.max_length
+        if limit is not None and len(new_value) > limit:
+            raise ValueError(f"string of {len(new_value)} characters exceeds {limit}")
+        data_el = self._child("DATA")
+        len_el = self._child("LEN")
+        if data_el is not None and len_el is not None:
+            len_el.set("Value", str(len(new_value)))
+            _set_cdata_text(data_el, literal if new_value else "")
+        elif element.tag in ("Data", "DefaultData") and (
+            element.get("Format") == "String"
+        ):
+            element.set("Length", str(len(new_value)))
+            _set_cdata_text(element, literal)
+        else:
+            raise TypeError(f"{self._operand_path or 'node'} has no string layout")
+        self._raw_text = None
+        self._drop_stale_l5k()
 
     @property
     def len(self) -> int:
@@ -1188,6 +1426,21 @@ def _child_def_scopes(
     return parent_scopes
 
 
+def _set_cdata_text(element: ET.Element, text: str) -> None:
+    """Set the CDATA text of *element*, keeping the existing child if any.
+
+    Args:
+        element: The element holding a CDATA section.
+        text: The new text.
+    """
+    cdata = element.find(CDATA_TAG)
+    if cdata is None:
+        element.text = "\n"
+        cdata = ET.SubElement(element, CDATA_TAG)
+        cdata.tail = "\n"
+    cdata.text = text
+
+
 def _build_node(
     element: ET.Element,
     member_def: MemberDef | None,
@@ -1261,7 +1514,7 @@ def _build_node(
     if element.get("Value") is None:
         text = cdata_text(element, strip=False)
         if text:
-            parsed_text = _parse_string_literal(text)
+            parsed_text = parse_string_literal(text)
             return AtomicNode(
                 element,
                 member_def,

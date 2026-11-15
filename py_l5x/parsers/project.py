@@ -34,8 +34,9 @@ Usage:
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator, Mapping
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Any, Union
 from xml.etree import ElementTree as ET
 
 from py_l5x.parsers.aoi import AOICollection, AOIDataTypesCollection, AOIDefinition
@@ -353,6 +354,30 @@ class Project:
             The top-level XML element of the parsed L5X document.
         """
         return self._root
+
+    def to_string(self, **kwargs: Any) -> str:
+        """Serialize the project to L5X document text.
+
+        Args:
+            **kwargs: Passed to ``py_l5x.writer.to_string`` (``newline``).
+
+        Returns:
+            The full L5X document text.
+        """
+        from py_l5x import writer
+
+        return writer.to_string(self._root, **kwargs)
+
+    def write(self, path: str | os.PathLike, **kwargs: Any) -> None:
+        """Write the project to an L5X file.
+
+        Args:
+            path: Destination file path.
+            **kwargs: Passed to ``py_l5x.writer.write`` (``bom``, ``newline``).
+        """
+        from py_l5x import writer
+
+        writer.write(self._root, path, **kwargs)
 
     @property
     def controller_element(self) -> ET.Element:

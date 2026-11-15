@@ -771,6 +771,38 @@ for prog_name in task.scheduled_program_names:
 #   Robot
 ```
 
+## Editing and writing L5X files
+
+> [!NOTE]
+> Write support is new and only verified against Studio 5000 **v37**. Tag values and documentation can be edited; adding or removing tags, members and routines is not supported yet.
+
+Any loaded project (full or component export) can be edited in place and written back. The output matches Studio's own export format (UTF-8 BOM, CRLF, CDATA sections), so it can be opened in Studio, or imported with Import Component, and diffs cleanly against the original.
+
+```python
+from py_l5x import load, loads
+
+project = load("my_project.L5X")
+prog = project.programs["MainProgram"]
+
+prog.tags["a_timer"].members["PRE"].value = 5000       # TIMER preset
+prog.tags["a_dint"].value = -77
+prog.tags["a_udt_instance"].members["a_real"].value = 9.5
+prog.tags["a_2d_array"][1, 2].value = 42
+prog.tags["a_string"].value = "Line 1\nLine 2"         # escapes handled ($l, $$, $', $HH)
+project.aois["Debounce"].parameters["onDelay"].value = 250   # AOI default value
+
+prog.tags["a_dint"].description = "Edited description"
+prog.routines["MainRoutine"].rungs[0].comment = "Edited rung comment"
+
+project.write("my_project_edited.L5X")
+text = project.to_string()        # or get the document text
+again = loads(text)               # parse L5X text directly
+```
+
+Value writes are validated: out-of-range integers, the wrong Python type, non-finite floats, and strings that are too long or contain characters outside Latin-1 raise `ValueError`/`TypeError`, and the XML is left unchanged. Values are written in the tag's radix exactly as Studio formats them (for example `16#0000_00ff` for a Hex DINT). When a value changes, the tag's redundant `L5K` data block is removed, because Studio would otherwise use the stale copy. Bits of integers (`tag.bit(3)`) are read-only.
+
+Rung text can be set with `rung.text = "XIC(a)OTE(b);"`. Note that v37 L5X files use `MOVE` rather than `MOV`, and that a literal preset in rung text (for example `TON(t,3000,0)`) overwrites the timer's preset on import. See [docs/import-format.md](docs/import-format.md) for what Studio accepts on import.
+
 ## Component exports
 
 Studio 5000 can export individual components (a single Program, Routine, AOI, DataType, Module, Rung, or Tag) rather than an entire project. Component exports are wrapped in the same `<RSLogix5000Content>` envelope as full projects but carry a `TargetType` indicating what was exported (e.g., `"Program"`, `"Routine"`, `"Rung"`) and a `<Controller Use="Context">` section containing all dependencies (UDTs, AOIs, parent programs, etc.). `py_l5x` supports component exports through the same `load()` API and provides a `.target` property to quickly access the exported object.
@@ -936,9 +968,10 @@ uv run ruff check --fix .   # auto-fix where possible
 - Not all features or specialty tag types are supported. For example:
     - Alarms
     - Motion Coordinate Groups
-- There is no write support. `py_l5x` can only read L5X files. It cannot write back to them.
+- Write support is limited to editing values and documentation of existing objects, verified against v37 only. See [Editing and writing L5X files](#editing-and-writing-l5x-files).
 
 ## Road Map
 
-- [ ] Implement a write feature to allow for modifying an exported L5X file
+- [x] Write L5X files and edit values and documentation in place
+- [ ] Structural edits: add, remove and rename tags, members, parameters, routines and rungs
 - [ ] Implement a generate component feature to go along with write allowing users to create component imports using python.

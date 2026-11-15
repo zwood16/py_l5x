@@ -7,7 +7,7 @@ Usage:
     MyController
 """
 
-from py_l5x.parse import load
+from py_l5x.parse import load, loads
 from py_l5x.parsers.aoi import (
     AOIDefinition,
     AOILocalArrayTag,
@@ -123,4 +123,5 @@ __all__ = [
     "TimeTag",
     "UnknownTag",
     "load",
+    "loads",
 ]

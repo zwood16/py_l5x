@@ -8,16 +8,47 @@ from xml.sax.saxutils import escape as _xml_escape
 from py_l5x.parsers.project import Project
 from py_l5x.parsers.utils import CDATA_TAG
 
-_CDATA_RE = re.compile(r"<!\[CDATA\[(.*?)\]\]>", re.DOTALL)
+_CDATA_SECTION = r"<!\[CDATA\[(.*?)\]\]>"
+#: One or more directly adjacent CDATA sections. Text containing ``]]>`` is
+#: written as two sections (``]]]]><![CDATA[>``), so a run of sections is one
+#: logical text value.
+_CDATA_RE = re.compile(rf"(?:{_CDATA_SECTION})+", re.DOTALL)
+_CDATA_SECTION_RE = re.compile(_CDATA_SECTION, re.DOTALL)
 
 
 def _cdata_to_element(match: re.Match) -> str:
-    """Replace a CDATA section with a ``<CDATA_TAG>`` element.
+    """Replace a run of adjacent CDATA sections with a ``<CDATA_TAG>`` element.
 
-    The content is XML-escaped so characters like ``<``, ``>``, and ``&``
-    (common in Structured Text and rung comments) do not break the parser.
+    The sections' contents are joined, so text that was split around a
+    ``]]>`` terminator is restored. The content is XML-escaped so characters
+    like ``<``, ``>``, and ``&`` (common in Structured Text and rung comments)
+    do not break the parser.
     """
-    return f"<{CDATA_TAG}>{_xml_escape(match.group(1))}</{CDATA_TAG}>"
+    text = "".join(_CDATA_SECTION_RE.findall(match.group(0)))
+    return f"<{CDATA_TAG}>{_xml_escape(text)}</{CDATA_TAG}>"
+
+
+def _parse_text(raw: str) -> ET.Element:
+    """Parse L5X text into an element tree, converting CDATA sections.
+
+    Replaces ``<![CDATA[...]]>`` with ``<CDATA_TAG>`` elements. Content is
+    XML-escaped so that characters like ``<``, ``>`` and ``&`` (common in
+    Structured Text and rung comments) remain valid inside the element text.
+
+    Args:
+        raw (str): The L5X document text.
+
+    Returns:
+        ET.Element: The root element.
+
+    Raises:
+        ValueError: If the text cannot be parsed as XML.
+    """
+    processed = _CDATA_RE.sub(_cdata_to_element, raw)
+    try:
+        return ET.fromstring(processed.encode("utf-8"))
+    except ET.ParseError as e:
+        raise ValueError(f"Failed to parse the L5X file: {e}") from e
 
 
 def _load_l5x(file_path: str) -> ET.Element:
@@ -48,16 +79,7 @@ def _load_l5x(file_path: str) -> ET.Element:
     except OSError as e:
         raise FileNotFoundError(f"Could not read file {file_path}: {e}") from e
 
-    # Replace <![CDATA[...]]> with <CDATA_TAG> elements. Content is
-    # XML-escaped so that characters like < > & (common in Structured Text
-    # and rung comments) remain valid inside the element text node.
-    processed = _CDATA_RE.sub(_cdata_to_element, raw)
-
-    try:
-        root = ET.fromstring(processed.encode("utf-8"))
-        return root
-    except ET.ParseError as e:
-        raise ValueError(f"Failed to parse the L5X file: {e}") from e
+    return _parse_text(raw)
 
 
 def load(file_path: str) -> Project:
@@ -88,3 +110,24 @@ def load(file_path: str) -> Project:
         ...     print(task.name, list(task.programs))
     """
     return Project(_load_l5x(file_path))
+
+
+def loads(text: str) -> Project:
+    """Parse L5X text and return a hierarchical ``Project`` object.
+
+    Behaves like :func:`load` but takes the document text instead of a path.
+    A leading byte order mark is stripped and line endings are normalized
+    to ``"\\n"`` so results match file loading.
+
+    Args:
+        text: The L5X document text.
+
+    Returns:
+        A ``Project`` instance providing typed access to all project data.
+
+    Raises:
+        ValueError: If the text is not a valid L5X XML document or lacks
+            a ``<Controller>`` element.
+    """
+    text = text.removeprefix("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
+    return Project(_parse_text(text))
