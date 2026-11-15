@@ -774,7 +774,7 @@ for prog_name in task.scheduled_program_names:
 ## Editing and writing L5X files
 
 > [!NOTE]
-> Write support is new and only verified against Studio 5000 **v37**. Tag values and documentation can be edited; adding or removing tags, members and routines is not supported yet.
+> Write support is new and only verified against Studio 5000 **v37**. Values, documentation, tags, operand metadata, routines and rungs can be edited. Editing UDT members and AOI parameters is not supported yet.
 
 Any loaded project (full or component export) can be edited in place and written back. The output matches Studio's own export format (UTF-8 BOM, CRLF, CDATA sections), so it can be opened in Studio, or imported with Import Component, and diffs cleanly against the original.
 
@@ -784,22 +784,50 @@ from py_l5x import load, loads
 project = load("my_project.L5X")
 prog = project.programs["MainProgram"]
 
-prog.tags["a_timer"].members["PRE"].value = 5000       # TIMER preset
+prog.tags["a_timer"].members["PRE"].value = 5000  # TIMER preset
 prog.tags["a_dint"].value = -77
 prog.tags["a_udt_instance"].members["a_real"].value = 9.5
 prog.tags["a_2d_array"][1, 2].value = 42
-prog.tags["a_string"].value = "Line 1\nLine 2"         # escapes handled ($l, $$, $', $HH)
-project.aois["Debounce"].parameters["onDelay"].value = 250   # AOI default value
+prog.tags["a_string"].value = "Line 1\nLine 2"  # escapes handled ($l, $$, $', $HH)
+project.aois["Debounce"].parameters["onDelay"].value = 250  # AOI default value
 
 prog.tags["a_dint"].description = "Edited description"
 prog.routines["MainRoutine"].rungs[0].comment = "Edited rung comment"
 
 project.write("my_project_edited.L5X")
-text = project.to_string()        # or get the document text
-again = loads(text)               # parse L5X text directly
+text = project.to_string()  # or get the document text
+again = loads(text)  # parse L5X text directly
 ```
 
 Value writes are validated: out-of-range integers, the wrong Python type, non-finite floats, and strings that are too long or contain characters outside Latin-1 raise `ValueError`/`TypeError`, and the XML is left unchanged. Values are written in the tag's radix exactly as Studio formats them (for example `16#0000_00ff` for a Hex DINT). When a value changes, the tag's redundant `L5K` data block is removed, because Studio would otherwise use the stale copy. Bits of integers (`tag.bit(3)`) are read-only.
+
+### Adding, removing and renaming
+
+```python
+tags = project.controller_tags                 # or program.tags
+tags.add("Motor1_Run", "BOOL", description="Run command")
+tags.add("Motor1_Timer", "TIMER")
+tags.add("Recipe", "DINT", dimensions=(4, 10), radix="Hex")
+tags.add_alias("M1_Run", "Motor1_Run")
+tags["Motor1_Run"].value = True
+tags.rename("Recipe", "RecipeTable")
+tags.remove("OldTag")
+
+timer = tags["Motor1_Timer"]
+timer.set_operand_comment(".DN", "Motor started")
+timer.set_operand_metadata(".PRE", "engineering_unit", "ms")
+
+routines = project.programs["MainProgram"].routines
+r = routines.add("Motor1", description="Motor 1 logic")            # RLL by default
+r.add_rung("XIC(Motor1_Run)TON(Motor1_Timer,?,?);", comment="Start delay")
+r.add_rung("NOP();", index=0)                                       # insert; rungs are renumbered
+r.remove_rung(0)
+st = routines.add("Calc", "ST")
+st.set_st_lines(["IF Motor1_Run THEN", "    Count := Count + 1;", "END_IF;"])
+routines.rename("Calc", "Motor1_Calc")
+```
+
+New tags are written without a data block, so Studio gives them their type's default values. Atomic and STRING tags get one as soon as a value is set; setting values on new structure or array tags is not supported yet. Names are validated (Logix naming rules, case-insensitive duplicates). Removing or renaming a tag or routine does **not** update references to it in logic, aliases or `JSR` instructions, apart from a program's main and fault routine names, which follow a rename. `add_rung` checks only that the text ends in `;` and that brackets are balanced. Problems like undefined tags show up only when Studio verifies the project.
 
 Rung text can be set with `rung.text = "XIC(a)OTE(b);"`. Note that v37 L5X files use `MOVE` rather than `MOV`, and that a literal preset in rung text (for example `TON(t,3000,0)`) overwrites the timer's preset on import. See [docs/import-format.md](docs/import-format.md) for what Studio accepts on import.
 
@@ -968,10 +996,11 @@ uv run ruff check --fix .   # auto-fix where possible
 - Not all features or specialty tag types are supported. For example:
     - Alarms
     - Motion Coordinate Groups
-- Write support is limited to editing values and documentation of existing objects, verified against v37 only. See [Editing and writing L5X files](#editing-and-writing-l5x-files).
+- Write support covers values, documentation, tags, operand metadata, routines and rungs, verified against v37 only. UDT members and AOI parameters cannot be edited yet. See [Editing and writing L5X files](#editing-and-writing-l5x-files).
 
 ## Road Map
 
 - [x] Write L5X files and edit values and documentation in place
-- [ ] Structural edits: add, remove and rename tags, members, parameters, routines and rungs
+- [x] Add, remove and rename tags, routines and rungs; edit operand metadata
+- [ ] Edit UDT members and AOI parameters (keeping existing tag data consistent)
 - [ ] Implement a generate component feature to go along with write allowing users to create component imports using python.

@@ -116,6 +116,7 @@ Value-tree nodes (members, array elements, bits) are organized in a typed hierar
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import TYPE_CHECKING, cast, overload
 from xml.etree import ElementTree as ET
@@ -123,6 +124,7 @@ from xml.etree import ElementTree as ET
 from py_l5x.parsers.atomic_types import (
     ATOMIC_TYPES,
     atomic_info,
+    default_radix,
     format_float_literal,
     format_integer_literal,
     format_string_literal,
@@ -144,7 +146,13 @@ from py_l5x.parsers.datatype import (
     DataTypeMember,
     DataTypesCollection,
 )
-from py_l5x.parsers.schema import remove_child
+from py_l5x.parsers.names import validate_new_name
+from py_l5x.parsers.schema import (
+    insert_child,
+    insert_child_at,
+    new_cdata_element,
+    remove_child,
+)
 from py_l5x.parsers.specialty_tags import (
     AxisParameters,
     MessageParameters,
@@ -295,9 +303,18 @@ class _TagOverrides:
             tag_element: The ``<Tag>`` element to scan.
         """
         self.owner = tag_element
-        self._by_path: dict[str, dict[str, str]] = {}
+        self.refresh()
+
+    def refresh(self) -> None:
+        """Re-scan :attr:`owner`, updating this instance in place.
+
+        Every node of a tag shares one ``_TagOverrides``, so refreshing it makes
+        edits to the override containers visible to nodes that already exist.
+        """
+        tag_element = self.owner
+        self._by_path = {}
         # Upper-cased path -> operand text as first exported (for display).
-        self._display: dict[str, str] = {}
+        self._display = {}
         for container_tag, (child_tag, key) in _OVERRIDE_CONTAINERS.items():
             container = tag_element.find(container_tag)
             if container is None:
@@ -339,6 +356,28 @@ class _TagOverrides:
             were overridden at that path. Empty if none were.
         """
         return self._by_path.get(operand_path.upper(), {})
+
+
+#: Override keys whose entries hold CDATA text; the rest are plain element text.
+_CDATA_OVERRIDE_KEYS = frozenset({"comment", "engineering_unit", "state0", "state1"})
+
+
+def _operand_sort_key(operand: str) -> list[str | int]:
+    """Return the key that orders operands the way Studio lists them.
+
+    Comparison is case-insensitive and digit runs compare numerically, so
+    ``.FAULT.2`` precedes ``.FAULT.10`` and ``.DN`` precedes ``.PRE``.
+
+    Args:
+        operand: An operand such as ``".FAULT.10"`` or ``"[0,1]"``.
+
+    Returns:
+        A list alternating text and integer parts, comparable with ``<``.
+    """
+    return [
+        int(part) if i % 2 else part
+        for i, part in enumerate(re.split(r"(\d+)", operand.upper()))
+    ]
 
 
 def _relative_operand(operand_path: str, anchor: str) -> str | None:
@@ -629,16 +668,53 @@ class TagNode:
         """The wrapped XML element (None for synthetic nodes like bits)."""
         return self._value_element
 
-    def _require_element(self) -> ET.Element:
+    def _check_writable(self) -> None:
+        """Fail early if this node can never be written.
+
+        Raises:
+            TypeError: If the node has no backing element and none can be
+                created (a bit or a synthetic ``LEN``/``DATA`` member).
+        """
+        if self._value_element is None:
+            self._require_element(create=False)
+
+    def _reject_aggregate_write(self) -> None:
+        """Raise the error for assigning ``value`` on a structure or array.
+
+        Raises:
+            TypeError: Always. A data-less tag gets the "layouts aren't
+                supported yet" message from :meth:`_check_writable`.
+        """
+        self._check_writable()
+        raise TypeError(
+            "cannot assign a value to a structure or array node; "
+            "write its members or elements instead"
+        )
+
+    def _materialize_root(self) -> ET.Element | None:
+        """Create the node's value element if it is a data-less root tag.
+
+        Returns:
+            The new element, or ``None`` if this node cannot create one.
+        """
+        return None
+
+    def _require_element(self, create: bool = True) -> ET.Element:
         """Return the backing element, or fail for a non-writable node.
+
+        Args:
+            create: Whether a data-less root tag may create its element.
 
         Returns:
             The wrapped value element.
 
         Raises:
-            TypeError: If the node has no backing element (a bit or a
-                synthetic ``LEN``/``DATA`` member).
+            TypeError: If the node has no backing element and cannot create
+                one (a bit, a synthetic ``LEN``/``DATA`` member, or a
+                data-less structure or array).
         """
+        if self._value_element is None and create:
+            self._value_element = self._materialize_root()
         if self._value_element is None:
             raise TypeError(
                 f"{self._operand_path or 'node'} has no backing XML element "
@@ -680,6 +756,113 @@ class TagNode:
         ):
             return self._value_element.get("ExternalAccess", "")
         return self._member_def.external_access if self._member_def else ""
+
+    def set_operand_metadata(self, operand: str, key: str, value: str | None) -> None:
+        """Set, update or remove one per-operand metadata entry.
+
+        The entry lives in this element's own override container (``Comments``,
+        ``Maxes``, ...), created at its schema position if missing. Operands are
+        written upper-case, as Studio exports them, and entries are kept sorted
+        by operand (case-insensitive, digits numeric). An existing entry is
+        matched case-insensitively and updated in place. Setting ``None`` or
+        ``""`` removes the entry, and the container when it becomes empty.
+        Existing node objects of this tag see the change immediately.
+
+        ``comment``, ``engineering_unit``, ``state0`` and ``state1`` are written
+        as CDATA; ``max``, ``min`` and ``external_logging`` as plain text.
+
+        Args:
+            operand: The operand path, starting with ``"."`` or ``"["``
+                (for example ``".PRE"`` or ``"[1,2].0"``).
+            key: One of ``comment``, ``max``, ``min``, ``engineering_unit``,
+                ``state0``, ``state1`` or ``external_logging``.
+            value: The new text, or ``None``/``""`` to remove the entry.
+
+        Raises:
+            ValueError: If *key* is unknown or *operand* does not start with
+                ``"."`` or ``"["``.
+        """
+        spec = next(
+            (
+                (container_tag, child_tag)
+                for container_tag, (child_tag, k) in _OVERRIDE_CONTAINERS.items()
+                if k == key
+            ),
+            None,
+        )
+        if spec is None:
+            valid = ", ".join(k for _, k in _OVERRIDE_CONTAINERS.values())
+            raise ValueError(
+                f"unknown operand metadata key {key!r}; use one of {valid}"
+            )
+        if not isinstance(operand, str) or operand[:1] not in (".", "["):
+            raise ValueError(f"operand must start with '.' or '[': {operand!r}")
+        container_tag, child_tag = spec
+        owner = self._overrides.owner
+        wanted = operand.upper()
+        container = owner.find(container_tag)
+        entry = None
+        if container is not None:
+            entry = next(
+                (e for e in container if e.get("Operand", "").upper() == wanted), None
+            )
+
+        if not value:
+            if entry is not None and container is not None:
+                remove_child(container, entry)
+                if len(container) == 0:
+                    remove_child(owner, container)
+        elif entry is not None:
+            self._fill_override(entry, key, value)
+        else:
+            entry = ET.Element(child_tag)
+            entry.set("Operand", wanted)
+            self._fill_override(entry, key, value)
+            new_container = container is None
+            if container is None:
+                container = ET.Element(container_tag)
+            position = sum(
+                1
+                for existing in container
+                if _operand_sort_key(existing.get("Operand", ""))
+                <= _operand_sort_key(wanted)
+            )
+            insert_child_at(container, position, entry)
+            if new_container:
+                insert_child(owner, container)
+        self._overrides.refresh()
+
+    @staticmethod
+    def _fill_override(entry: ET.Element, key: str, value: str) -> None:
+        """Set an override entry's text, keeping its attributes and tail.
+
+        Args:
+            entry: The ``<Comment>``/``<Max>``/... element.
+            key: The metadata key, which decides CDATA versus plain text.
+            value: The new text.
+        """
+        for child in list(entry):
+            entry.remove(child)
+        if key in _CDATA_OVERRIDE_KEYS:
+            built = new_cdata_element(entry.tag, value)
+            entry.text = built.text
+            entry.append(built[0])
+        else:
+            entry.text = value
+
+    def set_operand_comment(self, operand: str, text: str | None) -> None:
+        """Set or remove the comment on an operand.
+
+        Shorthand for ``set_operand_metadata(operand, "comment", text)``.
+
+        Args:
+            operand: The operand path (see :meth:`set_operand_metadata`).
+            text: The comment, or ``None``/``""`` to remove it.
+
+        Raises:
+            ValueError: If *operand* does not start with ``"."`` or ``"["``.
+        """
+        self.set_operand_metadata(operand, "comment", text)
 
     def _meta_override(self, key: str) -> str | None:
         """Return the operand override for a metadata key, or None.
@@ -867,8 +1050,9 @@ class AtomicNode(TagNode):
             TypeError: If the node is not writable or the type is wrong.
             ValueError: If the value is out of range or malformed.
         """
-        element = self._require_element()
+        self._check_writable()
         text = self._format_value(new_value)
+        element = self._require_element()
         element.set("Value", text)
         self._raw_text = None
         self._drop_stale_l5k()
@@ -1251,11 +1435,12 @@ class StringNode(TagNode):
             ValueError: If the text is longer than :attr:`max_length` or has
                 characters outside Latin-1.
         """
-        element = self._require_element()
+        self._check_writable()
         literal = format_string_literal(new_value)
         limit = self.max_length
         if limit is not None and len(new_value) > limit:
             raise ValueError(f"string of {len(new_value)} characters exceeds {limit}")
+        element = self._require_element()
         data_el = self._child("DATA")
         len_el = self._child("LEN")
         if data_el is not None and len_el is not None:
@@ -1342,6 +1527,23 @@ class StructNode(TagNode):
     """A structure node exposing a members mapping."""
 
     @property
+    def value(self) -> object:
+        """Structures have no scalar value (reading raises AttributeError)."""
+        raise AttributeError("value")
+
+    @value.setter
+    def value(self, new_value: object) -> None:
+        """Reject assignment: structures are written member by member.
+
+        Args:
+            new_value: Ignored.
+
+        Raises:
+            TypeError: Always.
+        """
+        self._reject_aggregate_write()
+
+    @property
     def members(self) -> Mapping[str, TagNode]:
         """Members mapping (lazy)."""
         return _StructureMembers(self)
@@ -1351,15 +1553,37 @@ class ArrayNode(TagNode):
     """An array node exposing dimensions and elements sequence."""
 
     @property
+    def value(self) -> object:
+        """Arrays have no scalar value (reading raises AttributeError)."""
+        raise AttributeError("value")
+
+    @value.setter
+    def value(self, new_value: object) -> None:
+        """Reject assignment: arrays are written element by element.
+
+        Args:
+            new_value: Ignored.
+
+        Raises:
+            TypeError: Always.
+        """
+        self._reject_aggregate_write()
+
+    @property
     def dimensions(self) -> tuple[int, ...]:
         """The array dimensions as a tuple of ints."""
         if self._value_element is None:
-            return ()
-        dims_str = self._value_element.get("Dimensions", "")
+            # A data-less root tag keeps its dimensions on the <Tag> itself
+            # (space separated, e.g. "2 3").
+            if self._operand_path:
+                return ()
+            dims_str = self._overrides.owner.get("Dimensions", "")
+        else:
+            dims_str = self._value_element.get("Dimensions", "")
         if not dims_str:
             return ()
         try:
-            return tuple(int(x.strip()) for x in dims_str.split(","))
+            return tuple(int(x) for x in dims_str.replace(",", " ").split())
         except ValueError:
             return ()
 
@@ -1948,7 +2172,7 @@ class _ValueTag(Tag):
         self,
         element: ET.Element,
         type_registry: TypeRegistry,
-        value_element: ET.Element,
+        value_element: ET.Element | None,
     ) -> None:
         """Initialize a tag with a value node.
 
@@ -1956,7 +2180,9 @@ class _ValueTag(Tag):
             element: The ``<Tag>`` element.
             type_registry: Used to resolve value tree members.
             value_element: The ``Data[@Format='Decorated']`` child element, or the
-                ``Data[@Format='String']`` element for STRING tags.
+                ``Data[@Format='String']`` element for STRING tags. ``None``
+                for a tag with no ``<Data>``; its radix then comes from the
+                ``Radix`` attribute or the type's default.
         """
         # Tag.__init__ sets the identity state. Tag's super() chain doesn't
         # reach TagNode, so the node base is initialized explicitly below; it
@@ -1969,7 +2195,78 @@ class _ValueTag(Tag):
             self._overrides,
             "",
             type_registry,
+            radix=self._dataless_radix() if value_element is None else None,
         )
+
+    def _dataless_radix(self) -> str | None:
+        """Return the radix of a tag that has no ``<Data>``.
+
+        Returns:
+            The tag's ``Radix`` attribute, else the default for an atomic
+            ``DataType``, else ``None``.
+        """
+        return self._element.get("Radix") or default_radix(
+            self._element.get("DataType", "")
+        )
+
+    def _dataless_kind(self) -> str:
+        """Classify a data-less tag by what can be materialized for it.
+
+        Returns:
+            ``"atomic"`` or ``"string"`` when a value element can be built,
+            otherwise ``"layout"`` (a structure or array).
+        """
+        if self._element.get("Dimensions"):
+            return "layout"
+        data_type = self._element.get("DataType", "")
+        if atomic_info(data_type) is not None:
+            return "atomic"
+        if self._type_registry.is_string_type(data_type):
+            return "string"
+        return "layout"
+
+    def _check_writable(self) -> None:
+        """Fail early for a data-less structure or array tag.
+
+        Raises:
+            TypeError: If the tag has no ``<Data>`` and is a structure or
+                array, whose full type layout is not supported yet.
+        """
+        if self._value_element is None and self._dataless_kind() == "layout":
+            raise TypeError(
+                f"cannot write a value to data-less tag {self.name!r}: full type "
+                "layouts for structures and arrays aren't supported yet (Phase 3)"
+            )
+
+    def _materialize_root(self) -> ET.Element | None:
+        """Create the ``<Data>`` element of a data-less atomic or STRING tag.
+
+        The element is inserted at its schema position in the ``<Tag>``, shaped
+        like Studio's output.
+
+        Returns:
+            The element value writes go to (``DataValue`` for atomic tags,
+            ``Data`` for STRING tags), or ``None`` for structures and arrays.
+        """
+        kind = self._dataless_kind()
+        if kind == "layout":
+            return None
+        data = ET.Element("Data")
+        data.text = "\n"
+        if kind == "string":
+            data.set("Format", "String")
+            insert_child(self._element, data)
+            return data
+        data.set("Format", "Decorated")
+        value = ET.SubElement(
+            data,
+            "DataValue",
+            DataType=self._element.get("DataType", ""),
+            Radix=self._dataless_radix() or "Decimal",
+        )
+        value.tail = "\n"
+        insert_child(self._element, data)
+        return value
 
 
 class BoolTag(_ValueTag, BoolNode):
@@ -2206,6 +2503,37 @@ def _classify_node(
     return AtomicNode, data_type
 
 
+def _make_dataless_tag(element: ET.Element, type_registry: TypeRegistry) -> Tag:
+    """Create the Tag subclass for a non-alias tag that has no value ``<Data>``.
+
+    Args:
+        element: The ``<Tag>`` element.
+        type_registry: Used to recognise STRING-family types.
+
+    Returns:
+        An ``ArrayTag`` for any ``Dimensions``; the typed class for an atomic
+        type; a ``StringTag`` for STRING-family types; a ``MessageTag``,
+        ``MotionGroupTag`` or ``AxisTag`` for those special types; otherwise a
+        ``StructTag``. Value tags get ``value_element=None``.
+    """
+    data_type = element.get("DataType", "")
+    if element.get("Dimensions"):
+        return ArrayTag(element, type_registry, None)
+    info = atomic_info(data_type)
+    if info is not None:
+        node_cls = _ATOMIC_NODE_CLASSES.get(info.family, AtomicNode)
+        return _TAG_CLASSES[node_cls](element, type_registry, None)
+    if type_registry.is_string_type(data_type):
+        return StringTag(element, type_registry, None)
+    if data_type == "MESSAGE":
+        return MessageTag(element, type_registry)
+    if data_type == "MOTION_GROUP":
+        return MotionGroupTag(element, type_registry)
+    if data_type.startswith("AXIS_"):
+        return AxisTag(element, type_registry)
+    return StructTag(element, type_registry, None)
+
+
 def _make_tag(element: ET.Element, type_registry: TypeRegistry) -> Tag:
     """Factory function to create the appropriate Tag subclass.
 
@@ -2243,6 +2571,11 @@ def _make_tag(element: ET.Element, type_registry: TypeRegistry) -> Tag:
         tag_cls = _TAG_CLASSES.get(node_cls, AtomicTag)
         return tag_cls(element, type_registry, value_el)
 
+    # No <Data> at all (or only the ignored L5K one): pick the class from the
+    # DataType and Dimensions, with no value tree.
+    if all(d.get("Format") == "L5K" for d in element.findall("Data")):
+        return _make_dataless_tag(element, type_registry)
+
     # No recognized value data
     return UnknownTag(element, type_registry)
 
@@ -2253,6 +2586,11 @@ class TagsCollection(BaseCollection[Tag]):
     Works identically for the controller-level ``<Tags>`` and each
     ``<Program>``'s ``<Tags>`` -- pass whichever element contains the
     ``Tags/Tag`` children.
+
+    Besides reading, the collection can create, delete and rename tags
+    (:meth:`add`, :meth:`add_alias`, :meth:`remove`, :meth:`rename`). Those
+    edits only touch the ``<Tag>`` elements: they do **not** update references
+    in logic, alias tags or other tags' data.
 
     Args:
         scope_element: The ``<Controller>`` or ``<Program>`` element whose
@@ -2271,3 +2609,207 @@ class TagsCollection(BaseCollection[Tag]):
         super().__init__(
             scope_element, "Tags/Tag", _make_tag, item_args=(type_registry,)
         )
+
+    # ------------------------------------------------------------------
+    # Edits
+    # ------------------------------------------------------------------
+
+    def _tag_elements(self) -> list[ET.Element]:
+        """Return this scope's ``<Tag>`` elements.
+
+        Returns:
+            The elements in document order.
+        """
+        return self._parent.findall("Tags/Tag")
+
+    def _check_new_name(self, name: str, ignore: ET.Element | None = None) -> None:
+        """Validate a new tag name and check it is unused in this scope.
+
+        Args:
+            name: The proposed name.
+            ignore: A tag element to leave out of the duplicate check (the
+                tag being renamed).
+
+        Raises:
+            ValueError: If the name is not a valid Logix tag name (see
+                :func:`py_l5x.parsers.names.validate_new_name`) or matches an
+                existing tag, ignoring case.
+        """
+        validate_new_name(
+            name,
+            (
+                element.get("Name", "")
+                for element in self._tag_elements()
+                if element is not ignore
+            ),
+            "tag",
+        )
+
+    def _append(self, element: ET.Element) -> Tag:
+        """Append a new ``<Tag>`` to this scope, creating ``<Tags>`` if needed.
+
+        Args:
+            element: The new tag element.
+
+        Returns:
+            The tag as built by this collection.
+        """
+        tags = self._parent.find("Tags")
+        if tags is None:
+            tags = ET.Element("Tags")
+            insert_child(self._parent, tags)
+        insert_child_at(tags, len(tags), element)
+        return self[element.get("Name", "")]
+
+    def add(
+        self,
+        name: str,
+        data_type: str,
+        *,
+        dimensions: int | tuple[int, ...] | None = None,
+        description: str | None = None,
+        radix: str | None = None,
+        external_access: str | None = None,
+        constant: bool | None = None,
+    ) -> Tag:
+        """Create a base tag with no ``<Data>``.
+
+        Studio fills in the type's default value on import and on opening the
+        project. The returned tag is typed from *data_type* and *dimensions*
+        (see ``_make_dataless_tag``); atomic and STRING tags can be given a
+        value straight away. Optional attributes are written only when given.
+
+        *data_type* is not validated yet (the built-in type table is not
+        available), so a misspelled type is written as is.
+
+        Args:
+            name: The tag name (see :meth:`_check_new_name` for the rules).
+            data_type: The ``DataType`` (atomic, STRING, UDT, AOI or built-in).
+            dimensions: An array size, or a tuple of up to three sizes.
+            description: Tag description.
+            radix: Display radix (for example ``"Hex"``).
+            external_access: ``"Read/Write"``, ``"Read Only"`` or ``"None"``.
+            constant: Whether the tag is a constant.
+
+        Returns:
+            The new tag.
+
+        Raises:
+            ValueError: If the name is invalid or taken, or *dimensions* is
+                not one to three positive integers.
+        """
+        self._check_new_name(name)
+        element = ET.Element("Tag")
+        element.set("Name", name)
+        element.set("TagType", "Base")
+        element.set("DataType", data_type)
+        if dimensions is not None:
+            sizes = (
+                tuple(dimensions)
+                if isinstance(dimensions, tuple | list)
+                else (dimensions,)
+            )
+            if (
+                not 1 <= len(sizes) <= 3
+                or not all(
+                    isinstance(n, int) and not isinstance(n, bool) for n in sizes
+                )
+                or any(n < 1 for n in sizes)
+            ):
+                raise ValueError(
+                    f"dimensions must be one to three positive integers: {dimensions!r}"
+                )
+            element.set("Dimensions", " ".join(str(n) for n in sizes))
+        if radix is not None:
+            element.set("Radix", radix)
+        if constant is not None:
+            element.set("Constant", "true" if constant else "false")
+        if external_access is not None:
+            element.set("ExternalAccess", external_access)
+        tag = self._append(element)
+        if description:
+            tag.description = description
+        return tag
+
+    def add_alias(
+        self, name: str, alias_for: str, *, description: str | None = None
+    ) -> AliasTag:
+        """Create an alias tag.
+
+        Args:
+            name: The alias name (same rules as :meth:`add`).
+            alias_for: The tag or operand path the alias points at.
+            description: Tag description.
+
+        Returns:
+            The new alias tag.
+
+        Raises:
+            ValueError: If the name is invalid or taken.
+        """
+        self._check_new_name(name)
+        element = ET.Element("Tag")
+        element.set("Name", name)
+        element.set("TagType", "Alias")
+        element.set("AliasFor", alias_for)
+        tag = self._append(element)
+        if description:
+            tag.description = description
+        return cast("AliasTag", tag)
+
+    def _find_element(self, name: str) -> ET.Element:
+        """Return the ``<Tag>`` element with exactly this name.
+
+        Args:
+            name: The tag name.
+
+        Returns:
+            The element.
+
+        Raises:
+            KeyError: If there is no such tag.
+        """
+        for element in self._tag_elements():
+            if element.get("Name") == name:
+                return element
+        raise KeyError(name)
+
+    def remove(self, name: str) -> None:
+        """Delete a tag.
+
+        Does **not** update references to the tag in logic, alias tags or other
+        tags; those are left dangling.
+
+        Args:
+            name: The tag name.
+
+        Raises:
+            KeyError: If there is no such tag.
+        """
+        element = self._find_element(name)
+        tags = self._parent.find("Tags")
+        assert tags is not None
+        remove_child(tags, element)
+
+    def rename(self, old: str, new: str) -> Tag:
+        """Rename a tag.
+
+        Does **not** update references to the old name in logic, alias tags or
+        other tags.
+
+        Args:
+            old: The current name.
+            new: The new name (same rules as :meth:`add`; the tag itself is
+                ignored by the duplicate check, so a case-only change works).
+
+        Returns:
+            The renamed tag.
+
+        Raises:
+            KeyError: If *old* does not exist.
+            ValueError: If *new* is invalid or taken by another tag.
+        """
+        element = self._find_element(old)
+        self._check_new_name(new, ignore=element)
+        element.set("Name", new)
+        return self[new]

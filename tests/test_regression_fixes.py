@@ -27,7 +27,6 @@ from py_l5x.parsers.tag import (
     Tag,
     TagNode,
     TypeRegistry,
-    UnknownTag,
     _build_node,
     _find_special_data_element,
     _make_tag,
@@ -290,14 +289,14 @@ class TestSpecialData:
         el = ET.fromstring('<Tag><Data Format="L5K"/><Data Format="Decorated"/></Tag>')
         assert _find_special_data_element(el) is None
 
-    def test_tag_without_data_is_unknown(self, type_registry: TypeRegistry) -> None:
-        """A tag with no data at all falls back to UnknownTag."""
+    def test_tag_without_data_is_typed(self, type_registry: TypeRegistry) -> None:
+        """A tag with no data at all is classified by its DataType."""
         tag = _make_tag(
             ET.fromstring('<Tag Name="io" TagType="Base" DataType="DINT"/>'),
             type_registry,
         )
-        assert isinstance(tag, UnknownTag)
-        assert tag.special_data_format is None
+        assert isinstance(tag, IntegerTag)
+        assert tag.value is None
 
 
 class TestReprs:

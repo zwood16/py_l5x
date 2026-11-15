@@ -203,6 +203,17 @@ exports: TIMER.PRE, a DINT, REAL and BOOL, UDT BOOL/REAL/nested members, a 2D ar
 STRING with escapes, a custom string, a string array element, an AOI-typed tag member, an
 AOI parameter default, and tag, AOI, UDT and rung descriptions/comments.
 
+### Structural edits through the py_l5x API (exp12)
+Tags added with no `<Data>` (DINT, TIMER, UDT, AOI type, TIMER[3], INT[2,3] Hex, STRING,
+Constant DINT, alias), added and removed program tags, a renamed tag, operand comments and
+metadata, new RLL and ST routines (with inserted, removed and renumbered rungs and JSR
+calls), a renamed routine, and a program component with an added tag and rung all open,
+import and build cleanly. A routine that writes to a `Constant="true"` tag fails the build
+with `RxCMP_E_AUDIT_BAD_CONSTANT_TAG_OPERATION`. Studio exports an empty routine as a
+self-closed `<Routine .../>` with no content element. Operand entries come back sorted
+(`[0]` before `[1].PRE`, `.DN` before `.PRE`). Max/Min/ExternalLogging entries are plain
+text, while the other operand metadata is CDATA.
+
 ## Not yet tested
 - Logix versions other than v37 (the VM has v30–v37 installed; the SDK supports v31 and later).
 - Whether a full-project L5X with a tag whose `<Data>` disagrees with a changed UDT still opens. In exp07b the `simple_udt` instance data didn't include the new member; the project opened, but the instance's value wasn't checked.

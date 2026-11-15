@@ -298,6 +298,37 @@ TIME_PREFIXES: Mapping[str, str] = MappingProxyType(
     {"TIME32": "T32#", "TIME": "T#", "LTIME": "LT#", "DT": "DT#", "LDT": "LDT#"}
 )
 
+#: Radix Studio gives a tag of each non-integer type when none is stated.
+#: Integer and BOOL types use ``"Decimal"``.
+_DEFAULT_RADIX: dict[str, str] = {
+    "REAL": "Float",
+    "LREAL": "Float",
+    "TIME32": "Time32 (us)",
+    "TIME": "Time (us)",
+    "LTIME": "LTime (ns)",
+    "DT": "Date/Time",
+    "LDT": "Date/Time (ns)",
+}
+
+
+def default_radix(data_type: str) -> str | None:
+    """Return the radix Studio uses for a tag of an atomic type by default.
+
+    Args:
+        data_type: The atomic type name (case-insensitive).
+
+    Returns:
+        ``"Decimal"`` for integers and BOOL, ``"Float"`` for REAL/LREAL, the
+        time/date-time radix names (for example ``"Time (us)"``) for those
+        types, or ``None`` if *data_type* is not atomic.
+    """
+    name = data_type.upper()
+    if name in _DEFAULT_RADIX:
+        return _DEFAULT_RADIX[name]
+    info = ATOMIC_TYPES.get(name)
+    return "Decimal" if info is not None else None
+
+
 #: Exponent (base 10) range written positionally by the Float radix.
 _POSITIONAL_EXP_RANGE = range(-4, 16)
 

@@ -140,6 +140,24 @@ def insert_child(parent: ET.Element, child: ET.Element) -> ET.Element:
             if existing_rank > rank or (l5k_first and existing_rank == rank):
                 index = i
                 break
+    return insert_child_at(parent, index, child)
+
+
+def insert_child_at(parent: ET.Element, index: int, child: ET.Element) -> ET.Element:
+    """Insert *child* at *index*, keeping Studio's one-element-per-line layout.
+
+    The child's ``tail`` becomes ``"\\n"``, an empty parent ``text`` becomes
+    ``"\\n"``, and the preceding sibling's ``tail`` (or the parent's ``text``)
+    is made to end with a newline so no two elements share a line.
+
+    Args:
+        parent: The element to insert into.
+        index: Position among the parent's children.
+        child: The new element.
+
+    Returns:
+        *child*.
+    """
     parent.insert(index, child)
 
     child.tail = "\n"

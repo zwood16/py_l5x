@@ -2608,6 +2608,107 @@ def exp11():
     (HERE / "exp11" / "lits.json").write_text(json.dumps(lits))
 
 
+def exp12_edit(p):
+    """Structural edits via the py_l5x API (tags, operand metadata, routines, rungs, ST)."""
+    ct = p.controller_tags
+    ct.add("gen_dint", "DINT", description="generated dint")
+    ct.add("gen_timer", "TIMER", description="generated timer")
+    ct.add("gen_udt", "A_UDT")
+    ct.add("gen_aoi", "Debounce")
+    ct.add("gen_arr", "TIMER", dimensions=3)
+    ct.add("gen_arr2d", "INT", dimensions=(2, 3), radix="Hex")
+    ct.add("gen_str", "STRING")
+    ct.add("gen_const", "DINT", constant=True)
+    ct.add_alias("gen_alias", "gen_dint")
+    ct["gen_dint"].value = 77
+    ct["gen_str"].value = "made by py_l5x"
+    t = ct["gen_timer"]
+    t.set_operand_comment(".PRE", "preset cmt")
+    t.set_operand_comment(".DN", "done cmt")
+    ct["gen_arr"].set_operand_comment("[1].PRE", "arr elem cmt")
+    ct["gen_arr"].set_operand_comment("[0]", "arr elem0 cmt")
+    ct["gen_udt"].set_operand_metadata(".A_DINT", "engineering_unit", "mm")
+    ct["gen_udt"].set_operand_metadata(".A_DINT", "max", "100")
+    ct["gen_udt"].set_operand_metadata(".A_DINT", "min", "-5")
+    mp = p.programs["MainProgram"]
+    mp.tags.remove("an_unsigned_sint")
+    mp.tags.rename("a_character", "renamed_char")
+    mp.tags.add("prog_new", "BOOL")
+    r = mp.routines.add("GenRLL", description="generated routine")
+    r.add_rung("XIC(prog_new)OTE(gen_timer.EN);", comment="first generated rung")
+    r.add_rung("MOVE(gen_const,gen_dint);")
+    r.add_rung("TON(gen_timer,?,?);", index=0)
+    r.add_rung("NOP();")
+    r.remove_rung(3)
+    st = mp.routines.add("GenST", "ST")
+    st.set_st_lines(
+        [
+            "// generated ST",
+            "IF prog_new THEN",
+            "    gen_dint := gen_dint + 1;",
+            "",
+            "END_IF;",
+        ]
+    )
+    mp.routines.rename("GenST", "GenST2")
+    main = mp.routines["MainRoutine"]
+    main.add_rung("JSR(GenRLL,0);", comment="call generated routine")
+    main.add_rung("JSR(GenST2,0);")
+    # program with no tags gets a tag; unscheduled program gets a routine
+    p.programs["Unscheduled"].tags.add("added_to_unscheduled", "REAL")
+    p.programs["Unscheduled"].routines.add("EmptyRLL")
+    p.programs["Unscheduled"].routines.add("EmptyST", "ST")
+
+
+def exp12():
+    py_l5x = _py_l5x()
+    p = py_l5x.load(str(FIX / "example.L5X"))
+    exp12_edit(p)
+    d = HERE / "exp12"
+    d.mkdir(exist_ok=True)
+    p.write(d / "edited.L5X")
+    e = Exp("exp12", base="C:/Users/zwood/ldsdk/projects/exp12/edited.L5X")
+    e.files = {"edited.L5X": (d / "edited.L5X").read_bytes()}
+    e.raw(id="build", op="build")
+    for n in [
+        "gen_dint",
+        "gen_timer",
+        "gen_udt",
+        "gen_aoi",
+        "gen_arr",
+        "gen_arr2d",
+        "gen_str",
+        "gen_const",
+        "gen_alias",
+    ]:
+        e.export(n, CT(n))
+    e.export("mainprogram", PR("MainProgram"))
+    e.export("unscheduled", PR("Unscheduled"))
+    e.export("empty_rll", RT("Unscheduled", "EmptyRLL"))
+    # component path: edited program fixture imported into the example base as a new program
+    comp = py_l5x.load(str(FIX / "MainProgram_Program.L5X"))
+    cp = comp.programs["MainProgram"]
+    cp.name = "MainProgramCopy"
+    cp.tags.add("comp_new", "DINT")
+    cp.routines["MainRoutine"].add_rung(
+        "MOVE(5,comp_new);", comment="component rung", index=0
+    )
+    # the target name in the header must follow the rename
+    comp.root.set("TargetName", "MainProgramCopy")
+    e.files["c_prog.L5X"] = py_l5x.writer.to_bytes(comp.root)
+    e.steps.append(
+        {
+            "id": "C1_prog_component",
+            "op": "import",
+            "file": "c_prog.L5X",
+            "xpath": "Controller",
+            "coll": "overwrite",
+        }
+    )
+    e.export("c_prog", PR("MainProgramCopy"))
+    e.write()
+
+
 if __name__ == "__main__":
     for name in sys.argv[1:]:
         globals()[name]()

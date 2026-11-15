@@ -85,6 +85,10 @@ class ProjectTagsView(Mapping[str, Tag | ModuleTagRef]):
     Values are ``Tag`` instances for controller tags and :class:`ModuleTagRef`
     instances for module I/O tags.
 
+    The view stays read-only: it has no ``add``/``remove``/``rename``. Edit
+    controller tags through ``project.controller_tags`` and program tags through
+    ``program.tags`` (both :class:`~py_l5x.parsers.tag.TagsCollection`).
+
     Args:
         controller_tags (TagsCollection): The controller-level tag collection.
         modules (ModulesCollection): The module collection to merge in.
