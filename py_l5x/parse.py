@@ -1,31 +1,10 @@
 """L5X XML File Parsing."""
 
-import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from xml.sax.saxutils import escape as _xml_escape
 
 from py_l5x.parsers.project import Project
-from py_l5x.parsers.utils import CDATA_TAG
-
-_CDATA_SECTION = r"<!\[CDATA\[(.*?)\]\]>"
-#: One or more directly adjacent CDATA sections. Text containing ``]]>`` is
-#: written as two sections (``]]]]><![CDATA[>``), so a run of sections is one
-#: logical text value.
-_CDATA_RE = re.compile(rf"(?:{_CDATA_SECTION})+", re.DOTALL)
-_CDATA_SECTION_RE = re.compile(_CDATA_SECTION, re.DOTALL)
-
-
-def _cdata_to_element(match: re.Match) -> str:
-    """Replace a run of adjacent CDATA sections with a ``<CDATA_TAG>`` element.
-
-    The sections' contents are joined, so text that was split around a
-    ``]]>`` terminator is restored. The content is XML-escaped so characters
-    like ``<``, ``>``, and ``&`` (common in Structured Text and rung comments)
-    do not break the parser.
-    """
-    text = "".join(_CDATA_SECTION_RE.findall(match.group(0)))
-    return f"<{CDATA_TAG}>{_xml_escape(text)}</{CDATA_TAG}>"
+from py_l5x.parsers.utils import replace_cdata_sections
 
 
 def _parse_text(raw: str) -> ET.Element:
@@ -44,7 +23,7 @@ def _parse_text(raw: str) -> ET.Element:
     Raises:
         ValueError: If the text cannot be parsed as XML.
     """
-    processed = _CDATA_RE.sub(_cdata_to_element, raw)
+    processed = replace_cdata_sections(raw)
     try:
         return ET.fromstring(processed.encode("utf-8"))
     except ET.ParseError as e:

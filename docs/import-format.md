@@ -214,6 +214,12 @@ self-closed `<Routine .../>` with no content element. Operand entries come back 
 (`[0]` before `[1].PRE`, `.DN` before `.PRE`). Max/Min/ExternalLogging entries are plain
 text, while the other operand metadata is CDATA.
 
+### Type layouts and structured values (exp13–exp15)
+- Studio created a data-less tag for 216 of the 224 ProductDefined types on the 5069 safety controller. The ones it couldn't create were ALARM_CONDITION, ALARM_SET, the legacy AXIS_GENERIC/GENERIC_DRIVE/SERVO/SERVO_DRIVE types, MODULE, and MOTION_GROUP (the project allows only one, and it already exists). Of those 216, 180 are Decorated structures, 23 are scalars (including REF_TO_*), 3 are String types, and 10 use special formats (Message, Axis, Alarm, CoordinateSystem, BEO, EEO, HMIBC).
+- AOI Decorated layout: the parameters in order, without `InOut` ones; local tags are excluded. EnableIn defaults to 1. UDT layout: the non-hidden members, with BIT members written as BOOL. A BOOL `DataValueMember` never has a Radix.
+- BOOL arrays are rounded up to a multiple of 32 (BOOL[40] is stored as BOOL[64]).
+- Tags created with complete generated values (TIMER, COUNTER, CONTROL, PID, UDT with nested UDT/AOI/array members, AOI-typed, 2D DINT, sparse TIMER[3], BOOL[40], STRING, custom string, STRING[2], UDT[2]) import, build and export with exactly the generated values, both in a full project and in a component built from an empty template.
+
 ## Not yet tested
 - Logix versions other than v37 (the VM has v30–v37 installed; the SDK supports v31 and later).
 - Whether a full-project L5X with a tag whose `<Data>` disagrees with a changed UDT still opens. In exp07b the `simple_udt` instance data didn't include the new member; the project opened, but the instance's value wasn't checked.

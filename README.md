@@ -774,7 +774,7 @@ for prog_name in task.scheduled_program_names:
 ## Editing and writing L5X files
 
 > [!NOTE]
-> Write support is new and only verified against Studio 5000 **v37**. Values, documentation, tags, operand metadata, routines and rungs can be edited. Editing UDT members and AOI parameters is not supported yet.
+> Write support is new and only verified against Studio 5000 **v37**. Values (including whole structures and arrays), documentation, tags, operand metadata, routines and rungs can be edited. Editing UDT members and AOI parameters is not supported yet.
 
 Any loaded project (full or component export) can be edited in place and written back. The output matches Studio's own export format (UTF-8 BOM, CRLF, CDATA sections), so it can be opened in Studio, or imported with Import Component, and diffs cleanly against the original.
 
@@ -801,10 +801,29 @@ again = loads(text)  # parse L5X text directly
 
 Value writes are validated: out-of-range integers, the wrong Python type, non-finite floats, and strings that are too long or contain characters outside Latin-1 raise `ValueError`/`TypeError`, and the XML is left unchanged. Values are written in the tag's radix exactly as Studio formats them (for example `16#0000_00ff` for a Hex DINT). When a value changes, the tag's redundant `L5K` data block is removed, because Studio would otherwise use the stale copy. Bits of integers (`tag.bit(3)`) are read-only.
 
+### Structured values
+
+Structures accept a (partial) dict and arrays a list (flat or nested) or a `{index: value}` dict. Members that aren't mentioned keep their current values. The whole assignment is validated first, so a bad value anywhere leaves the tag unchanged. `to_python()` reads any node back as plain Python data.
+
+```python
+tags = project.controller_tags
+tags.add("Delay", "TIMER", value={"PRE": 5000})
+tags.add("Recipe", "DINT", dimensions=(2, 3), value=[[1, 2, 3], [4, 5, 6]])
+tags.add(
+    "Seq", "SeqCtrl", value={"startupStep": 10}
+)  # AOI-typed tag, AOI defaults kept
+
+udt = project.programs["MainProgram"].tags["a_udt_instance"]
+udt.value = {"a_real": 3.5, "a_nested_UDT": {"lint": 77}, "an_array": {2: 2.5}}
+print(udt.to_python()["a_nested_UDT"])
+```
+
+Studio rounds BOOL arrays up to a multiple of 32 elements, and `add()` does the same. Tags of types with special data formats (MESSAGE, AXIS_*, ALARM_*, …) can be added, but not given values.
+
 ### Adding, removing and renaming
 
 ```python
-tags = project.controller_tags                 # or program.tags
+tags = project.controller_tags  # or program.tags
 tags.add("Motor1_Run", "BOOL", description="Run command")
 tags.add("Motor1_Timer", "TIMER")
 tags.add("Recipe", "DINT", dimensions=(4, 10), radix="Hex")
@@ -818,16 +837,16 @@ timer.set_operand_comment(".DN", "Motor started")
 timer.set_operand_metadata(".PRE", "engineering_unit", "ms")
 
 routines = project.programs["MainProgram"].routines
-r = routines.add("Motor1", description="Motor 1 logic")            # RLL by default
+r = routines.add("Motor1", description="Motor 1 logic")  # RLL by default
 r.add_rung("XIC(Motor1_Run)TON(Motor1_Timer,?,?);", comment="Start delay")
-r.add_rung("NOP();", index=0)                                       # insert; rungs are renumbered
+r.add_rung("NOP();", index=0)  # insert; rungs are renumbered
 r.remove_rung(0)
 st = routines.add("Calc", "ST")
 st.set_st_lines(["IF Motor1_Run THEN", "    Count := Count + 1;", "END_IF;"])
 routines.rename("Calc", "Motor1_Calc")
 ```
 
-New tags are written without a data block, so Studio gives them their type's default values. Atomic and STRING tags get one as soon as a value is set; setting values on new structure or array tags is not supported yet. Names are validated (Logix naming rules, case-insensitive duplicates). Removing or renaming a tag or routine does **not** update references to it in logic, aliases or `JSR` instructions, apart from a program's main and fault routine names, which follow a rename. `add_rung` checks only that the text ends in `;` and that brackets are balanced. Problems like undefined tags show up only when Studio verifies the project.
+New tags are written without a data block, so Studio gives them their type's default values. Setting a value, or calling `tag.initialize_data()`, writes the complete default value tree first. The same goes for any UDT, AOI or built-in type, using layouts taken from Studio itself. Names are validated (Logix naming rules, case-insensitive duplicates). Removing or renaming a tag or routine does **not** update references to it in logic, aliases or `JSR` instructions, apart from a program's main and fault routine names, which follow a rename. `add_rung` checks only that the text ends in `;` and that brackets are balanced. Problems like undefined tags show up only when Studio verifies the project.
 
 Rung text can be set with `rung.text = "XIC(a)OTE(b);"`. Note that v37 L5X files use `MOVE` rather than `MOV`, and that a literal preset in rung text (for example `TON(t,3000,0)`) overwrites the timer's preset on import. See [docs/import-format.md](docs/import-format.md) for what Studio accepts on import.
 

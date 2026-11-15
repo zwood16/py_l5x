@@ -13,6 +13,9 @@ dependencies = []
 [tool.setuptools.packages.find]
 include = ["py_l5x*"]
 
+[tool.setuptools.package-data]
+py_l5x = ["data/*.gz"]
+
 [tool.ruff]
 line-length = 88
 

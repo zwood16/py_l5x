@@ -116,9 +116,10 @@ Value-tree nodes (members, array elements, bits) are organized in a typed hierar
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from typing import TYPE_CHECKING, cast, overload
+from typing import TYPE_CHECKING, Self, cast, overload
 from xml.etree import ElementTree as ET
 
 from py_l5x.parsers.atomic_types import (
@@ -143,9 +144,11 @@ from py_l5x.parsers.base import (
     str_attr,
 )
 from py_l5x.parsers.datatype import (
+    DataType,
     DataTypeMember,
     DataTypesCollection,
 )
+from py_l5x.parsers.layout import LayoutError, default_data_element
 from py_l5x.parsers.names import validate_new_name
 from py_l5x.parsers.schema import (
     insert_child,
@@ -161,7 +164,11 @@ from py_l5x.parsers.specialty_tags import (
 from py_l5x.parsers.utils import CDATA_TAG, cdata_text, convert_numeric
 
 if TYPE_CHECKING:
-    from py_l5x.parsers.aoi import AOIDataTypesCollection, AOIParameter
+    from py_l5x.parsers.aoi import (
+        AOIDataTypesCollection,
+        AOIParameter,
+        AOIParametersCollection,
+    )
 
     #: A member/parameter definition used for metadata cross-reference. Both
     #: classes expose the same property surface (description/min/max/
@@ -205,6 +212,30 @@ class TypeRegistry:
         """
         self._data_types = data_types
         self._aoi_types = aoi_types
+
+    def udt(self, type_name: str) -> DataType | None:
+        """Look up a user-defined data type by name.
+
+        Args:
+            type_name: The ``DataType`` name.
+
+        Returns:
+            The :class:`~py_l5x.parsers.datatype.DataType`, or ``None`` if the
+            project has no UDT of that name. Product-defined and I/O types
+            exported with the project are included.
+        """
+        return self._data_types.get(type_name)
+
+    def aoi(self, type_name: str) -> AOIParametersCollection | None:
+        """Look up an Add-On Instruction's parameters by AOI name.
+
+        Args:
+            type_name: The AOI name.
+
+        Returns:
+            The AOI's parameter collection, or ``None`` if there is no such AOI.
+        """
+        return self._aoi_types.get(type_name)
 
     def resolve_members(self, type_name: str) -> Mapping[str, MemberDef] | None:
         """Look up the member/parameter definitions for a data type name.
@@ -668,6 +699,14 @@ class TagNode:
         """The wrapped XML element (None for synthetic nodes like bits)."""
         return self._value_element
 
+    def _can_materialize(self) -> bool:
+        """Report whether a missing value element can be created on write.
+
+        Returns:
+            ``True`` only for the root node of a data-less value tag.
+        """
+        return False
+
     def _check_writable(self) -> None:
         """Fail early if this node can never be written.
 
@@ -675,21 +714,8 @@ class TagNode:
             TypeError: If the node has no backing element and none can be
                 created (a bit or a synthetic ``LEN``/``DATA`` member).
         """
-        if self._value_element is None:
+        if self._value_element is None and not self._can_materialize():
             self._require_element(create=False)
-
-    def _reject_aggregate_write(self) -> None:
-        """Raise the error for assigning ``value`` on a structure or array.
-
-        Raises:
-            TypeError: Always. A data-less tag gets the "layouts aren't
-                supported yet" message from :meth:`_check_writable`.
-        """
-        self._check_writable()
-        raise TypeError(
-            "cannot assign a value to a structure or array node; "
-            "write its members or elements instead"
-        )
 
     def _materialize_root(self) -> ET.Element | None:
         """Create the node's value element if it is a data-less root tag.
@@ -710,8 +736,7 @@ class TagNode:
 
         Raises:
             TypeError: If the node has no backing element and cannot create
-                one (a bit, a synthetic ``LEN``/``DATA`` member, or a
-                data-less structure or array).
+                one (a bit or a synthetic ``LEN``/``DATA`` member).
         """
         if self._value_element is None and create:
             self._value_element = self._materialize_root()
@@ -721,6 +746,63 @@ class TagNode:
                 "(bit or synthetic member) and cannot be written"
             )
         return self._value_element
+
+    def _plan_write(self, new_value: object, ops: list[Callable[[], None]]) -> None:
+        """Validate a write and queue the edits that perform it.
+
+        Nothing is modified here: all validation happens up front and the
+        queued callables only set attributes and text, so a whole assignment
+        either validates completely or changes nothing.
+
+        Args:
+            new_value: The value being assigned.
+            ops: The list of edits to append to.
+
+        Raises:
+            TypeError: If this node cannot be written, or the type is wrong.
+            ValueError: If the value is out of range or malformed.
+        """
+        raise TypeError(f"{type(self).__name__} cannot be assigned a value")
+
+    def _assign_aggregate(self, new_value: object) -> None:
+        """Assign a dict or list to a structure or array node.
+
+        The assignment is validated completely before the XML is touched. On a
+        data-less tag the default data is built detached and inserted only if
+        validation passes.
+
+        Args:
+            new_value: A ``dict`` (structure, or ``{index: value}`` for an
+                array) or a ``list`` (array).
+
+        Raises:
+            KeyError: If a member name is unknown.
+            IndexError: If an array index is out of range.
+            TypeError: If a value has the wrong type.
+            ValueError: If a value is out of range or an array list has the
+                wrong length.
+            LayoutError: If the tag's type has no decorated layout.
+        """
+        if self._value_element is None:
+            self._check_writable()
+            self._assign_dataless(new_value)
+            return
+        ops: list[Callable[[], None]] = []
+        self._plan_write(new_value, ops)
+        for op in ops:
+            op()
+        self._drop_stale_l5k()
+
+    def _assign_dataless(self, new_value: object) -> None:
+        """Assign to a data-less root node (see :meth:`_assign_aggregate`).
+
+        Args:
+            new_value: The value being assigned.
+
+        Raises:
+            TypeError: Always for plain nodes, which cannot be data-less.
+        """
+        raise TypeError(f"{type(self).__name__} has no data to assign to")
 
     def _drop_stale_l5k(self) -> None:
         """Remove the owner's ``Format="L5K"`` ``Data``/``DefaultData`` siblings.
@@ -1056,6 +1138,30 @@ class AtomicNode(TagNode):
         element.set("Value", text)
         self._raw_text = None
         self._drop_stale_l5k()
+
+    def _plan_write(self, new_value: object, ops: list[Callable[[], None]]) -> None:
+        """Validate a scalar write and queue the ``Value`` edit.
+
+        Args:
+            new_value: The value being assigned.
+            ops: The list of edits to append to.
+
+        Raises:
+            TypeError: If the node is not writable or the type is wrong.
+            ValueError: If the value is out of range or malformed.
+        """
+        element = self._require_element(create=False)
+        text = self._format_value(new_value)
+        ops.append(lambda: element.set("Value", text))
+
+    def to_python(self) -> int | float | str | bool | None:
+        """Return this node's value as a plain Python object.
+
+        Returns:
+            The same as :attr:`value`: an ``int``, ``float``, ``bool`` or
+            literal ``str``, or ``None`` if no value was exported.
+        """
+        return self.value
 
     @value.setter
     def value(self, new_value: object) -> None:
@@ -1436,25 +1542,81 @@ class StringNode(TagNode):
                 characters outside Latin-1.
         """
         self._check_writable()
-        literal = format_string_literal(new_value)
+        self._validated_literal(new_value)
+        self._require_element()
+        ops: list[Callable[[], None]] = []
+        self._plan_write(new_value, ops)
+        for op in ops:
+            op()
+        self._raw_text = None
+        self._drop_stale_l5k()
+
+    def _validated_literal(self, new_value: object) -> str:
+        """Check a new string and return its quoted literal.
+
+        Args:
+            new_value: The string being assigned.
+
+        Returns:
+            The literal for the CDATA.
+
+        Raises:
+            TypeError: If *new_value* is not a ``str``.
+            ValueError: If it is longer than :attr:`max_length` or has
+                characters above U+00FF.
+        """
+        literal = format_string_literal(new_value)  # type: ignore[arg-type]
         limit = self.max_length
-        if limit is not None and len(new_value) > limit:
-            raise ValueError(f"string of {len(new_value)} characters exceeds {limit}")
-        element = self._require_element()
+        if limit is not None and len(new_value) > limit:  # type: ignore[arg-type]
+            raise ValueError(
+                f"string of {len(new_value)} characters exceeds {limit}"  # type: ignore[arg-type]
+            )
+        return literal
+
+    def _plan_write(self, new_value: object, ops: list[Callable[[], None]]) -> None:
+        """Validate a string write and queue the length and CDATA edits.
+
+        Args:
+            new_value: The string being assigned.
+            ops: The list of edits to append to.
+
+        Raises:
+            TypeError: If the value is not a ``str`` or the node has no
+                backing element or recognised string layout.
+            ValueError: If the text is too long or has characters outside
+                Latin-1.
+        """
+        element = self._require_element(create=False)
+        literal = self._validated_literal(new_value)
+        text = cast(str, new_value)
         data_el = self._child("DATA")
         len_el = self._child("LEN")
         if data_el is not None and len_el is not None:
-            len_el.set("Value", str(len(new_value)))
-            _set_cdata_text(data_el, literal if new_value else "")
+
+            def nested() -> None:
+                len_el.set("Value", str(len(text)))
+                _set_cdata_text(data_el, literal if text else "")
+
+            ops.append(nested)
         elif element.tag in ("Data", "DefaultData") and (
             element.get("Format") == "String"
         ):
-            element.set("Length", str(len(new_value)))
-            _set_cdata_text(element, literal)
+
+            def root() -> None:
+                element.set("Length", str(len(text)))
+                _set_cdata_text(element, literal)
+
+            ops.append(root)
         else:
             raise TypeError(f"{self._operand_path or 'node'} has no string layout")
-        self._raw_text = None
-        self._drop_stale_l5k()
+
+    def to_python(self) -> str:
+        """Return the string as a plain ``str``.
+
+        Returns:
+            The same as :attr:`value`.
+        """
+        return self.value
 
     @property
     def len(self) -> int:
@@ -1528,20 +1690,80 @@ class StructNode(TagNode):
 
     @property
     def value(self) -> object:
-        """Structures have no scalar value (reading raises AttributeError)."""
+        """Structures have no scalar value (reading raises AttributeError).
+
+        Assigning a ``dict`` sets those members recursively and leaves the
+        others alone: nested ``dict`` for structure members, ``list`` or
+        ``{index: value}`` for array members, ``str`` for strings and the
+        usual scalars otherwise. Member names match case-insensitively and
+        keep their spelling in the XML. The whole assignment is validated
+        before anything changes. Use :meth:`to_python` to read a structure.
+        """
         raise AttributeError("value")
 
     @value.setter
     def value(self, new_value: object) -> None:
-        """Reject assignment: structures are written member by member.
+        """Assign member values from a ``dict``.
 
         Args:
-            new_value: Ignored.
+            new_value: ``{member: value, ...}``.
 
         Raises:
-            TypeError: Always.
+            KeyError: If a member name is unknown.
+            TypeError: If *new_value* is not a ``dict`` or a leaf has the wrong
+                type.
+            ValueError: If a leaf is out of range, or a name repeats ignoring
+                case.
+            LayoutError: If a data-less tag's type has no decorated layout.
         """
-        self._reject_aggregate_write()
+        self._assign_aggregate(new_value)
+
+    def _plan_write(self, new_value: object, ops: list[Callable[[], None]]) -> None:
+        """Validate a ``dict`` assignment and queue its edits.
+
+        Args:
+            new_value: ``{member: value, ...}``.
+            ops: The list of edits to append to.
+
+        Raises:
+            KeyError: If a member name is unknown.
+            TypeError: If *new_value* is not a mapping or a leaf has the wrong
+                type.
+            ValueError: If a name repeats ignoring case, or a leaf is invalid.
+        """
+        if not isinstance(new_value, Mapping):
+            raise TypeError(
+                f"a structure value must be a dict, not {type(new_value).__name__}"
+            )
+        element = self._require_element(create=False)
+        names = {
+            child.get("Name", "").lower(): child.get("Name", "")
+            for child in element
+            if child.get("Name")
+        }
+        resolved: dict[str, object] = {}
+        for key, member_value in new_value.items():
+            if not isinstance(key, str):
+                raise TypeError(f"member names must be str, not {key!r}")
+            actual = names.get(key.lower())
+            if actual is None:
+                raise KeyError(f"{self.data_type!r} has no member {key!r}")
+            if actual in resolved:
+                raise ValueError(f"member {actual!r} given more than once")
+            resolved[actual] = member_value
+        members = self.members
+        for actual, member_value in resolved.items():
+            members[actual]._plan_write(member_value, ops)
+
+    def to_python(self) -> dict[str, object]:
+        """Return the structure as a ``dict`` of plain Python values.
+
+        Returns:
+            Members in order: scalars, ``str`` for strings, nested ``dict``
+            for structures and nested ``list`` for arrays. Empty for a
+            data-less tag.
+        """
+        return {name: node.to_python() for name, node in self.members.items()}  # type: ignore[attr-defined]
 
     @property
     def members(self) -> Mapping[str, TagNode]:
@@ -1549,25 +1771,125 @@ class StructNode(TagNode):
         return _StructureMembers(self)
 
 
+def _flatten_array_value(value: Sequence[object], dims: tuple[int, ...]) -> list:
+    """Flatten a list assigned to an array into row-major order.
+
+    Args:
+        value: A flat list, or nested lists matching *dims*.
+        dims: The array dimensions.
+
+    Returns:
+        The leaf values in row-major order.
+
+    Raises:
+        ValueError: If the list does not match the dimensions.
+    """
+    if len(dims) <= 1:
+        expected = dims[0] if dims else len(value)
+        if len(value) != expected:
+            raise ValueError(f"expected {expected} values, got {len(value)}")
+        return list(value)
+    total = math.prod(dims)
+    is_list = [isinstance(item, list | tuple) for item in value]
+    if len(value) == dims[0] and all(is_list):
+        flat: list = []
+        for item in value:
+            flat.extend(_flatten_array_value(item, dims[1:]))  # type: ignore[arg-type]
+        return flat
+    if len(value) == total and not any(is_list):
+        return list(value)
+    raise ValueError(
+        f"expected {total} values (flat) or nested lists for dimensions "
+        f"{list(dims)}, got {len(value)}"
+    )
+
+
 class ArrayNode(TagNode):
     """An array node exposing dimensions and elements sequence."""
 
     @property
     def value(self) -> object:
-        """Arrays have no scalar value (reading raises AttributeError)."""
+        """Arrays have no scalar value (reading raises AttributeError).
+
+        Assigning a ``list`` sets every element: flat in row-major order, or
+        nested per dimension. The length must match the element count
+        exactly. Assigning a ``dict`` sets individual elements by flat
+        position (``int``) or Logix subscript (``tuple``). The whole
+        assignment is validated before anything changes. Use
+        :meth:`to_python` to read an array.
+        """
         raise AttributeError("value")
 
     @value.setter
     def value(self, new_value: object) -> None:
-        """Reject assignment: arrays are written element by element.
+        """Assign element values from a ``list`` or ``{index: value}``.
 
         Args:
-            new_value: Ignored.
+            new_value: A ``list`` (flat or nested) or a ``dict`` of indexes.
 
         Raises:
-            TypeError: Always.
+            IndexError: If a ``dict`` index is out of range.
+            TypeError: If *new_value* or an index has the wrong type, or a leaf
+                has the wrong type.
+            ValueError: If a list has the wrong length, or a leaf is invalid.
+            LayoutError: If a data-less tag's type has no decorated layout.
         """
-        self._reject_aggregate_write()
+        self._assign_aggregate(new_value)
+
+    def _plan_write(self, new_value: object, ops: list[Callable[[], None]]) -> None:
+        """Validate a list or dict assignment and queue its edits.
+
+        Args:
+            new_value: A ``list``/``tuple`` or a mapping of indexes.
+            ops: The list of edits to append to.
+
+        Raises:
+            IndexError: If an index is out of range.
+            TypeError: If the value or an index has the wrong type.
+            ValueError: If a list has the wrong length, or a leaf is invalid.
+        """
+        self._require_element(create=False)
+        if isinstance(new_value, Mapping):
+            for key, item in new_value.items():
+                if isinstance(key, bool) or not isinstance(key, int | tuple):
+                    raise TypeError(f"array index must be an int or tuple, not {key!r}")
+                self[key]._plan_write(item, ops)
+            return
+        if not isinstance(new_value, list | tuple):
+            raise TypeError(
+                "an array value must be a list or a dict of indexes, "
+                f"not {type(new_value).__name__}"
+            )
+        leaves = _flatten_array_value(new_value, self.dimensions)
+        nodes = list(self.elements)
+        if len(leaves) != len(nodes):
+            raise ValueError(f"expected {len(nodes)} values, got {len(leaves)}")
+        for node, leaf in zip(nodes, leaves, strict=True):
+            node._plan_write(leaf, ops)
+
+    def to_python(self) -> list:
+        """Return the array as a nested ``list`` of plain Python values.
+
+        Returns:
+            One nesting level per dimension (a flat list for one dimension),
+            with scalars, strings and ``dict`` structures as leaves. Empty for
+            a data-less tag.
+        """
+        flat = [node.to_python() for node in self.elements]  # type: ignore[attr-defined]
+        dims = self.dimensions
+        if len(dims) <= 1 or len(flat) != math.prod(dims):
+            return flat
+
+        def nest(items: list, sizes: tuple[int, ...]) -> list:
+            if len(sizes) == 1:
+                return items
+            step = len(items) // sizes[0]
+            return [
+                nest(items[i * step : (i + 1) * step], sizes[1:])
+                for i in range(sizes[0])
+            ]
+
+        return nest(flat, dims)
 
     @property
     def dimensions(self) -> tuple[int, ...]:
@@ -2209,64 +2531,116 @@ class _ValueTag(Tag):
             self._element.get("DataType", "")
         )
 
-    def _dataless_kind(self) -> str:
-        """Classify a data-less tag by what can be materialized for it.
+    def _can_materialize(self) -> bool:
+        """Report that a data-less value tag can create its ``<Data>``.
 
         Returns:
-            ``"atomic"`` or ``"string"`` when a value element can be built,
-            otherwise ``"layout"`` (a structure or array).
+            Always ``True``.
         """
-        if self._element.get("Dimensions"):
-            return "layout"
-        data_type = self._element.get("DataType", "")
-        if atomic_info(data_type) is not None:
-            return "atomic"
-        if self._type_registry.is_string_type(data_type):
-            return "string"
-        return "layout"
+        return True
 
-    def _check_writable(self) -> None:
-        """Fail early for a data-less structure or array tag.
+    def _dimensions_attribute(self) -> tuple[int, ...] | None:
+        """Parse the tag's ``Dimensions`` attribute (space separated).
+
+        Returns:
+            The sizes, or ``None`` for a scalar tag.
+        """
+        text = self._element.get("Dimensions", "")
+        return tuple(int(n) for n in text.replace(",", " ").split()) or None
+
+    def _default_data(self) -> ET.Element:
+        """Build the default ``<Data>`` element for this tag's type.
+
+        Returns:
+            A detached ``<Data>`` element (see
+            :func:`py_l5x.parsers.layout.default_data_element`).
 
         Raises:
-            TypeError: If the tag has no ``<Data>`` and is a structure or
-                array, whose full type layout is not supported yet.
+            LayoutError: If the type is unknown or has no decorated layout.
         """
-        if self._value_element is None and self._dataless_kind() == "layout":
-            raise TypeError(
-                f"cannot write a value to data-less tag {self.name!r}: full type "
-                "layouts for structures and arrays aren't supported yet (Phase 3)"
+        try:
+            return default_data_element(
+                self._element.get("DataType", ""),
+                self._type_registry,
+                dimensions=self._dimensions_attribute(),
+                radix=self._element.get("Radix"),
             )
+        except LayoutError as exc:
+            raise LayoutError(
+                f"cannot initialize data for tag {self.name!r}: {exc}"
+            ) from exc
 
-    def _materialize_root(self) -> ET.Element | None:
-        """Create the ``<Data>`` element of a data-less atomic or STRING tag.
+    @staticmethod
+    def _value_root(data: ET.Element) -> ET.Element:
+        """Return the element a value node wraps inside a ``<Data>``.
 
-        The element is inserted at its schema position in the ``<Tag>``, shaped
-        like Studio's output.
+        Args:
+            data: A ``Decorated`` or ``String`` ``<Data>`` element.
 
         Returns:
-            The element value writes go to (``DataValue`` for atomic tags,
-            ``Data`` for STRING tags), or ``None`` for structures and arrays.
+            The ``String`` element itself, or the first child of a
+            ``Decorated`` one.
         """
-        kind = self._dataless_kind()
-        if kind == "layout":
-            return None
-        data = ET.Element("Data")
-        data.text = "\n"
-        if kind == "string":
-            data.set("Format", "String")
-            insert_child(self._element, data)
+        if data.get("Format") == "String":
             return data
-        data.set("Format", "Decorated")
-        value = ET.SubElement(
-            data,
-            "DataValue",
-            DataType=self._element.get("DataType", ""),
-            Radix=self._dataless_radix() or "Decimal",
-        )
-        value.tail = "\n"
+        return data[0]
+
+    def initialize_data(self) -> Self:
+        """Give a data-less tag Studio's default ``<Data>``.
+
+        Builds the default value tree for the tag's ``DataType``,
+        ``Dimensions`` and ``Radix``, inserts it at its schema position
+        (removing any stale L5K ``Data``), and points this object at it, so
+        ``members``, ``elements`` and ``value`` work straight away. Does
+        nothing if the tag already has data. Reads never call this; writes do.
+
+        Returns:
+            This tag.
+
+        Raises:
+            LayoutError: If the type is unknown or has no decorated layout
+                (MESSAGE, AXIS_*, ...).
+        """
+        if self._value_element is not None:
+            return self
+        data = self._default_data()
         insert_child(self._element, data)
-        return value
+        self._value_element = self._value_root(data)
+        self._drop_stale_l5k()
+        return self
+
+    def _materialize_root(self) -> ET.Element | None:
+        """Create the ``<Data>`` on write (see :meth:`initialize_data`).
+
+        Returns:
+            The element value writes go to.
+        """
+        return self.initialize_data()._value_element
+
+    def _assign_dataless(self, new_value: object) -> None:
+        """Assign a dict or list to a data-less structure or array tag.
+
+        The default data is built detached and a throwaway node is validated
+        against it, so a failed assignment leaves the tag without ``<Data>``.
+
+        Args:
+            new_value: The value being assigned.
+        """
+        data = self._default_data()
+        probe = ET.Element("Tag")
+        probe.set("DataType", self._element.get("DataType", ""))
+        probe.append(data)
+        found = _find_value_root(probe, "Data", self._type_registry)
+        assert found is not None
+        node_cls, root = found
+        shadow = node_cls(root, None, self._overrides, "", self._type_registry)
+        ops: list[Callable[[], None]] = []
+        shadow._plan_write(new_value, ops)
+        insert_child(self._element, data)
+        self._value_element = root
+        for op in ops:
+            op()
+        self._drop_stale_l5k()
 
 
 class BoolTag(_ValueTag, BoolNode):
@@ -2671,13 +3045,24 @@ class TagsCollection(BaseCollection[Tag]):
         radix: str | None = None,
         external_access: str | None = None,
         constant: bool | None = None,
+        value: object = None,
     ) -> Tag:
-        """Create a base tag with no ``<Data>``.
+        """Create a base tag, with no ``<Data>`` unless *value* is given.
 
         Studio fills in the type's default value on import and on opening the
         project. The returned tag is typed from *data_type* and *dimensions*
-        (see ``_make_dataless_tag``); atomic and STRING tags can be given a
-        value straight away. Optional attributes are written only when given.
+        (see ``_make_dataless_tag``). Optional attributes are written only
+        when given.
+
+        With *value* the tag's default data is created and the value assigned
+        as ``tag.value = value`` would (a scalar, a ``str``, a ``dict`` for a
+        structure, a ``list`` or ``dict`` for an array). If the assignment
+        fails the tag is not added.
+
+        A one-dimensional BOOL array's size is rounded up to a multiple of 32,
+        as Studio does (``BOOL[40]`` is stored as ``BOOL[64]``), so a *value*
+        list must have the rounded length. Multi-dimensional BOOL arrays are
+        not supported.
 
         *data_type* is not validated yet (the built-in type table is not
         available), so a misspelled type is written as is.
@@ -2690,13 +3075,19 @@ class TagsCollection(BaseCollection[Tag]):
             radix: Display radix (for example ``"Hex"``).
             external_access: ``"Read/Write"``, ``"Read Only"`` or ``"None"``.
             constant: Whether the tag is a constant.
+            value: Initial value (see above).
 
         Returns:
             The new tag.
 
         Raises:
-            ValueError: If the name is invalid or taken, or *dimensions* is
-                not one to three positive integers.
+            ValueError: If the name is invalid or taken, *dimensions* is not
+                one to three positive integers, a multi-dimensional BOOL array
+                is requested, or *value* is invalid.
+            KeyError: If *value* names an unknown structure member.
+            TypeError: If *value* has the wrong type.
+            LayoutError: If *value* is given for a type with no decorated
+                layout.
         """
         self._check_new_name(name)
         element = ET.Element("Tag")
@@ -2719,6 +3110,10 @@ class TagsCollection(BaseCollection[Tag]):
                 raise ValueError(
                     f"dimensions must be one to three positive integers: {dimensions!r}"
                 )
+            if data_type == "BOOL":
+                if len(sizes) > 1:
+                    raise ValueError("multi-dimensional BOOL arrays are not supported")
+                sizes = (-(-sizes[0] // 32) * 32,)
             element.set("Dimensions", " ".join(str(n) for n in sizes))
         if radix is not None:
             element.set("Radix", radix)
@@ -2729,6 +3124,15 @@ class TagsCollection(BaseCollection[Tag]):
         tag = self._append(element)
         if description:
             tag.description = description
+        if value is not None:
+            if not isinstance(tag, TagNode):
+                self.remove(name)
+                raise LayoutError(f"cannot assign a value to {data_type} tags")
+            try:
+                tag.value = value
+            except BaseException:
+                self.remove(name)
+                raise
         return tag
 
     def add_alias(

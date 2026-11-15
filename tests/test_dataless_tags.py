@@ -20,6 +20,7 @@ from py_l5x import (
     load,
     loads,
 )
+from py_l5x.parsers.layout import LayoutError
 from py_l5x.parsers.tag import AxisTag, MessageTag, MotionGroupTag
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -324,30 +325,38 @@ class TestMaterialize:
         assert string._element.find("Data") is None
 
 
-class TestUnsupportedWrites:
-    """Structures and arrays can't be written without a type layout."""
+class TestAggregateWritesOnDataless:
+    """Bad assignments to data-less structures and arrays create nothing."""
 
-    @pytest.mark.parametrize("name", ["t_udt", "t_timer", "t_aoi", "t_array"])
-    def test_raises(self, project: Project, name: str) -> None:
-        """Writing a value raises a clear TypeError."""
+    @pytest.mark.parametrize("name", ["t_udt", "t_timer", "t_array"])
+    def test_wrong_type_raises(self, project: Project, name: str) -> None:
+        """A scalar is rejected and no Data is created."""
         tag = project.controller_tags[name]
-        with pytest.raises(TypeError, match="Phase 3"):
+        with pytest.raises(TypeError):
             tag.value = 1
+        assert tag._element.find("Data") is None
+
+    def test_unknown_type_raises_layout_error(self, project: Project) -> None:
+        """A type with no layout raises LayoutError."""
+        tag = project.controller_tags["t_aoi"]
+        with pytest.raises(LayoutError, match="unknown data type"):
+            tag.value = {}
         assert tag._element.find("Data") is None
 
 
 #: Tag classes across every fixture, recorded before data-less classification
-#: was added. No fixture tag lacks data, so none may change class.
+#: was added (plus the type_defaults fixture, whose tags all carry data). No
+#: fixture tag lacks data, so none may change class.
 _FIXTURE_CLASSES = {
     "IntegerTag": 173,
     "FloatTag": 50,
-    "StructTag": 30,
-    "StringTag": 21,
+    "StructTag": 44,
+    "StringTag": 23,
     "BoolTag": 14,
     "TimeTag": 9,
     "DateTimeTag": 6,
     "AliasTag": 4,
-    "ArrayTag": 4,
+    "ArrayTag": 13,
     "MessageTag": 2,
     "MotionGroupTag": 1,
     "AxisTag": 1,

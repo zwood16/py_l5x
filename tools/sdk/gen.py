@@ -2709,6 +2709,211 @@ def exp12():
     e.write()
 
 
+def _product_defined_names():
+    import re as _re
+
+    t = (HERE / "results" / "exp02a" / "all_product_defined.L5X").read_text(
+        encoding="utf-8-sig"
+    )
+    return _re.findall(r'<DataType Use="Target" Name="([^"]+)"', t)
+
+
+def exp13():
+    """One data-less tag per ProductDefined type: Studio's Decorated defaults are the layout table."""
+    e = Exp("exp13")
+    for t in _product_defined_names():
+        e.case(
+            f"std_{t}",
+            env(
+                "Tag",
+                f"bt_{t}",
+                ctag(f'<Tag Use="Target" Name="bt_{t}" DataType="{t}"/>'),
+            ),
+        )
+        e.case(
+            f"saf_{t}",
+            env(
+                "Tag",
+                f"bs_{t}",
+                ctag(
+                    f'<Tag Use="Target" Name="bs_{t}" Class="Safety" DataType="{t}"/>'
+                ),
+            ),
+        )
+    e.export("all_tags", "Controller/Tags/Tag")
+    e.write()
+
+
+def exp14():
+    """Data-less tags of every fixture UDT/AOI (+arrays): golden defaults for computed layouts."""
+    e = Exp("exp14")
+    udts = [
+        "A_UDT",
+        "GenericRobotInputs",
+        "GenericRobotIO",
+        "GenericRobotOutputs",
+        "robotAlarmCode",
+        "robotString",
+        "robotUI",
+        "robotUO",
+        "simple_udt",
+    ]
+    aoi_names = [
+        "Debounce",
+        "GenericInput",
+        "FanucAlarmLookup",
+        "FanucPNS",
+        "SeqCtrl",
+        "FanucRobot",
+    ]
+    tags = []
+    for t in udts + aoi_names:
+        tags.append(f'<Tag Name="d_{t}" DataType="{t}"/>')
+    for t, dims in [
+        ("A_UDT", "2"),
+        ("Debounce", "2"),
+        ("robotString", "3"),
+        ("TIMER", "2"),
+        ("DINT", "2 3"),
+        ("BOOL", "40"),
+        ("STRING", "2"),
+        ("simple_udt", "2 2"),
+    ]:
+        tags.append(
+            f'<Tag Name="a_{t}_{dims.replace(" ", "x")}" DataType="{t}" Dimensions="{dims}"/>'
+        )
+    # a UDT using BOOLs in host form, plain-BOOL form, nested built-ins, a STRING member and arrays of each
+    tags_udt = udt_d(
+        "DefMix",
+        mem("ZZZZZZZZZZDefMix0", "SINT", extra=' Hidden="true"')
+        + mem("b0", "BIT", extra=' Target="ZZZZZZZZZZDefMix0" BitNumber="0"')
+        + mem("b1", "BIT", extra=' Target="ZZZZZZZZZZDefMix0" BitNumber="1"')
+        + mem("t", "TIMER")
+        + mem("ta", "TIMER", 2)
+        + mem("s", "STRING")
+        + mem("rs", "robotString")
+        + mem("x", "REAL", 3)
+        + mem("flags", "BOOL", 32)
+        + mem("su", "simple_udt")
+        + mem("deb", "Debounce"),
+        ["simple_udt", "robotString"],
+    )
+    e.case(
+        "D0_udt",
+        env("DataType", "DefMix", dts(tags_udt.replace("</DataType>", "</DataType>"))),
+    )
+    tags.append('<Tag Name="d_DefMix" DataType="DefMix"/>')
+    tags.append('<Tag Name="a_DefMix_2" DataType="DefMix" Dimensions="2"/>')
+    e.case("D1_tags", env("Tag", "x", ctag("".join(tags))))
+    e.export("all_tags", "Controller/Tags/Tag")
+    e.export("defmix", DT("DefMix"))
+    e.write()
+
+
+# (name, data_type, dimensions, value) - assigned via tags.add(..., value=...)
+EXP15_TAGS = [
+    ("v_timer", "TIMER", None, {"PRE": 5000, "ACC": 12, "EN": True}),
+    ("v_counter", "COUNTER", None, {"PRE": 10}),
+    ("v_control", "CONTROL", None, {"LEN": 7, "POS": 3}),
+    ("v_pid", "PID", None, {"SP": 50.5, "KP": 1.25}),
+    (
+        "v_udt",
+        "A_UDT",
+        None,
+        {
+            "a_Bool": True,
+            "a_real": 3.5,
+            "a_nested_UDT": {"lint": 77, "bool3": True},
+            "an_array": [0.5, 1.5, 2.5, 3.5],
+            "an_aoi": {"onDelay": 111},
+        },
+    ),
+    ("v_aoi", "SeqCtrl", None, {"startupStep": 10, "mode": True}),
+    ("v_dint2d", "DINT", (2, 3), [[1, 2, 3], [4, 5, 6]]),
+    ("v_timers", "TIMER", 3, {1: {"PRE": 2500}}),
+    ("v_bools", "BOOL", 40, {0: True, 39: True}),
+    ("v_str", "STRING", None, "generated"),
+    ("v_rstr", "robotString", None, "robot text"),
+    ("v_strs", "STRING", 2, ["first", "second"]),
+    ("v_udts", "simple_udt", 2, [{"Dint": 1}, {"Dint": 2, "real": 9}]),
+    ("v_real", "REAL", None, 1.5),
+]
+
+COMPONENT_TEMPLATE = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<RSLogix5000Content SchemaRevision="1.0" SoftwareRevision="37.00" TargetType="Tag" ContainsContext="true">
+<Controller Use="Context" Name="Example_PLC">
+<DataTypes Use="Context">
+</DataTypes>
+<Tags Use="Context">
+</Tags>
+</Controller>
+</RSLogix5000Content>
+"""
+
+
+def exp15():
+    """Structured values: full-project tags.add(value=...) and a component generated from a template."""
+    py_l5x = _py_l5x()
+    p = py_l5x.load(str(FIX / "example.L5X"))
+    expected = {}
+    for name, dt, dims, val in EXP15_TAGS:
+        t = p.controller_tags.add(name, dt, dimensions=dims, value=val)
+        expected[name] = t.to_python()
+    d = HERE / "exp15"
+    d.mkdir(exist_ok=True)
+    p.write(d / "edited.L5X")
+    (d / "expected.json").write_text(json.dumps(expected, default=str))
+    e = Exp("exp15", base="C:/Users/zwood/ldsdk/projects/exp15/edited.L5X")
+    e.files = {"edited.L5X": (d / "edited.L5X").read_bytes()}
+    e.raw(id="build", op="build")
+    e.export("full_tags", "Controller/Tags/Tag")
+    # component: start from an empty template, context types from the example project
+    comp = py_l5x.loads(COMPONENT_TEMPLATE)
+    comp.controller_tags  # noqa: B018
+    # the component's TypeRegistry has no UDT/AOI definitions, so only built-in/atomic types here
+    for name, dt, dims, val in EXP15_TAGS:
+        if dt in ("A_UDT", "SeqCtrl", "robotString", "simple_udt"):
+            continue
+        comp.controller_tags.add("c_" + name, dt, dimensions=dims, value=val)
+    e.files["component.L5X"] = py_l5x.writer.to_bytes(comp.root)
+    e.steps.append(
+        {
+            "id": "C1_component_tags",
+            "op": "import",
+            "file": "component.L5X",
+            "xpath": "Controller",
+            "coll": "overwrite",
+        }
+    )
+    e.export("comp_tags", "Controller/Tags/Tag")
+    e.raw(id="build2", op="build")
+    e.write()
+
+
+def exp15_check():
+    """Compare Studio's exported values with what py_l5x produced."""
+    py_l5x = _py_l5x()
+    expected = json.loads((HERE / "exp15" / "expected.json").read_text())
+    full = py_l5x.load(str(HERE / "results" / "exp15" / "full_tags.L5X"))
+    comp = py_l5x.load(str(HERE / "results" / "exp15" / "comp_tags.L5X"))
+    bad = 0
+    for name, exp in expected.items():
+        for label, proj, tname in (("full", full, name), ("comp", comp, "c_" + name)):
+            if tname not in proj.controller_tags:
+                if label == "comp" and name in ("v_udt", "v_aoi", "v_rstr", "v_udts"):
+                    continue
+                print(f"MISSING {label} {tname}")
+                bad += 1
+                continue
+            got = json.loads(
+                json.dumps(proj.controller_tags[tname].to_python(), default=str)
+            )
+            if got != exp:
+                bad += 1
+                print(f"DIFF {label} {tname}:\n  exp {exp}\n  got {got}")
+    print("all values match" if not bad else f"{bad} problems")
+
+
 if __name__ == "__main__":
     for name in sys.argv[1:]:
         globals()[name]()

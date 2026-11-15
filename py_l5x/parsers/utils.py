@@ -1,6 +1,8 @@
 """Miscellaneous helper functions."""
 
+import re
 from xml.etree import ElementTree as ET
+from xml.sax.saxutils import escape as _xml_escape
 
 from py_l5x.parsers.atomic_types import (
     atomic_info,
@@ -13,6 +15,44 @@ from py_l5x.parsers.atomic_types import (
 #: the document is fed to ElementTree. Import this constant wherever the tag
 #: name is needed instead of hard-coding the string.
 CDATA_TAG = "CDataContent"
+
+_CDATA_SECTION = r"<!\[CDATA\[(.*?)\]\]>"
+#: One or more directly adjacent CDATA sections. Text containing ``]]>`` is
+#: written as two sections (``]]]]><![CDATA[>``), so a run of sections is one
+#: logical text value.
+_CDATA_RE = re.compile(rf"(?:{_CDATA_SECTION})+", re.DOTALL)
+_CDATA_SECTION_RE = re.compile(_CDATA_SECTION, re.DOTALL)
+
+
+def _cdata_to_element(match: re.Match) -> str:
+    """Replace a run of adjacent CDATA sections with a ``<CDATA_TAG>`` element.
+
+    The sections' contents are joined, so text that was split around a
+    ``]]>`` terminator is restored. The content is XML-escaped so characters
+    like ``<``, ``>``, and ``&`` (common in Structured Text and rung comments)
+    do not break the parser.
+
+    Args:
+        match: A match of ``_CDATA_RE``.
+
+    Returns:
+        The replacement element text.
+    """
+    text = "".join(_CDATA_SECTION_RE.findall(match.group(0)))
+    return f"<{CDATA_TAG}>{_xml_escape(text)}</{CDATA_TAG}>"
+
+
+def replace_cdata_sections(raw: str) -> str:
+    """Replace every CDATA section in L5X text with a ``CDATA_TAG`` element.
+
+    Args:
+        raw: The L5X document text.
+
+    Returns:
+        Text that ``xml.etree.ElementTree`` can parse without losing the
+        CDATA boundaries.
+    """
+    return _CDATA_RE.sub(_cdata_to_element, raw)
 
 
 def parse_int(value: str | None) -> int | None:
