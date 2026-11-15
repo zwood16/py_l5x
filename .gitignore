@@ -6,6 +6,10 @@
 scratch/
 reference/
 
+# SDK harness: generated case folders and pulled results
+tools/sdk/exp*/
+tools/sdk/results/
+
 # Studio 5000 tempfiles
 *.Sem
 *.Wrk
