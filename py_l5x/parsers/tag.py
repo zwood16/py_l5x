@@ -213,6 +213,15 @@ class TypeRegistry:
         self._data_types = data_types
         self._aoi_types = aoi_types
 
+    def type_names(self) -> list[str]:
+        """List every UDT and AOI name known to the project.
+
+        Returns:
+            The names (UDTs first, including product-defined and I/O types
+            exported with the project, then AOIs).
+        """
+        return [*self._data_types, *self._aoi_types]
+
     def udt(self, type_name: str) -> DataType | None:
         """Look up a user-defined data type by name.
 

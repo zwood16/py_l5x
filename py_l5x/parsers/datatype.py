@@ -14,8 +14,10 @@ without needing to filter or group members by hand.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from xml.etree import ElementTree as ET
 
+from py_l5x.parsers.atomic_types import ATOMIC_TYPES, default_radix
 from py_l5x.parsers.base import (
     BaseCollection,
     BaseElement,
@@ -24,7 +26,13 @@ from py_l5x.parsers.base import (
     int_attr,
     str_attr,
 )
-from py_l5x.parsers.utils import convert_numeric
+from py_l5x.parsers.names import validate_new_name
+from py_l5x.parsers.schema import insert_child, insert_child_at, remove_child
+from py_l5x.parsers.utils import cdata_text, convert_numeric
+
+if TYPE_CHECKING:
+    from py_l5x.build.specs import DataTypeSpec
+    from py_l5x.parsers.tag import TypeRegistry
 
 # ------------------------------------------------------------------
 # DataTypes (UDTs)
@@ -297,6 +305,55 @@ class DataType(BaseElement):
     # Display
     # ------------------------------------------------------------------
 
+    def to_spec(self) -> DataTypeSpec:
+        """Convert this data type to a spec that rebuilds it.
+
+        Hidden members (the ``SINT`` hosts of packed booleans) are dropped and
+        ``BIT`` members become plain ``BOOL``. Descriptions, engineering units,
+        state text, min/max and external logging are kept, read as raw CDATA
+        text. A radix equal to the type's default (``Decimal`` for integers and
+        BOOL, ``Float`` for REAL, ``NullType`` for structured types, ...) is
+        stored as ``None``; any other radix is kept. Building the spec gives
+        back the same members either way, but ``None`` keeps specs minimal.
+
+        Returns:
+            A :class:`~py_l5x.build.specs.DataTypeSpec`.
+        """
+        from py_l5x.build.specs import DataTypeSpec, MemberSpec
+
+        def text(element: ET.Element, tag: str) -> str:
+            return cdata_text(element.find(tag), strip=False)
+
+        members = []
+        for member in self.members.values():
+            if member.hidden:
+                continue
+            element = member._element
+            data_type = "BOOL" if member.data_type == "BIT" else member.data_type
+            default = (
+                default_radix(data_type) if data_type in ATOMIC_TYPES else "NullType"
+            )
+            logging = element.get("ExternalLogging")
+            members.append(
+                MemberSpec(
+                    name=member.name,
+                    data_type=data_type,
+                    dimension=member.dimension,
+                    description=text(element, "Description"),
+                    radix=None if member.radix == default else member.radix,
+                    external_access=member.external_access,
+                    engineering_unit=text(element, "EngineeringUnit"),
+                    min=element.get("Min"),
+                    max=element.get("Max"),
+                    state0=text(element, "State0"),
+                    state1=text(element, "State1"),
+                    external_logging=None if logging is None else logging == "true",
+                )
+            )
+        return DataTypeSpec(
+            self.name, members, text(self._element, "Description"), self.family
+        )
+
     def __repr__(self) -> str:
         """Return the full :meth:`describe` text for this data type.
 
@@ -349,3 +406,285 @@ class DataTypesCollection(BaseCollection[DataType]):
                 ``DataTypes/DataType`` children form this collection.
         """
         super().__init__(controller_element, "DataTypes/DataType", DataType)
+        #: Set by :class:`~py_l5x.parsers.project.Project`; needed by the edit
+        #: methods to resolve types and migrate values.
+        self._registry: TypeRegistry | None = None
+
+    # ------------------------------------------------------------------
+    # Edits
+    # ------------------------------------------------------------------
+
+    def _require_registry(self) -> TypeRegistry:
+        """Return the type registry the edit methods need.
+
+        Returns:
+            The registry bound by the project.
+
+        Raises:
+            RuntimeError: If the collection was created without a project.
+        """
+        if self._registry is None:
+            raise RuntimeError(
+                "editing data types needs a project; use project.data_types"
+            )
+        return self._registry
+
+    def _taken_names(
+        self, registry: TypeRegistry, ignore: str | None = None
+    ) -> list[str]:
+        """List every name a data type may not take.
+
+        Args:
+            registry: The project's type registry.
+            ignore: A type name to leave out (the type being renamed).
+
+        Returns:
+            Project UDT and AOI names (product-defined types exported in the
+            file included), the built-in table and the atomic types.
+        """
+        from py_l5x.parsers.layout import builtin_table
+
+        names = [*registry.type_names(), *builtin_table(), *ATOMIC_TYPES]
+        return [n for n in names if n != ignore]
+
+    @staticmethod
+    def _check_member_types(spec: DataTypeSpec, registry: TypeRegistry) -> None:
+        """Check that every member type resolves.
+
+        Studio silently accepts unknown member types, so they are caught here.
+
+        Args:
+            spec: The spec.
+            registry: The project's type registry.
+
+        Raises:
+            ValueError: If a member type is not atomic, built-in, a project
+                UDT or an AOI.
+        """
+        from py_l5x.parsers.layout import builtin_table
+
+        for member in spec.members:
+            kind = member.data_type
+            if (
+                kind in ATOMIC_TYPES
+                or kind in builtin_table()
+                or registry.udt(kind) is not None
+                or registry.aoi(kind) is not None
+            ):
+                continue
+            raise ValueError(f"member {member.name!r}: unknown data type {kind!r}")
+
+    def _container(self) -> ET.Element:
+        """Return ``Controller/DataTypes``, creating it if missing.
+
+        Returns:
+            The container element.
+        """
+        container = self._parent.find("DataTypes")
+        if container is None:
+            container = ET.Element("DataTypes")
+            insert_child(self._parent, container)
+        return container
+
+    def _find_element(self, name: str) -> ET.Element:
+        """Return the ``<DataType>`` element with exactly this name.
+
+        Args:
+            name: The data type name.
+
+        Returns:
+            The element.
+
+        Raises:
+            KeyError: If there is no such data type.
+        """
+        for element in self._children():
+            if element.get("Name") == name:
+                return element
+        raise KeyError(name)
+
+    def add(self, spec: DataTypeSpec) -> DataType:
+        """Add a user-defined data type built from a spec.
+
+        The element comes from :func:`~py_l5x.build.datatype.build_datatype`
+        (with ``<Dependencies>``) and is inserted into ``Controller/DataTypes``
+        (created if missing) in case-insensitive name order, as Studio sorts
+        them.
+
+        Args:
+            spec: The data type.
+
+        Returns:
+            The new data type.
+
+        Raises:
+            ValueError: If the spec is invalid, the name matches (ignoring
+                case) a UDT, an AOI, a built-in or an atomic type, or a member
+                type does not resolve.
+        """
+        from py_l5x.build.datatype import build_datatype
+
+        registry = self._require_registry()
+        lowered = spec.name.lower()
+        for taken in self._taken_names(registry):
+            if taken.lower() == lowered:
+                raise ValueError(
+                    f"data type name {spec.name!r} is already in use as {taken!r}"
+                )
+        element = build_datatype(spec, registry)
+        self._check_member_types(spec, registry)
+        container = self._container()
+        position = len(container)
+        for index, existing in enumerate(container):
+            if existing.get("Name", "").lower() > lowered:
+                position = index
+                break
+        insert_child_at(container, position, element)
+        return self[spec.name]
+
+    def replace(self, spec: DataTypeSpec) -> DataType:
+        """Replace a user-defined data type and migrate its existing data.
+
+        The element is rebuilt in place, then every instance of the type
+        (tag roots, nested in other structures, array elements, AOI parameter
+        and local tag defaults, and root strings) is migrated the way Studio
+        does on import: values are kept by member name (ignoring case), new
+        members get defaults, removed members are dropped, and a member whose
+        type changed is converted where that makes sense (see
+        :func:`~py_l5x.parsers.migrate.convert_atomic_value`). The stale L5K
+        data of every touched tag is removed. Operand metadata (comments and
+        so on) that points at removed members is left in place, as Studio
+        does. The change is all or nothing: if anything fails the document is
+        unchanged. The family (``NoFamily``/``StringFamily``) cannot change.
+
+        Args:
+            spec: The new definition; ``spec.name`` selects the type.
+
+        Returns:
+            The replaced data type.
+
+        Raises:
+            KeyError: If there is no data type of that name.
+            ValueError: If the spec is invalid, a member type does not
+                resolve, the type is not a user type, or the family changes.
+        """
+        from py_l5x.build.datatype import build_datatype
+        from py_l5x.parsers.migrate import plan_instance_migration
+
+        registry = self._require_registry()
+        existing = self._find_element(spec.name)
+        if existing.get("Class") != "User":
+            raise ValueError(f"{spec.name!r} is not a user-defined data type")
+        if existing.get("Family") != spec.family:
+            raise ValueError("changing the family of a data type is not supported")
+        self._check_member_types(spec, registry)
+        fresh = build_datatype(spec, registry)
+        container = self._container()
+        index = list(container).index(existing)
+        fresh.tail = existing.tail
+        container[index] = fresh
+        try:
+            ops = plan_instance_migration(self._parent, registry, spec.name)
+        except BaseException:
+            container[index] = existing
+            raise
+        for op in ops:
+            op()
+        return self[spec.name]
+
+    def rename(self, old: str, new: str) -> DataType:
+        """Rename a data type and every reference to it.
+
+        Updates the ``Name``; the ``DataType`` attribute of UDT members, AOI
+        parameters and local tags, tags of every scope, and of value trees
+        (``Structure``, ``StructureMember``, ``Array``, ``ArrayMember`` and the
+        string ``DATA`` member); and ``<Dependency Name>`` entries. Hidden host
+        member names are not renamed, matching Studio. The type keeps its
+        position in ``<DataTypes>``. Logic text is not touched.
+
+        Args:
+            old: The current name.
+            new: The new name (same rules as :meth:`add`; the type itself is
+                ignored by the collision check, so a case-only change works).
+
+        Returns:
+            The renamed data type.
+
+        Raises:
+            KeyError: If *old* does not exist.
+            ValueError: If *new* is invalid or taken.
+        """
+        registry = self._require_registry()
+        element = self._find_element(old)
+        validate_new_name(new, self._taken_names(registry, ignore=old), "data type")
+        element.set("Name", new)
+        for node in self._parent.iter():
+            if node.get("DataType") == old:
+                node.set("DataType", new)
+            elif (
+                node.tag == "Dependency"
+                and node.get("Type") == "DataType"
+                and node.get("Name") == old
+            ):
+                node.set("Name", new)
+        return self[new]
+
+    def users(self, name: str) -> list[str]:
+        """List what uses a data type.
+
+        Args:
+            name: The data type name.
+
+        Returns:
+            Descriptions of every tag (controller and program scope), UDT
+            member, AOI parameter and AOI local tag that has this type.
+        """
+        found: list[str] = []
+        controller = self._parent
+        for tag in controller.findall("Tags/Tag"):
+            if tag.get("DataType") == name:
+                found.append(f"controller tag {tag.get('Name')}")
+        for program in controller.findall("Programs/Program"):
+            for tag in program.findall("Tags/Tag"):
+                if tag.get("DataType") == name:
+                    found.append(f"program {program.get('Name')} tag {tag.get('Name')}")
+        for data_type in controller.findall("DataTypes/DataType"):
+            if data_type.get("Name") == name:
+                continue
+            for member in data_type.findall("Members/Member"):
+                if member.get("DataType") == name:
+                    found.append(
+                        f"data type {data_type.get('Name')} member {member.get('Name')}"
+                    )
+        for aoi in controller.findall(
+            "AddOnInstructionDefinitions/AddOnInstructionDefinition"
+        ):
+            for kind, path in (
+                ("parameter", "Parameters/Parameter"),
+                ("local tag", "LocalTags/LocalTag"),
+            ):
+                for item in aoi.findall(path):
+                    if item.get("DataType") == name:
+                        found.append(f"AOI {aoi.get('Name')} {kind} {item.get('Name')}")
+        return found
+
+    def remove(self, name: str, *, force: bool = False) -> None:
+        """Delete a data type.
+
+        Args:
+            name: The data type name.
+            force: Delete even if something uses the type. The users are then
+                left pointing at a type that no longer exists.
+
+        Raises:
+            KeyError: If there is no such data type.
+            ValueError: If the type is in use (listing the users) and *force*
+                is false.
+        """
+        element = self._find_element(name)
+        users = self.users(name)
+        if users and not force:
+            raise ValueError(f"data type {name!r} is in use by: " + ", ".join(users))
+        container = self._parent.find("DataTypes")
+        assert container is not None
+        remove_child(container, element)

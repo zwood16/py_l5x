@@ -7,6 +7,7 @@ Usage:
     MyController
 """
 
+from py_l5x.build import DataTypeSpec, MemberSpec, build_datatype
 from py_l5x.parse import load, loads
 from py_l5x.parsers.aoi import (
     AOIDefinition,
@@ -95,6 +96,7 @@ __all__ = [
     "ConsumeInfo",
     "ControllerInfo",
     "DataType",
+    "DataTypeSpec",
     "DataTypeMember",
     "DateTimeNode",
     "DateTimeTag",
@@ -103,6 +105,7 @@ __all__ = [
     "IntegerNode",
     "IntegerTag",
     "MessageTag",
+    "MemberSpec",
     "Module",
     "ModuleTagRef",
     "ModuleTagsView",
@@ -122,6 +125,7 @@ __all__ = [
     "TimeNode",
     "TimeTag",
     "UnknownTag",
+    "build_datatype",
     "load",
     "loads",
 ]

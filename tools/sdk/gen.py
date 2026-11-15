@@ -2479,6 +2479,7 @@ def exp09():
 def _py_l5x():
     sys.path.insert(0, str(HERE.parent.parent))
     import py_l5x
+    import py_l5x.writer  # noqa: F401  (submodule, imported lazily by the package)
 
     return py_l5x
 
@@ -2912,6 +2913,392 @@ def exp15_check():
                 bad += 1
                 print(f"DIFF {label} {tname}:\n  exp {exp}\n  got {got}")
     print("all values match" if not bad else f"{bad} problems")
+
+
+def exp16():
+    """Get real L5K text (to use L5K import as a BOOL-packing oracle)."""
+    e = Exp("exp16")
+    e.raw(id="save_l5k", op="save_as", name="example.L5K")
+    e.write()
+
+
+def exp16b():
+    e = Exp("exp16b", base=BLANK_ACD)
+    e.raw(id="save_l5k", op="save_as", name="blank.L5K")
+    e.write()
+
+
+PACK_UDTS = {
+    # name: L5K member lines (BOOLs declared plainly; Studio decides packing)
+    "PkTen": [f"BOOL b{i};" for i in range(10)],
+    "PkSplit": [
+        "BOOL a0;",
+        "BOOL a1;",
+        "DINT x;",
+        "BOOL c0;",
+        "SINT s;",
+        "BOOL d0;",
+        "BOOL d1;",
+        "BOOL d2;",
+    ],
+    "PkSeventeen": ["DINT first;"]
+    + [f"BOOL b{i};" for i in range(17)]
+    + ["REAL last;"],
+    "PkBoolArr": ["BOOL flags[32];", "BOOL single;", "BOOL flags2[64];", "BOOL tail;"],
+    "PkVeryLongUdtNameX": ["BOOL a;", "DINT x;", "BOOL b;"],
+    "PkNested": ["PkTen inner;", "BOOL after;", "TIMER t;", "BOOL last;"],
+}
+
+
+def exp16c():
+    """L5K import as BOOL-packing oracle: plain BOOL members, Studio packs them."""
+    base = (HERE / "results" / "exp16b" / "blank.L5K").read_text(encoding="utf-8-sig")
+    dts = ""
+    for n, lines in PACK_UDTS.items():
+        dts += (
+            f"\tDATATYPE {n} (FamilyType := NoFamily)\n"
+            + "".join(f"\t\t{l}\n" for l in lines)
+            + "\tEND_DATATYPE\n\n"
+        )
+    # insert before the first MODULE (datatypes come first in a controller block)
+    i = base.index("\tMODULE ")
+    txt = base[:i] + dts + base[i:]
+    d = HERE / "exp16c"
+    d.mkdir(exist_ok=True)
+    (d / "packing.L5K").write_bytes(
+        txt.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8")
+    )
+    e = Exp("exp16c", base="C:/Users/zwood/ldsdk/projects/exp16c/packing.L5K")
+    e.files = {}
+    e.raw(id="save_l5x", op="save_as", name="packing.L5X")
+    e.write()
+    (d / "packing.L5K").write_bytes(
+        txt.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8")
+    )
+
+
+def exp17():
+    """Built UDTs: component import (packed layout, deps) and full project with <Dependencies> added."""
+    py_l5x = _py_l5x()
+    from py_l5x import DataTypeSpec, MemberSpec, build_datatype
+    from py_l5x.parsers import schema
+
+    specs = [
+        DataTypeSpec(
+            "BdInner",
+            [
+                MemberSpec("x", "DINT"),
+                MemberSpec("on", "BOOL", description="inner bool"),
+            ],
+        ),
+        DataTypeSpec(
+            "BdMain",
+            [MemberSpec(f"b{i}", "BOOL") for i in range(10)]
+            + [
+                MemberSpec(
+                    "speed",
+                    "REAL",
+                    engineering_unit="rpm",
+                    min=0,
+                    max=1800,
+                    description="Speed",
+                ),
+                MemberSpec("inner", "BdInner"),
+                MemberSpec("deb", "Debounce"),
+                MemberSpec("t", "TIMER"),
+                MemberSpec("flags", "BOOL", 40),
+                MemberSpec("last", "BOOL", state0="off", state1="on"),
+            ],
+            description="built by py_l5x",
+        ),
+        DataTypeSpec.string("BdStr", 20),
+        DataTypeSpec(
+            "BdEight",
+            [MemberSpec(f"b{i}", "BOOL") for i in range(8)] + [MemberSpec("x", "DINT")],
+        ),
+    ]
+    # component file: target UDTs first (dependents before dependencies, as Studio exports)
+    comp = py_l5x.loads(
+        COMPONENT_TEMPLATE.replace('TargetType="Tag"', 'TargetType="DataType"')
+    )
+    dts_el = comp.root.find("Controller/DataTypes")
+    reg = py_l5x.load(str(FIX / "example.L5X"))._type_registry
+    for sp in specs:
+        schema.insert_child(dts_el, build_datatype(sp, reg))
+    for sp in specs:
+        comp.controller_tags.add("bt_" + sp.name, sp.name)
+    e = Exp("exp17")
+    e.files = {"component.L5X": py_l5x.writer.to_bytes(comp.root)}
+    e.steps.append(
+        {
+            "id": "C1_built_udts",
+            "op": "import",
+            "file": "component.L5X",
+            "xpath": "Controller",
+            "coll": "overwrite",
+        }
+    )
+    for sp in specs:
+        e.export(sp.name, DT(sp.name))
+    e.raw(id="raw_BdEight", op="get", xpath=CT("bt_BdEight"), type="raw")
+    e.raw(id="raw_BdMain", op="get", xpath=CT("bt_BdMain"), type="raw")
+    e.raw(id="build", op="build")
+    e.write()
+    (HERE / "exp17" / "built").mkdir(exist_ok=True)
+    for sp in specs:
+        (HERE / "exp17" / "built" / f"{sp.name}.xml").write_text(
+            py_l5x.writer.to_string(build_datatype(sp, reg))
+        )
+
+
+def exp17b():
+    """Full project where every UDT is rebuilt from its spec WITH <Dependencies> (exports have none)."""
+    py_l5x = _py_l5x()
+    from py_l5x import build_datatype
+
+    p = py_l5x.load(str(FIX / "example.L5X"))
+    dts_el = p.root.find("Controller/DataTypes")
+    for i, el in enumerate(list(dts_el)):
+        spec = p.data_types[el.get("Name")].to_spec()
+        new = build_datatype(spec, p._type_registry)
+        new.tail = el.tail
+        dts_el.remove(el)
+        dts_el.insert(i, new)
+    d = HERE / "exp17b"
+    d.mkdir(exist_ok=True)
+    p.write(d / "rebuilt.L5X")
+    e = Exp("exp17b", base="C:/Users/zwood/ldsdk/projects/exp17b/rebuilt.L5X")
+    e.files = {"rebuilt.L5X": (d / "rebuilt.L5X").read_bytes()}
+    e.raw(id="build", op="build")
+    e.export("a_udt", DT("A_UDT"))
+    e.export("gio", DT("GenericRobotIO"))
+    e.raw(id="save", op="save_as", name="resaved.L5X")
+    e.write()
+
+
+def exp18():
+    """How Studio converts member values when a UDT member type changes on overwrite."""
+    e = Exp("exp18", base=BLANK_ACD)
+    vals = [
+        ("r1", "REAL", "2.7"),
+        ("r2", "REAL", "-2.7"),
+        ("r3", "REAL", "2.5"),
+        ("r4", "REAL", "3.5"),
+        ("r5", "REAL", "1e10"),
+        ("d1", "DINT", "300"),
+        ("d2", "DINT", "-1"),
+        ("d3", "DINT", "2147483647"),
+        ("b1", "BOOL", "1"),
+        ("s1", "SINT", "-5"),
+    ]
+    e.case(
+        "X1_udt",
+        env(
+            "DataType", "Conv", dts(udt("Conv", "".join(mem(n, t) for n, t, _ in vals)))
+        ),
+    )
+    struct = "".join(
+        f'<DataValueMember Name="{n}" DataType="{t}" Value="{v}"/>' for n, t, v in vals
+    )
+    e.case(
+        "X2_tag",
+        env(
+            "Tag",
+            "conv",
+            ctag(
+                f'<Tag Use="Target" Name="conv" DataType="Conv">{dec("<Structure DataType=" + chr(34) + "Conv" + chr(34) + ">" + struct + "</Structure>")}</Tag>'
+            ),
+        ),
+    )
+    # change: REAL->DINT, DINT->SINT (overflow), DINT->BOOL, BOOL->REAL, SINT->UINT (negative to unsigned)
+    new = {
+        "r1": "DINT",
+        "r2": "DINT",
+        "r3": "DINT",
+        "r4": "DINT",
+        "r5": "DINT",
+        "d1": "SINT",
+        "d2": "BOOL",
+        "d3": "REAL",
+        "b1": "REAL",
+        "s1": "UINT",
+    }
+    e.case(
+        "X3_change",
+        env(
+            "DataType",
+            "Conv",
+            dts(udt("Conv", "".join(mem(n, new[n]) for n, _, _ in vals))),
+        ),
+        export=[CT("conv")],
+    )
+    e.write()
+
+
+def exp18b():
+    """Numeric -> BOOL conversion: nonzero or low bit?"""
+    e = Exp("exp18b", base=BLANK_ACD)
+    vals = [
+        ("d2", "DINT", "2"),
+        ("d4", "DINT", "4"),
+        ("d3", "DINT", "3"),
+        ("d0", "DINT", "0"),
+        ("r05", "REAL", "0.5"),
+        ("r2", "REAL", "2.0"),
+    ]
+    e.case(
+        "Y1_udt",
+        env(
+            "DataType",
+            "ConvB",
+            dts(udt("ConvB", "".join(mem(n, t) for n, t, _ in vals))),
+        ),
+    )
+    struct = "".join(
+        f'<DataValueMember Name="{n}" DataType="{t}" Value="{v}"/>' for n, t, v in vals
+    )
+    e.case(
+        "Y2_tag",
+        env(
+            "Tag",
+            "convb",
+            ctag(
+                f'<Tag Use="Target" Name="convb" DataType="ConvB">{dec("<Structure DataType=" + chr(34) + "ConvB" + chr(34) + ">" + struct + "</Structure>")}</Tag>'
+            ),
+        ),
+    )
+    e.case(
+        "Y3_change",
+        env(
+            "DataType",
+            "ConvB",
+            dts(udt("ConvB", "".join(mem(n, "BOOL") for n, _, _ in vals))),
+        ),
+        export=[CT("convb")],
+    )
+    e.write()
+
+
+def exp19_specs(p):
+    """The UDT changes under test, applied to a loaded example project's specs."""
+    from py_l5x import MemberSpec
+
+    su = p.data_types["simple_udt"].to_spec()
+    m = {x.name: x for x in su.members}
+    # reorder, insert a member in the middle, change Dint DINT->REAL, real DINT->SINT, drop bool4
+    su.members = [
+        m["lint"],
+        m["bool1"],
+        MemberSpec("inserted", "INT"),
+        m["bool2"],
+        m["bool3"],
+        MemberSpec("Dint", "REAL"),
+        MemberSpec("real", "SINT"),
+    ]
+    return su
+
+
+def exp19():
+    """UDT replace: our migration (full project) vs Studio's own migration (component import)."""
+    py_l5x = _py_l5x()
+    from py_l5x import build_datatype
+    from py_l5x.parsers import schema
+
+    seed = {
+        "a_simple_udt_instance": {
+            "bool1": True,
+            "bool4": True,
+            "Dint": 70000,
+            "real": 300,
+            "lint": 9,
+        },
+        "a_simple_udt_with_overrides": {
+            "bool2": True,
+            "Dint": -1,
+            "real": -129,
+            "lint": -5,
+        },
+    }
+    # 1) seeded project (both paths start from this)
+    p = py_l5x.load(str(FIX / "example.L5X"))
+    for t, v in seed.items():
+        p.programs["MainProgram"].tags[t].value = v
+    p.programs["MainProgram"].tags["a_udt_instance"].value = {
+        "a_nested_UDT": {"Dint": 123, "real": 7, "bool3": True}
+    }
+    d = HERE / "exp19"
+    d.mkdir(exist_ok=True)
+    p.write(d / "seeded.L5X")
+    # 2) our migration
+    ours = py_l5x.load(str(d / "seeded.L5X"))
+    ours.data_types.replace(exp19_specs(ours))
+    ours.write(d / "ours.L5X")
+    # 3) Studio's migration: component file with just the new simple_udt, imported over the seeded project
+    comp = py_l5x.loads(
+        COMPONENT_TEMPLATE.replace('TargetType="Tag"', 'TargetType="DataType"')
+    )
+    ref = py_l5x.load(str(d / "seeded.L5X"))
+    schema.insert_child(
+        comp.root.find("Controller/DataTypes"),
+        build_datatype(exp19_specs(ref), ref._type_registry),
+    )
+    e = Exp("exp19", base="C:/Users/zwood/ldsdk/projects/exp19/seeded.L5X")
+    e.files = {
+        "seeded.L5X": (d / "seeded.L5X").read_bytes(),
+        "ours.L5X": (d / "ours.L5X").read_bytes(),
+        "studio_udt.L5X": py_l5x.writer.to_bytes(comp.root),
+    }
+    e.steps.append(
+        {
+            "id": "S1_studio_migrates",
+            "op": "import",
+            "file": "studio_udt.L5X",
+            "xpath": "Controller",
+            "coll": "overwrite",
+        }
+    )
+    e.raw(id="build_studio", op="build")
+    e.export("studio_mainprogram", PR("MainProgram"))
+    e.write()
+
+
+def exp19b():
+    e = Exp("exp19b", base="C:/Users/zwood/ldsdk/projects/exp19/ours.L5X")
+    e.raw(id="build_ours", op="build")
+    e.export("ours_mainprogram", PR("MainProgram"))
+    e.write()
+
+
+def exp19_check():
+    py_l5x = _py_l5x()
+    s = (
+        py_l5x.load(str(HERE / "results" / "exp19" / "studio_mainprogram.L5X"))
+        .programs["MainProgram"]
+        .tags
+    )
+    o = (
+        py_l5x.load(str(HERE / "results" / "exp19b" / "ours_mainprogram.L5X"))
+        .programs["MainProgram"]
+        .tags
+    )
+    local = py_l5x.load(str(HERE / "exp19" / "ours.L5X")).programs["MainProgram"].tags
+    bad = 0
+    for t in ["a_simple_udt_instance", "a_simple_udt_with_overrides", "a_udt_instance"]:
+        sv, ov, lv = s[t].to_python(), o[t].to_python(), local[t].to_python()
+        if t == "a_udt_instance":
+            sv, ov, lv = sv["a_nested_UDT"], ov["a_nested_UDT"], lv["a_nested_UDT"]
+        ok = sv == ov == lv
+        bad += not ok
+        print(
+            ("SAME " if ok else "DIFF ") + t,
+            "\n  studio:",
+            sv,
+            "\n  ours  :",
+            ov,
+            "\n  local :",
+            lv,
+        )
+    print("all identical" if not bad else f"{bad} differ")
 
 
 if __name__ == "__main__":

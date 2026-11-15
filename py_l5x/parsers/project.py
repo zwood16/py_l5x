@@ -204,6 +204,7 @@ class Project:
 
         # Build the shared TypeRegistry (glue for tag value parsing).
         self._type_registry = TypeRegistry(self._data_types, self._aoi_types)
+        self._data_types._registry = self._type_registry
 
         # Build collections that depend on TypeRegistry.
         self._controller = ControllerInfo(self._controller_element)

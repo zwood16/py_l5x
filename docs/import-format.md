@@ -220,6 +220,12 @@ text, while the other operand metadata is CDATA.
 - BOOL arrays are rounded up to a multiple of 32 (BOOL[40] is stored as BOOL[64]).
 - Tags created with complete generated values (TIMER, COUNTER, CONTROL, PID, UDT with nested UDT/AOI/array members, AOI-typed, 2D DINT, sparse TIMER[3], BOOL[40], STRING, custom string, STRING[2], UDT[2]) import, build and export with exactly the generated values, both in a full project and in a component built from an empty template.
 
+### UDT building and migration (exp16–exp19)
+- Studio keeps plain `BOOL` UDT members unpacked, **even when opening an L5K file** (exp16c). The GUI's packed form has to be produced by us. The rule, from every real export: each run of consecutive BOOL members gets one hidden SINT host per 8 bits, placed right before its bits and named `ZZZZZZZZZZ` + the first 10 characters of the UDT name + the host's own index in the member list. A non-BOOL member or a BOOL array ends the run. Studio does not rename hosts when a UDT is renamed.
+- Built UDTs import with 0 warnings, and the packed layout is confirmed: 8 BOOLs plus a DINT is 8 bytes. Studio's export is byte-identical to the builder output (exp17). Full-project exports carry no `<Dependencies>`, but a full project that has them opens and builds (exp17b). Component exports list one `<Dependency>` per member (duplicates kept).
+- Member value conversion when a UDT member's type changes on overwrite (exp18, exp18b): REAL→integer rounds half to even, then saturates; integer→integer wraps in two's complement (DINT 300 → SINT 44, SINT -5 → UINT 65531); integer→REAL uses float32 rounding; BOOL→numeric is 0/1; numeric→BOOL is nonzero→1 (REAL 0.5 → 1).
+- py_l5x's `data_types.replace()` migration gives exactly the same values as Studio's own migration on import, for a reorder, an insert, a removal, DINT→REAL, DINT→SINT wrapping and a nested instance (exp19).
+
 ## Not yet tested
 - Logix versions other than v37 (the VM has v30–v37 installed; the SDK supports v31 and later).
 - Whether a full-project L5X with a tag whose `<Data>` disagrees with a changed UDT still opens. In exp07b the `simple_udt` instance data didn't include the new member; the project opened, but the instance's value wasn't checked.

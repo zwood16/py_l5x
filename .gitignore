@@ -244,3 +244,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# The library's own build package (the template above ignores every build/)
+!py_l5x/build/
