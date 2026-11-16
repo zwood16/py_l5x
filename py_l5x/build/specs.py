@@ -12,9 +12,11 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from py_l5x.build.template import SubstituteMixin
+
 
 @dataclass
-class MemberSpec:
+class MemberSpec(SubstituteMixin):
     """One member of a user-defined data type.
 
     ``data_type`` ``"BOOL"`` means a plain BOOL: the builder packs runs of them
@@ -52,7 +54,7 @@ class MemberSpec:
 
 
 @dataclass
-class DataTypeSpec:
+class DataTypeSpec(SubstituteMixin):
     """A user-defined data type.
 
     Attributes:
@@ -118,7 +120,7 @@ class DataTypeSpec:
 
 
 @dataclass
-class ParameterSpec:
+class ParameterSpec(SubstituteMixin):
     """One parameter of an Add-On Instruction.
 
     ``EnableIn`` and ``EnableOut`` are not listed: the builder always adds them.
@@ -170,7 +172,7 @@ class ParameterSpec:
 
 
 @dataclass
-class LocalTagSpec:
+class LocalTagSpec(SubstituteMixin):
     """One local tag of an Add-On Instruction.
 
     Attributes:
@@ -194,7 +196,7 @@ class LocalTagSpec:
 
 
 @dataclass
-class RungSpec:
+class RungSpec(SubstituteMixin):
     """One ladder rung.
 
     Attributes:
@@ -207,7 +209,7 @@ class RungSpec:
 
 
 @dataclass
-class RoutineSpec:
+class RoutineSpec(SubstituteMixin):
     """One routine of an Add-On Instruction.
 
     Attributes:
@@ -226,7 +228,7 @@ class RoutineSpec:
 
 
 @dataclass
-class AOISpec:
+class AOISpec(SubstituteMixin):
     """An Add-On Instruction definition.
 
     Attributes:
@@ -298,7 +300,7 @@ class AOISpec:
 
 
 @dataclass
-class TagSpec:
+class TagSpec(SubstituteMixin):
     """A controller or program tag.
 
     Exactly one of ``data_type`` and ``alias_for`` is required.
@@ -364,7 +366,7 @@ class TagSpec:
 
 
 @dataclass
-class ProgramSpec:
+class ProgramSpec(SubstituteMixin):
     """A program.
 
     Attributes:

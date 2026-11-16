@@ -45,7 +45,7 @@ Public API: everything users import is re-exported in [py_l5x/__init__.py](py_l5
 
 ## Write support (in progress)
 
-Adding the ability to modify and generate L5X files. Target **Logix v37 only** for now; older versions may be patched in later (instruction mnemonics differ, e.g. `MOVE`/`MOV`, `EQ`/`EQU`).
+Modifying and generating L5X files (phases 1–5 done: writer, in-place edits, type layouts/values, spec builders for UDTs/AOIs/programs/tags, component export, templating). Target **Logix v37 only** for now; older versions may be patched in later (instruction mnemonics differ, e.g. `MOVE`/`MOV`, `EQ`/`EQU`). Builders live in `py_l5x/build/` (tracked despite the template's `build/` ignore rule; see the exception at the end of `.gitignore`).
 - [docs/write-plan.md](docs/write-plan.md) is the phased plan. Order: serializer and round trip, then editing loaded documents, then type layouts and values, then spec builders.
 - [docs/import-format.md](docs/import-format.md) records what Studio actually accepts on import, verified through the SDK. Read it before writing any code that emits XML. Key rules: Decorated tag data must be complete and in order, or it is dropped (sometimes silently), and omitting `<Data>` is safe; never emit L5K data; child elements must be in schema order; always emit `<Dependencies>` on UDTs and AOIs that reference other user types (Studio crashes otherwise); UDT BOOLs use the hidden SINT host plus `BIT` form.
 - [tools/sdk/](tools/sdk/) is the SDK verification harness, which runs on the Windows VM. Use it to verify fixtures and golden files; the pytest suite must stay OS- and Rockwell-independent and never call the SDK.

@@ -16,6 +16,7 @@ from py_l5x.build.specs import (
     TagSpec,
 )
 from py_l5x.build.tag import build_tag
+from py_l5x.build.template import stamp, substitute
 
 __all__ = [
     "AOISpec",
@@ -33,4 +34,6 @@ __all__ = [
     "build_program",
     "build_tag",
     "export_component",
+    "stamp",
+    "substitute",
 ]

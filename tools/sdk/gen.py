@@ -3894,6 +3894,94 @@ def exp24b():
     e.write()
 
 
+def exp25():
+    """Templating: stamp a motor program + its controller tags 5 times into a full project; build; export one."""
+    py_l5x = _py_l5x()
+    from py_l5x import ProgramSpec, RoutineSpec, RungSpec, TagSpec, stamp
+
+    base_prog = ProgramSpec(
+        "Motor1",
+        tags=[
+            TagSpec(
+                "M1_Delay",
+                "TIMER",
+                value={"PRE": 1000},
+                operand_comments={".DN": "Motor1 start delay done"},
+            ),
+            TagSpec("M1_Running", "BOOL", description="Motor1 running"),
+            TagSpec("M1_Deb", "Debounce", value={"onDelay": 50}),
+        ],
+        routines=[
+            RoutineSpec(
+                "Main",
+                rungs=[
+                    RungSpec(
+                        "XIC(Motor1_Cmd)TON(M1_Delay,?,?);",
+                        comment="Motor1 start delay",
+                    ),
+                    RungSpec("XIC(M1_Delay.DN)OTE(M1_Running);"),
+                    RungSpec("XIC(Motor1_Cmd)Debounce(M1_Deb);"),
+                    RungSpec("MOVE(Motor1_Speed,Motor1_SpeedOut);"),
+                ],
+            ),
+            RoutineSpec(
+                "Calc",
+                type_="ST",
+                lines=[
+                    "// Motor1 calc",
+                    "IF M1_Running THEN Motor1_SpeedOut := Motor1_Speed * 2.0; END_IF;",
+                ],
+            ),
+        ],
+        main_routine="Main",
+        description="Motor1 control",
+    )
+    base_tags = [
+        TagSpec("Motor1_Cmd", "BOOL", description="Motor1 command"),
+        TagSpec("Motor1_Speed", "REAL", value=10.5),
+        TagSpec("Motor1_SpeedOut", "REAL"),
+    ]
+    instances = [{"Motor1": f"Motor{i}", "M1_": f"M{i}_"} for i in range(1, 6)]
+    p = py_l5x.load(str(FIX / "example.L5X"))
+    for prog_spec in stamp(base_prog, instances):
+        p.programs.add(prog_spec, task="MainTask")
+    for m in instances:
+        for t in (
+            stamp(base_tags[0], [m])
+            + stamp(base_tags[1], [m])
+            + stamp(base_tags[2], [m])
+        ):
+            p.controller_tags.add(
+                t.name, t.data_type, description=t.description or None, value=t.value
+            )
+    d = HERE / "exp25"
+    d.mkdir(exist_ok=True)
+    p.write(d / "stamped.L5X")
+    e = Exp("exp25", base="C:/Users/zwood/ldsdk/projects/exp25/stamped.L5X")
+    e.files = {"stamped.L5X": (d / "stamped.L5X").read_bytes()}
+    e.raw(id="build", op="build")
+    e.export("motor3", PR("Motor3"))
+    e.export("motor5_delay", PT("Motor5", "M5_Delay"))
+    e.write()
+    # component: Motor4 exported by py_l5x (pulls Motor4_* controller tags + Debounce) into the example base
+    x = Exp("exp25b")
+    x.files = {
+        "motor4.L5X": py_l5x.writer.to_bytes(p.export(p.programs["Motor4"]).root)
+    }
+    x.steps.append(
+        {
+            "id": "C1_motor4_component",
+            "op": "import",
+            "file": "motor4.L5X",
+            "xpath": "Controller",
+            "coll": "overwrite",
+        }
+    )
+    x.raw(id="build", op="build")
+    x.export("motor4", PR("Motor4"))
+    x.write()
+
+
 if __name__ == "__main__":
     for name in sys.argv[1:]:
         globals()[name]()

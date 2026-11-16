@@ -23,6 +23,8 @@ from py_l5x.build import (
     build_program,
     build_tag,
     export_component,
+    stamp,
+    substitute,
 )
 from py_l5x.parse import load, loads
 from py_l5x.parsers.aoi import (
@@ -156,6 +158,8 @@ __all__ = [
     "build_program",
     "build_tag",
     "export_component",
+    "stamp",
+    "substitute",
     "load",
     "loads",
 ]

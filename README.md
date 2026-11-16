@@ -945,6 +945,22 @@ project.export(spec).write(
 
 Modules are included as references, like Studio does: the target project must already have them, or tags such as `Local:1:I` stay unresolved. Cross-program references (`\Program.Tag`) are not followed.
 
+### Templating repeated programs
+
+`substitute()` returns a copy of any spec with plain-text replacements applied to every string value (names, rung text, ST, descriptions, comments, string values). `stamp()` makes one copy per mapping. Replacements happen in a single pass, longest key first, so `{"Motor1": ..., "M1_": ...}` behaves predictably and results never cascade. Dict keys (member names such as `"PRE"`, operand paths) are left alone unless you pass `keys=True`.
+
+```python
+from py_l5x import stamp
+
+base = project.programs["Motor1"].to_spec()
+for spec in stamp(
+    base, [{"Motor1": f"Motor{i}", "M1_": f"M{i}_"} for i in range(2, 11)]
+):
+    project.programs.add(spec, task="MainTask")
+```
+
+Matching is plain, case-sensitive substring matching, so choose keys that can't appear in unrelated text.
+
 ### Adding, removing and renaming
 
 ```python
@@ -1152,4 +1168,4 @@ uv run ruff check --fix .   # auto-fix where possible
 - [x] Build, add, replace, rename and remove AOIs, migrating existing tag data and protecting call sites
 - [x] Build programs and tags from specs; add, replace, rename, remove and schedule programs
 - [x] Component export: write a target with its dependencies as a standalone import file
-- [ ] Templating repeated programs (name/tag substitution)
+- [x] Templating repeated programs (`substitute` / `stamp`)
