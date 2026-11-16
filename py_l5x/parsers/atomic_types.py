@@ -16,8 +16,10 @@ from __future__ import annotations
 
 import math
 import re
+import struct
 from collections.abc import Mapping
 from dataclasses import dataclass
+from decimal import ROUND_DOWN, Decimal
 from types import MappingProxyType
 from typing import Literal
 
@@ -285,3 +287,361 @@ def parse_float_literal(text: str) -> float:
     if upper == "-1.#INF":
         return -math.inf
     return float(text)
+
+
+# ----------------------------------------------------------------------
+# Formatting (the inverse of the parsers above)
+# ----------------------------------------------------------------------
+
+#: Literal prefix required for each time/datetime type.
+TIME_PREFIXES: Mapping[str, str] = MappingProxyType(
+    {"TIME32": "T32#", "TIME": "T#", "LTIME": "LT#", "DT": "DT#", "LDT": "LDT#"}
+)
+
+#: Radix Studio gives a tag of each non-integer type when none is stated.
+#: Integer and BOOL types use ``"Decimal"``.
+_DEFAULT_RADIX: dict[str, str] = {
+    "REAL": "Float",
+    "LREAL": "Float",
+    "TIME32": "Time32 (us)",
+    "TIME": "Time (us)",
+    "LTIME": "LTime (ns)",
+    "DT": "Date/Time",
+    "LDT": "Date/Time (ns)",
+}
+
+
+def default_radix(data_type: str) -> str | None:
+    """Return the radix Studio uses for a tag of an atomic type by default.
+
+    Args:
+        data_type: The atomic type name (case-insensitive).
+
+    Returns:
+        ``"Decimal"`` for integers and BOOL, ``"Float"`` for REAL/LREAL, the
+        time/date-time radix names (for example ``"Time (us)"``) for those
+        types, or ``None`` if *data_type* is not atomic.
+    """
+    name = data_type.upper()
+    if name in _DEFAULT_RADIX:
+        return _DEFAULT_RADIX[name]
+    info = ATOMIC_TYPES.get(name)
+    return "Decimal" if info is not None else None
+
+
+#: Exponent (base 10) range written positionally by the Float radix.
+_POSITIONAL_EXP_RANGE = range(-4, 16)
+
+
+def _group(digits: str, size: int) -> str:
+    """Group *digits* in chunks of *size* from the right, joined by ``_``.
+
+    Args:
+        digits: The digit string.
+        size: Chunk size.
+
+    Returns:
+        The grouped string (the leftmost chunk may be shorter).
+    """
+    head = len(digits) % size
+    chunks = [digits[:head]] if head else []
+    chunks += [digits[i : i + size] for i in range(head, len(digits), size)]
+    return "_".join(chunks)
+
+
+def _escape_byte(byte: int) -> str:
+    """Return the Logix string-literal form of one byte.
+
+    Args:
+        byte: The byte value (0-255).
+
+    Returns:
+        The character for printable ASCII (with ``$`` and ``'`` escaped),
+        otherwise ``$HH`` with upper-case hex.
+    """
+    if byte == 0x24:
+        return "$$"
+    if byte == 0x27:
+        return "$'"
+    if 0x20 <= byte <= 0x7E:
+        return chr(byte)
+    return f"${byte:02X}"
+
+
+def format_integer_literal(value: int, info: AtomicInfo, radix: str | None) -> str:
+    """Format an integer the way Studio exports it for a given radix.
+
+    Args:
+        value: The integer to format. ``bool`` is rejected.
+        info: The ``AtomicInfo`` of the (integer) target type.
+        radix: ``"Hex"``, ``"Octal"``, ``"Binary"`` or ``"ASCII"`` (matched
+            case-insensitively); anything else, including ``None``, is
+            decimal.
+
+    Returns:
+        The literal text: ``"255"``, ``"16#0000_00ff"``, ``"8#000_377"``,
+        ``"2#0000_1111"`` or ``"'$00$FF'"``.
+
+    Raises:
+        TypeError: If *value* is not an ``int`` (or is a ``bool``).
+        ValueError: If *value* is outside the range of the type.
+    """
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{info.name} value must be an int, not {type(value).__name__}")
+    if (
+        info.min is not None
+        and info.max is not None
+        and not info.min <= value <= info.max
+    ):
+        raise ValueError(f"{value} out of range for {info.name}")
+    pattern = value & (2**info.bit_width - 1)
+    kind = (radix or "").lower()
+    if kind == "hex":
+        digits = f"{pattern:0{info.bit_width // 4}x}"
+        return "16#" + _group(digits, 4)
+    if kind == "octal":
+        digits = f"{pattern:0{-(-info.bit_width // 3)}o}"
+        return "8#" + _group(digits, 3)
+    if kind == "binary":
+        return "2#" + _group(f"{pattern:0{info.bit_width}b}", 4)
+    if kind == "ascii":
+        raw = pattern.to_bytes(info.bit_width // 8, "big")
+        return "'" + "".join(_escape_byte(b) for b in raw) + "'"
+    return str(value)
+
+
+def _exponential(value: float, digits: int, *, truncate: bool = False) -> str:
+    """Format *value* in Logix exponential form with a 3-digit exponent.
+
+    Args:
+        value: The finite float to format.
+        digits: Digits after the decimal point in the mantissa.
+        truncate: Cut the exact decimal expansion instead of rounding it.
+            Studio's LREAL exports do this (``0.1`` is written
+            ``1.0000000000000000e-001``, not ``...0001e-001``). The
+            truncated text is used only when it still parses back to
+            *value*; otherwise the rounded text is used.
+
+    Returns:
+        Text such as ``"1.50000000e+000"``.
+    """
+    if truncate and value:
+        exact = Decimal(value)
+        exponent = exact.adjusted()
+        mantissa = exact.scaleb(-exponent).quantize(
+            Decimal(1).scaleb(-digits), rounding=ROUND_DOWN
+        )
+        if float(f"{mantissa}e{exponent}") == value:
+            sign = "-" if exponent < 0 else "+"
+            return f"{mantissa}e{sign}{abs(exponent):03d}"
+    mantissa, exponent = f"{value:.{digits}e}".split("e")
+    return f"{mantissa}e{'-' if exponent[0] == '-' else '+'}{abs(int(exponent)):03d}"
+
+
+def _to_float32(value: float) -> float:
+    """Round *value* to the nearest float32.
+
+    Args:
+        value: The float to round.
+
+    Returns:
+        The float32-representable value.
+
+    Raises:
+        ValueError: If *value* is too large for float32.
+    """
+    try:
+        return struct.unpack("<f", struct.pack("<f", value))[0]
+    except OverflowError:
+        raise ValueError(f"{value} does not fit in a REAL") from None
+
+
+def _decimal_text(value: float, single: bool) -> str:
+    """Return the decimal text used to write a float.
+
+    LREAL values use :func:`repr`. REAL values do too, unless that needs
+    more than nine significant digits (more than a float32 can hold); then
+    the shortest decimal that round-trips through float32 is used instead.
+
+    Args:
+        value: A finite float that fits the target type.
+        single: Whether the target is a REAL (float32) rather than a LREAL.
+
+    Returns:
+        Text that :class:`~decimal.Decimal` can parse (for example
+        ``"1e-10"`` or ``"0.30000000000000004"``).
+    """
+    text = repr(value)
+    if single and len(Decimal(text).normalize().as_tuple().digits) > 9:
+        rounded = _to_float32(value)
+        for precision in range(9):
+            text = f"{rounded:.{precision}e}"
+            if _to_float32(float(text)) == rounded:
+                break
+    return text
+
+
+def format_float_literal(value: int | float, data_type: str, radix: str | None) -> str:
+    """Format a REAL/LREAL the way Studio exports it for a given radix.
+
+    ``"Exponential"`` gives a mantissa with 8 (REAL) or 16 (LREAL) decimals
+    and a 3-digit exponent (``1.50000000e+000``). Any other radix (normally
+    ``"Float"``) gives the shortest decimal text (see :func:`_decimal_text`),
+    written positionally with at least one decimal when its decimal exponent
+    is from -4 to 15 (``1.5``, ``16777216.0``) and in exponential form
+    otherwise. REAL values must fit in float32 but are *not* rounded to it:
+    Studio's exports show the decimal of the value as entered.
+
+    Args:
+        value: The number to format. ``bool`` is rejected.
+        data_type: ``"REAL"`` or ``"LREAL"`` (case-insensitive).
+        radix: The node radix.
+
+    Returns:
+        The literal text.
+
+    Raises:
+        TypeError: If *value* is not an ``int`` or ``float``.
+        ValueError: If *value* is not finite or does not fit the type.
+    """
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise TypeError(
+            f"{data_type} value must be an int or float, not {type(value).__name__}"
+        )
+    try:
+        number = float(value)
+    except OverflowError:
+        raise ValueError(f"{value} does not fit in a {data_type}") from None
+    if not math.isfinite(number):
+        raise ValueError(f"{data_type} value must be finite")
+    single = data_type.upper() != "LREAL"
+    if single:
+        _to_float32(number)
+    text = _decimal_text(number, single)
+    decimal = Decimal(text)
+    if (radix or "").lower() != "exponential" and (
+        decimal.adjusted() in _POSITIONAL_EXP_RANGE
+    ):
+        positional = format(decimal, "f")
+        return positional if "." in positional else positional + ".0"
+    return _exponential(float(text), 8 if single else 16, truncate=not single)
+
+
+def format_time_literal(value: str, data_type: str) -> str:
+    """Validate a TIME/DT-family literal and return it unchanged.
+
+    Args:
+        value: The literal (for example ``"T#5s"``).
+        data_type: One of ``TIME32``, ``TIME``, ``LTIME``, ``DT``, ``LDT``.
+
+    Returns:
+        *value* as given.
+
+    Raises:
+        TypeError: If *value* is not a ``str`` or the type is unknown.
+        ValueError: If *value* lacks the type's literal prefix.
+    """
+    prefix = TIME_PREFIXES.get(data_type.upper())
+    if prefix is None:
+        raise TypeError(f"{data_type} values are not writable")
+    if not isinstance(value, str):
+        raise TypeError(
+            f"{data_type} value must be a str literal, not {type(value).__name__}"
+        )
+    if not value.startswith(prefix):
+        raise ValueError(f"{data_type} literal must start with {prefix!r}: {value!r}")
+    return value
+
+
+#: Escapes Studio writes for control characters in string literals.
+_STRING_ESCAPES: dict[int, str] = {
+    0x0A: "$l",
+    0x0D: "$r",
+    0x09: "$t",
+    0x0C: "$p",
+    0x24: "$$",
+    0x27: "$'",
+}
+
+#: Decoded form of each single-letter string escape (matched case-insensitively).
+_STRING_LETTER_ESCAPES: dict[str, str] = {
+    "L": "\n",
+    "N": "\r\n",
+    "R": "\r",
+    "T": "\t",
+    "P": "\f",
+    "$": "$",
+    "'": "'",
+}
+
+
+def parse_string_literal(text: str) -> str:
+    """Decode the text of a Logix string literal.
+
+    Surrounding whitespace and one pair of single quotes are removed, then
+    escapes are decoded (letters case-insensitively): ``$$``, ``$'``,
+    ``$L`` (newline), ``$N`` (CR LF), ``$R``, ``$T``, ``$P`` (form feed) and
+    ``$hh`` (two hex digits, one character). A ``$`` that does not start a
+    valid escape is kept as is.
+
+    Args:
+        text: The raw CDATA text (for example ``"'SRVO-003'"``).
+
+    Returns:
+        The decoded string. Unquoted text is decoded too.
+    """
+    text = text.strip()
+    if len(text) >= 2 and text[0] == "'" and text[-1] == "'":
+        text = text[1:-1]
+    out: list[str] = []
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if ch == "$" and i + 1 < len(text):
+            nxt = text[i + 1]
+            if nxt.upper() in _STRING_LETTER_ESCAPES:
+                out.append(_STRING_LETTER_ESCAPES[nxt.upper()])
+                i += 2
+                continue
+            pair = text[i + 1 : i + 3]
+            if len(pair) == 2 and all(c in _HEX_DIGITS for c in pair):
+                out.append(chr(int(pair, 16)))
+                i += 3
+                continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def format_string_literal(text: str) -> str:
+    """Return the quoted Logix literal for a string, as Studio canonicalizes it.
+
+    Newline, CR, tab and form feed become ``$l``, ``$r``, ``$t`` and ``$p``;
+    ``$`` and ``'`` become ``$$`` and ``$'``; other characters below 0x20 or
+    in 0x7F-0xFF become ``$HH`` (upper-case hex); printable ASCII, including
+    ``"``, is written as is.
+
+    Args:
+        text: The string. Every character must be at most U+00FF.
+
+    Returns:
+        The text in single quotes with escapes applied.
+
+    Raises:
+        TypeError: If *text* is not a ``str``.
+        ValueError: If a character is above U+00FF.
+    """
+    if not isinstance(text, str):
+        raise TypeError(f"string value must be a str, not {type(text).__name__}")
+    out: list[str] = []
+    for ch in text:
+        code = ord(ch)
+        if code > 0xFF:
+            raise ValueError(f"character {ch!r} is outside Latin-1")
+        if code in _STRING_ESCAPES:
+            out.append(_STRING_ESCAPES[code])
+        elif 0x20 <= code <= 0x7E:
+            out.append(ch)
+        else:
+            out.append(f"${code:02X}")
+    return "'" + "".join(out) + "'"

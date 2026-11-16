@@ -27,7 +27,9 @@ tag members.
 
 from __future__ import annotations
 
-from typing import cast
+import dataclasses
+import re
+from typing import TYPE_CHECKING, NamedTuple, cast
 from xml.etree import ElementTree as ET
 
 from py_l5x.parsers.base import (
@@ -37,7 +39,10 @@ from py_l5x.parsers.base import (
     bool_attr,
     str_attr,
 )
+from py_l5x.parsers.datatype import find_type_users
+from py_l5x.parsers.names import validate_new_name
 from py_l5x.parsers.routine import RoutinesCollection
+from py_l5x.parsers.schema import insert_child, insert_child_at, remove_child
 from py_l5x.parsers.tag import (
     ArrayNode,
     AtomicNode,
@@ -55,6 +60,10 @@ from py_l5x.parsers.tag import (
     _RootMetadataMixin,
     _TagOverrides,
 )
+from py_l5x.parsers.utils import CDATA_TAG
+
+if TYPE_CHECKING:
+    from py_l5x.build.specs import AOISpec
 
 
 class _AOIDefinitionTag(_RootMetadataMixin, BaseElement):
@@ -395,13 +404,357 @@ class AOIDefinition(BaseElement):
         print(text)
         return text
 
+    #: Child elements ``to_spec`` can represent.
+    _SPEC_CHILDREN = frozenset(
+        {
+            "Description",
+            "RevisionNote",
+            "AdditionalHelpText",
+            "Parameters",
+            "LocalTags",
+            "Routines",
+            "Dependencies",
+        }
+    )
+
+    #: Elements that mark a protected (encrypted or sealed) AOI. Their payload
+    #: cannot be read back, so ``to_spec`` refuses such definitions.
+    _PROTECTED_CHILDREN = frozenset(
+        {"EncodedData", "EncryptionInfo", "EncryptionConfig"}
+    )
+
+    def to_spec(self) -> AOISpec:
+        """Convert this definition to a spec that rebuilds it.
+
+        ``EnableIn`` and ``EnableOut`` are dropped (the builder re-adds them),
+        as are L5K blocks. Descriptions, comments and code are read as raw
+        CDATA text. A default equal to the type's default is stored as
+        ``None``, as are ``required`` and ``visible`` equal to their derived
+        values (``InOut``: both true; Input/Output: required false, visible
+        equal to required), a radix and an external access equal to the default,
+        and ``Execute*`` flags equal to "a routine of that name exists";
+        anything else is kept. ``metadata`` gets every other attribute
+        (``Class``, dates, ...) except ``Use``.
+
+        Returns:
+            An :class:`~py_l5x.build.specs.AOISpec`.
+
+        Raises:
+            ValueError: For a protected or encrypted AOI, an unsupported
+                child element, a non-RLL/ST routine, a multi-dimensional or
+                constant parameter, or an unreadable parameter.
+        """
+        from py_l5x.build.aoi import python_default
+        from py_l5x.build.specs import (
+            AOISpec,
+            LocalTagSpec,
+            ParameterSpec,
+            RoutineSpec,
+            RungSpec,
+        )
+        from py_l5x.parsers.atomic_types import ATOMIC_TYPES, default_radix
+        from py_l5x.parsers.migrate import _raw_cdata
+
+        element = self._element
+        for child in element:
+            if child.tag in self._PROTECTED_CHILDREN:
+                raise ValueError(
+                    f"AOI {self.name!r} is protected ({child.tag}); "
+                    "its definition cannot be read"
+                )
+            if child.tag not in self._SPEC_CHILDREN:
+                raise ValueError(f"AOI {self.name!r}: unsupported element {child.tag}")
+
+        def text(parent: ET.Element, tag: str) -> str:
+            found = parent.find(tag)
+            return _raw_cdata(found) if found is not None else ""
+
+        def plain(parent: ET.Element, container: str, tag: str) -> str:
+            for entry in parent.findall(f"{container}/{tag}"):
+                if "Operand" not in entry.attrib:
+                    return _raw_cdata(entry)
+            return ""
+
+        def dimension(item: ET.Element) -> int:
+            sizes = item.get("Dimensions", "").replace(",", " ").split()
+            if len(sizes) > 1:
+                raise ValueError(f"{item.get('Name')!r}: multi-dimensional arrays")
+            return int(sizes[0]) if sizes else 0
+
+        registry = self._type_registry
+        parameters = []
+        for pe in element.findall("Parameters/Parameter"):
+            name = pe.get("Name", "")
+            if name in ("EnableIn", "EnableOut"):
+                continue
+            if pe.get("Constant") == "true":
+                raise ValueError(f"parameter {name!r}: constant parameters")
+            usage = pe.get("Usage", "Input")
+            data_type = pe.get("DataType", "")
+            radix = pe.get("Radix")
+            if radix is not None and radix == default_radix(data_type):
+                radix = None
+            access = pe.get("ExternalAccess")
+            if access == {"Input": "Read/Write", "Output": "Read Only"}.get(usage):
+                access = None
+            default = None
+            if usage != "InOut":
+                node = self.parameters[name]
+                if hasattr(node, "to_python"):
+                    value = node.to_python()
+                    base = python_default(
+                        data_type,
+                        0,
+                        pe.get("Radix") or default_radix(data_type),
+                        registry,
+                    )
+                    default = None if value == base else value
+            required = pe.get("Required") == "true"
+            visible = pe.get("Visible") == "true"
+            derived_required = usage == "InOut"
+            derived_visible = usage == "InOut" or required
+            parameters.append(
+                ParameterSpec(
+                    name=name,
+                    data_type=data_type,
+                    usage=usage,
+                    required=None if required == derived_required else required,
+                    visible=None if visible == derived_visible else visible,
+                    dimension=dimension(pe),
+                    description=text(pe, "Description"),
+                    default=default,
+                    radix=radix,
+                    external_access=access,
+                    engineering_unit=plain(pe, "EngineeringUnits", "EngineeringUnit"),
+                    min=pe.get("Min"),
+                    max=pe.get("Max"),
+                    state0=plain(pe, "State0s", "State0"),
+                    state1=plain(pe, "State1s", "State1"),
+                    operand_comments={
+                        c.get("Operand", ""): _raw_cdata(c)
+                        for c in pe.findall("Comments/Comment")
+                    },
+                )
+            )
+
+        local_tags = []
+        for le in element.findall("LocalTags/LocalTag"):
+            name = le.get("Name", "")
+            data_type = le.get("DataType", "")
+            size = dimension(le)
+            radix = le.get("Radix")
+            if radix is not None and radix == default_radix(data_type):
+                radix = None
+            default = None
+            node = self.local_tags[name]
+            if hasattr(node, "to_python"):
+                value = node.to_python()
+                base_radix = le.get("Radix") or (
+                    default_radix(data_type) if data_type in ATOMIC_TYPES else None
+                )
+                base = python_default(data_type, size, base_radix, registry)
+                default = None if value == base else value
+            local_tags.append(
+                LocalTagSpec(
+                    name=name,
+                    data_type=data_type,
+                    dimension=size,
+                    description=text(le, "Description"),
+                    default=default,
+                    radix=radix,
+                    external_access=le.get("ExternalAccess", "Read/Write"),
+                )
+            )
+
+        routines = []
+        for re_ in element.findall("Routines/Routine"):
+            kind = re_.get("Type", "")
+            if kind not in ("RLL", "ST"):
+                raise ValueError(
+                    f"routine {re_.get('Name')!r}: unsupported type {kind}"
+                )
+            routines.append(
+                RoutineSpec(
+                    name=re_.get("Name", ""),
+                    type_=kind,
+                    rungs=[
+                        RungSpec(text(r, "Text"), text(r, "Comment"))
+                        for r in re_.findall("RLLContent/Rung")
+                    ],
+                    lines=[_raw_cdata(line) for line in re_.findall("STContent/Line")],
+                    description=text(re_, "Description"),
+                )
+            )
+
+        present = {r.name for r in routines}
+
+        def flag(attribute: str, routine: str) -> bool | None:
+            value = element.get(attribute) == "true"
+            return None if value == (routine in present) else value
+
+        known = {
+            "Name",
+            "Revision",
+            "Vendor",
+            "ExecutePrescan",
+            "ExecutePostscan",
+            "ExecuteEnableInFalse",
+            "Use",
+        }
+        return AOISpec(
+            name=self.name,
+            parameters=parameters,
+            local_tags=local_tags,
+            routines=routines,
+            revision=element.get("Revision", ""),
+            revision_note=text(element, "RevisionNote"),
+            description=text(element, "Description"),
+            vendor=element.get("Vendor", ""),
+            execute_prescan=flag("ExecutePrescan", "Prescan"),
+            execute_postscan=flag("ExecutePostscan", "Postscan"),
+            execute_enable_in_false=flag("ExecuteEnableInFalse", "EnableInFalse"),
+            additional_help_text=text(element, "AdditionalHelpText"),
+            metadata={k: v for k, v in element.attrib.items() if k not in known},
+        )
+
     def __repr__(self) -> str:
         """Return a concise representation including the AOI name."""
         return f"{type(self).__name__}({self.name!r})"
 
 
+class CallSite(NamedTuple):
+    """One place where an Add-On Instruction is called.
+
+    Attributes:
+        container_kind: ``"program"`` or ``"aoi"``.
+        container: The program or AOI name.
+        routine: The routine name.
+        language: ``"RLL"`` or ``"ST"``.
+        number: The rung number (RLL) or line number (ST).
+        text: The rung text or the ST line.
+    """
+
+    container_kind: str
+    container: str
+    routine: str
+    language: str
+    number: int
+    text: str
+
+    def describe(self) -> str:
+        """Describe the location for messages.
+
+        Returns:
+            For example ``"program MainProgram routine Main rung 3"``.
+        """
+        place = "rung" if self.language == "RLL" else "line"
+        return (
+            f"{self.container_kind} {self.container} routine {self.routine} "
+            f"{place} {self.number}"
+        )
+
+
+def _mask(text: str, st: bool) -> str:
+    """Blank out string literals (and ST comments) so calls inside them are
+    ignored.
+
+    Args:
+        text: Rung text or joined ST lines.
+        st: Whether *text* is structured text (``//`` and ``(* *)`` comments).
+
+    Returns:
+        A string of the same length with those parts replaced by spaces
+        (newlines kept).
+    """
+    out = list(text)
+    length = len(text)
+
+    def blank(start: int, end: int) -> None:
+        for k in range(start, min(end, length)):
+            if text[k] != "\n":
+                out[k] = " "
+
+    i = 0
+    while i < length:
+        char = text[i]
+        if char == "'":
+            j = i + 1
+            while j < length and text[j] != "'":
+                j += 2 if text[j] == "$" else 1
+            blank(i + 1, j)
+            i = j + 1
+        elif st and text.startswith("(*", i):
+            j = text.find("*)", i + 2)
+            j = length if j < 0 else j + 2
+            blank(i, j)
+            i = j
+        elif st and text.startswith("//", i):
+            j = text.find("\n", i)
+            j = length if j < 0 else j
+            blank(i, j)
+            i = j
+        else:
+            i += 1
+    return "".join(out)
+
+
+def _call_pattern(name: str) -> re.Pattern[str]:
+    """Compile the pattern matching calls of an AOI.
+
+    The name must sit on identifier boundaries, must not follow a ``.``
+    (so ``x.Name(`` is not a call), and must be followed by optional
+    whitespace and ``(``. Matching ignores case, as Logix does.
+
+    Args:
+        name: The AOI name.
+
+    Returns:
+        A pattern whose match is exactly the name.
+    """
+    return re.compile(
+        rf"(?<![A-Za-z0-9_.]){re.escape(name)}(?![A-Za-z0-9_])(?=\s*\()",
+        re.IGNORECASE,
+    )
+
+
+def _logic(controller: ET.Element):
+    """Iterate every routine of every AOI and program.
+
+    Args:
+        controller: The ``<Controller>`` element.
+
+    Yields:
+        ``(kind, container name, routine element)``.
+    """
+    for aoi in controller.findall(
+        "AddOnInstructionDefinitions/AddOnInstructionDefinition"
+    ):
+        for routine in aoi.findall("Routines/Routine"):
+            yield "aoi", aoi.get("Name", ""), routine
+    for program in controller.findall("Programs/Program"):
+        for routine in program.findall("Routines/Routine"):
+            yield "program", program.get("Name", ""), routine
+
+
+def _rung_text_element(rung: ET.Element) -> ET.Element | None:
+    """Return the CDATA element holding a rung's text.
+
+    Args:
+        rung: A ``<Rung>``.
+
+    Returns:
+        The ``CDataContent`` child of ``<Text>``, or ``None``.
+    """
+    text = rung.find("Text")
+    return None if text is None else text.find(CDATA_TAG)
+
+
 class AOICollection(BaseCollection[AOIDefinition]):
     """A ``Mapping`` over every ``<AddOnInstructionDefinition>`` by name.
+
+    Besides reading, the collection can add, replace, rename and remove
+    instructions and list their call sites (:meth:`add`, :meth:`replace`,
+    :meth:`rename`, :meth:`remove`, :meth:`call_sites`).
 
     Args:
         controller_element: The root XML element of the controller/project.
@@ -423,6 +776,402 @@ class AOICollection(BaseCollection[AOIDefinition]):
             AOIDefinition,
             item_args=(type_registry,),
         )
+        self._registry = type_registry
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _find_element(self, name: str) -> ET.Element:
+        """Return the AOI element with exactly this name.
+
+        Args:
+            name: The AOI name.
+
+        Returns:
+            The element.
+
+        Raises:
+            KeyError: If there is no such AOI.
+        """
+        for element in self._children():
+            if element.get("Name") == name:
+                return element
+        raise KeyError(name)
+
+    def _taken_names(self, ignore: str | None = None) -> list[str]:
+        """List every name an AOI may not take.
+
+        Args:
+            ignore: A name to leave out (the AOI being renamed).
+
+        Returns:
+            Project UDT and AOI names, built-in table types and atomic types.
+        """
+        from py_l5x.parsers.atomic_types import ATOMIC_TYPES
+        from py_l5x.parsers.layout import builtin_table
+
+        names = [*self._registry.type_names(), *builtin_table(), *ATOMIC_TYPES]
+        return [n for n in names if n != ignore]
+
+    def _check_name(self, name: str, ignore: str | None = None) -> None:
+        """Validate a new AOI name (rules plus collisions ignoring case).
+
+        Args:
+            name: The proposed name.
+            ignore: A name to leave out of the collision check.
+
+        Raises:
+            ValueError: If the name is invalid or taken.
+        """
+        validate_new_name(name, self._taken_names(ignore), "add-on instruction")
+
+    def _check_types(self, spec: AOISpec) -> None:
+        """Check that every parameter and local tag type resolves.
+
+        Args:
+            spec: The spec.
+
+        Raises:
+            ValueError: If a type is not atomic, built-in, a project UDT or
+                an AOI, or is the AOI itself.
+        """
+        from py_l5x.parsers.atomic_types import ATOMIC_TYPES
+        from py_l5x.parsers.layout import builtin_table
+
+        for item in [*spec.parameters, *spec.local_tags]:
+            kind = item.data_type
+            if kind == spec.name:
+                raise ValueError(f"{item.name!r} cannot be of its own type")
+            if (
+                kind in ATOMIC_TYPES
+                or kind in builtin_table()
+                or self._registry.udt(kind) is not None
+                or self._registry.aoi(kind) is not None
+            ):
+                continue
+            raise ValueError(f"{item.name!r}: unknown data type {kind!r}")
+
+    def _container(self) -> ET.Element:
+        """Return ``Controller/AddOnInstructionDefinitions``, creating it.
+
+        Returns:
+            The container element.
+        """
+        container = self._parent.find("AddOnInstructionDefinitions")
+        if container is None:
+            container = ET.Element("AddOnInstructionDefinitions")
+            insert_child(self._parent, container)
+        return container
+
+    # ------------------------------------------------------------------
+    # Call sites
+    # ------------------------------------------------------------------
+
+    def call_sites(self, name: str) -> list[CallSite]:
+        """List every place an instruction is called.
+
+        Searches the RLL rung text and the ST lines of every program and AOI
+        routine. A call is the name followed by optional spaces and ``(``,
+        on identifier boundaries, not preceded by ``.``, and outside string
+        literals and ST comments. Matching ignores case. A tag or member
+        merely named like the instruction (``Name_state``, ``x.Name``,
+        ``XIC(Name)``) is not a call.
+
+        Args:
+            name: The AOI name.
+
+        Returns:
+            The call sites in document order (AOIs, then programs); a rung or
+            line with several calls is listed once.
+        """
+        pattern = _call_pattern(name)
+        sites: list[CallSite] = []
+        for kind, container, routine in _logic(self._parent):
+            routine_name = routine.get("Name", "")
+            for rung in routine.findall("RLLContent/Rung"):
+                holder = _rung_text_element(rung)
+                text = (holder.text or "") if holder is not None else ""
+                if pattern.search(_mask(text, st=False)):
+                    sites.append(
+                        CallSite(
+                            kind,
+                            container,
+                            routine_name,
+                            "RLL",
+                            int(rung.get("Number", "0")),
+                            text,
+                        )
+                    )
+            lines = routine.findall("STContent/Line")
+            if lines:
+                texts = [self._line_text(line) for line in lines]
+                masked = _mask("\n".join(texts), st=True).split("\n")
+                for line, text, view in zip(lines, texts, masked, strict=True):
+                    if pattern.search(view):
+                        sites.append(
+                            CallSite(
+                                kind,
+                                container,
+                                routine_name,
+                                "ST",
+                                int(line.get("Number", "0")),
+                                text,
+                            )
+                        )
+        return sites
+
+    @staticmethod
+    def _line_text(line: ET.Element) -> str:
+        """Return an ST line's raw text.
+
+        Args:
+            line: A ``<Line>``.
+
+        Returns:
+            Its CDATA text.
+        """
+        holder = line.find(CDATA_TAG)
+        return (holder.text or "") if holder is not None else ""
+
+    def _rename_calls(self, old: str, new: str) -> None:
+        """Rewrite call sites of *old* to *new* in all logic.
+
+        Args:
+            old: The old AOI name.
+            new: The new AOI name.
+        """
+        pattern = _call_pattern(old)
+
+        def rewrite(text: str, st: bool) -> str:
+            masked = _mask(text, st)
+            spans = [m.span() for m in pattern.finditer(masked)]
+            return "".join(_splice(text, spans, new))
+
+        for _kind, _container, routine in _logic(self._parent):
+            for rung in routine.findall("RLLContent/Rung"):
+                holder = _rung_text_element(rung)
+                if holder is not None and holder.text:
+                    holder.text = rewrite(holder.text, False)
+            lines = routine.findall("STContent/Line")
+            holders = [line.find(CDATA_TAG) for line in lines]
+            if lines and all(h is not None for h in holders):
+                joined = "\n".join(h.text or "" for h in holders)
+                rewritten = rewrite(joined, True).split("\n")
+                for holder, text in zip(holders, rewritten, strict=True):
+                    holder.text = text
+
+    # ------------------------------------------------------------------
+    # Edits
+    # ------------------------------------------------------------------
+
+    def add(self, spec: AOISpec) -> AOIDefinition:
+        """Add an Add-On Instruction built from a spec.
+
+        The element comes from :func:`~py_l5x.build.aoi.build_aoi` and is
+        appended to ``Controller/AddOnInstructionDefinitions`` (created if
+        missing): Studio orders AOIs so that dependencies come first, and a
+        new AOI's dependencies already exist.
+
+        Calls made by the new logic are not checked: a missing instruction
+        cannot be told from an unknown mnemonic without Studio's instruction
+        table, so only parameter and local types are resolved.
+
+        Args:
+            spec: The instruction.
+
+        Returns:
+            The new definition.
+
+        Raises:
+            ValueError: If the spec is invalid, the name matches (ignoring
+                case) a UDT, an AOI, a built-in or an atomic type, or a
+                parameter or local tag type does not resolve.
+        """
+        from py_l5x.build.aoi import build_aoi
+
+        self._check_name(spec.name)
+        self._check_types(spec)
+        element = build_aoi(spec, self._registry)
+        container = self._container()
+        insert_child_at(container, len(container), element)
+        return self[spec.name]
+
+    def replace(
+        self, spec: AOISpec, *, allow_signature_change: bool = False
+    ) -> AOIDefinition:
+        """Replace an Add-On Instruction and migrate its existing data.
+
+        The definition is rebuilt in place. ``Class``, ``CreatedDate``,
+        ``CreatedBy`` and ``SoftwareRevision`` are kept unless
+        ``spec.metadata`` sets them; ``EditedDate`` and ``EditedBy`` are
+        removed unless the metadata sets them to something other than the
+        existing values (Studio stamps them on import, so the copies that
+        ``to_spec`` carries do not count).
+        Every instance of the AOI (``Structure``/``StructureMember`` with
+        this ``DataType``: Input and Output parameters only) is migrated by
+        parameter name with the conversion rules of
+        :func:`~py_l5x.parsers.migrate.convert_atomic_value`; new parameters
+        get the spec default. The change is all or nothing.
+
+        Studio does not fix call sites: a call is
+        ``Name(instance, <required parameters in order>)``, so changing the
+        required parameters breaks every call (the build fails with
+        ``RxCMP_E_AUDIT_INVALIDNOOFOPS``). If the required list changes and
+        the AOI is called anywhere, a ``ValueError`` lists the call sites
+        unless *allow_signature_change* is true; the call sites are then left
+        as they are.
+
+        Args:
+            spec: The new definition; ``spec.name`` selects the AOI.
+            allow_signature_change: Allow a changed required-parameter list
+                even if call sites exist.
+
+        Returns:
+            The replaced definition.
+
+        Raises:
+            KeyError: If there is no AOI of that name.
+            ValueError: If the spec is invalid, a type does not resolve, or
+                the signature changes while call sites exist.
+        """
+        from py_l5x.build.aoi import aoi_call_operands, build_aoi
+        from py_l5x.parsers.migrate import plan_instance_migration
+
+        existing = self._find_element(spec.name)
+        self._check_types(spec)
+        old_operands = aoi_call_operands(self[spec.name])
+        new_operands = aoi_call_operands(spec)
+        if old_operands != new_operands and not allow_signature_change:
+            sites = self.call_sites(spec.name)
+            if sites:
+                raise ValueError(
+                    f"the required parameters of {spec.name!r} change from "
+                    f"{old_operands} to {new_operands}, which breaks "
+                    f"{len(sites)} call site(s): "
+                    + "; ".join(site.describe() for site in sites)
+                    + " (pass allow_signature_change=True to replace anyway)"
+                )
+        metadata = {
+            key: value
+            for key, value in existing.attrib.items()
+            if key in ("Class", "CreatedDate", "CreatedBy", "SoftwareRevision")
+        }
+        for key, value in (spec.metadata or {}).items():
+            # EditedDate/EditedBy copied unchanged from the existing definition
+            # (as ``to_spec`` does) do not count as set: Studio re-stamps them.
+            if key in ("EditedDate", "EditedBy") and existing.get(key) == value:
+                continue
+            metadata[key] = value
+        merged = dataclasses.replace(spec, metadata=metadata)
+        fresh = build_aoi(merged, self._registry)
+        container = self._container()
+        index = list(container).index(existing)
+        fresh.tail = existing.tail
+        container[index] = fresh
+        try:
+            ops = plan_instance_migration(self._parent, self._registry, spec.name)
+        except BaseException:
+            container[index] = existing
+            raise
+        for op in ops:
+            op()
+        return self[spec.name]
+
+    def rename(self, old: str, new: str) -> AOIDefinition:
+        """Rename an Add-On Instruction and everything that refers to it.
+
+        Updates the ``Name``; the ``DataType`` attribute of tags (all scopes),
+        UDT members, AOI parameters and local tags, and of value trees;
+        ``<Dependency Type="AddOnInstructionDefinition">`` entries; and the
+        **call sites in RLL rung text and ST lines** (an AOI name is an
+        instruction in logic, so a rename that skipped logic would break the
+        project). Calls are matched as in :meth:`call_sites`, so tags named
+        like the instruction are untouched, and so are descriptions and
+        comments. The AOI keeps its position.
+
+        Args:
+            old: The current name.
+            new: The new name (same rules as :meth:`add`; the AOI itself is
+                ignored by the collision check, so a case-only change works).
+
+        Returns:
+            The renamed definition.
+
+        Raises:
+            KeyError: If *old* does not exist.
+            ValueError: If *new* is invalid or taken.
+        """
+        element = self._find_element(old)
+        self._check_name(new, ignore=old)
+        self._rename_calls(old, new)
+        element.set("Name", new)
+        for node in self._parent.iter():
+            if node.get("DataType") == old:
+                node.set("DataType", new)
+            elif (
+                node.tag == "Dependency"
+                and node.get("Type") == "AddOnInstructionDefinition"
+                and node.get("Name") == old
+            ):
+                node.set("Name", new)
+        return self[new]
+
+    def users(self, name: str) -> list[str]:
+        """List what uses an Add-On Instruction.
+
+        Args:
+            name: The AOI name.
+
+        Returns:
+            Tags, UDT members, other AOIs' parameters and local tags, and
+            call sites.
+        """
+        found = find_type_users(self._parent, name)
+        found.extend(f"call in {site.describe()}" for site in self.call_sites(name))
+        return found
+
+    def remove(self, name: str, *, force: bool = False) -> None:
+        """Delete an Add-On Instruction.
+
+        Args:
+            name: The AOI name.
+            force: Delete even if something uses it (tags, members, other
+                AOIs, call sites), leaving them dangling.
+
+        Raises:
+            KeyError: If there is no such AOI.
+            ValueError: If the AOI is in use (listing the users) and *force*
+                is false.
+        """
+        element = self._find_element(name)
+        users = self.users(name)
+        if users and not force:
+            raise ValueError(
+                f"add-on instruction {name!r} is in use by: " + ", ".join(users)
+            )
+        container = self._parent.find("AddOnInstructionDefinitions")
+        assert container is not None
+        remove_child(container, element)
+
+
+def _splice(text: str, spans: list[tuple[int, int]], replacement: str):
+    """Yield *text* with each span replaced.
+
+    Args:
+        text: The original text.
+        spans: Non-overlapping ``(start, end)`` pairs, in order.
+        replacement: The text to put in each span.
+
+    Yields:
+        The pieces of the new text.
+    """
+    position = 0
+    for start, end in spans:
+        yield text[position:start]
+        yield replacement
+        position = end
+    yield text[position:]
 
 
 # ------------------------------------------------------------------

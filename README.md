@@ -1,35 +1,35 @@
 # py_l5x
 
-A pythonic interface for reading Rockwell Automation L5X files.
+A pythonic interface for reading and writing Rockwell Automation L5X files.
 
 > [!IMPORTANT]
 > **⚠️ Work in Progress**: This project is currently under active development. APIs are subject to change, and not all features may be fully implemented or tested.
 
-`py_l5x` parses Rockwell Automation L5X exports from Studio 5000 Logix Designer and exposes the contents as a typed Python object hierarchy. It handles much of the file's quirks to create `dict` like collections of all your exports's tags, routines, modules, and the like. It also cross references different parts of the files to try and exposes as much metadata (comments, extended tag properties, etc.) as you'd expect to see in Studio 5000 but is spread across the `.L5X` file structure.
+`py_l5x` parses Rockwell Automation L5X exports from Studio 5000 Logix Designer and exposes the contents as a typed Python object hierarchy. It handles many of the file's quirks to create `dict`-like collections of all your export's tags, routines, modules, and the like. It also cross references different parts of the file to expose as much metadata (comments, extended tag properties, etc.) as you'd expect to see in Studio 5000 but is spread across the `.L5X` file structure.
 
 Both **full project exports** (a full PLC project) and **component exports** (a single Program, Routine, AOI, DataType, Module, Rung, etc.) are supported through the same `load()` function.
 
 > [!NOTE]
-> At this time, only reading L5X files is supported. Write support is planned in the future.  
-> Ladder Logic and Structure Text are the only supported languages for routine logic.
+> Write support (editing loaded files and generating new components) is new and only verified against Studio 5000 v37. See [Editing and writing L5X files](#editing-and-writing-l5x-files).  
+> Ladder Logic and Structured Text are the only supported languages for routine logic.
 
 ## Installation
 
 I don't yet have plans to upload this to PyPi. For now, download the latest `.whl` from the [releases](https://github.com/zwood16/py_l5x/releases) page and install it manually:
 
 ```bash
-pip install py_l5x-0.2.0-py3-none-any.whl
+pip install py_l5x-x.x.x-py3-none-any.whl
 ```
 
 or
 
 ```bash
-uv add py_l5x-0.2.0-py3-none-any.whl
+uv add py_l5x-x.x.x-py3-none-any.whl
 ```
 
 Or pull it straight from the Github release:
 
-```base
+```bash
 uv add https://github.com/zwood16/py_l5x/releases/download/v0.3.0/py_l5x-0.3.0-py3-none-any.whl
 ```
 
@@ -101,7 +101,7 @@ IntegerTag('an_int', 'INT')
   radix: 'Decimal'
 ```
 
-Attributes that are present in the XML but not modeled by a field or property are listed under `Extra Attributes:` if they are present. This will be more common on large structures like Servo Axes where it is hard to cover all possible members in all version of Studio 5000.
+Attributes that are present in the XML but not modeled by a field or property are listed under `Extra Attributes:` if they are present. This will be more common on large structures like Servo Axes where it is hard to cover all possible members in all versions of Studio 5000.
 
 ## Using Collections
 
@@ -111,7 +111,7 @@ For example: you can iterate through all keys (names) of every program in a proj
 
 ```python
 for name in project.programs:
-    print(name)     # loops over all keys
+    print(name)  # loops over all keys
 ```
 
 ```bash
@@ -141,7 +141,7 @@ main_program = project.programs["MainProgram"]
 main_program = project.programs.get("MainProgram")
 ```
 
-Many collections are nested in other objects following the [heirarchy shown above](#project-hierarchy). So using `main_program`, we can list all tags in that program or access a single one in the exact same way that programs were accessed:
+Many collections are nested in other objects following the [hierarchy shown above](#project-hierarchy). So using `main_program`, we can list all tags in that program or access a single one in the exact same way that programs were accessed:
 
 ```python
 # print all tags in MainProgram
@@ -168,7 +168,7 @@ TagsCollection([
 ])
 ```
 
-Then to access a single tag and get the the `description` defined on that tag:
+Then to access a single tag and get the `description` defined on that tag:
 
 ```python
 # Get the description from `a_commented_dint`
@@ -182,7 +182,7 @@ a dint with bit comments
 Or more directly you can chain together access:
 
 ```python
-print(project["MainProgram"].tags["a_commented_dint"].description)
+print(project.programs["MainProgram"].tags["a_commented_dint"].description)
 # prints the same thing as the previous example
 ```
 
@@ -251,7 +251,7 @@ testServo AXIS_CIP_DRIVE Base
 toSafety_reset BOOL Base
 ```
 
-Similarly, `project.tags` includes the [module I/O tags](#module-io-tags) using their derrived global names. This is what the Controller Tags menu in Studio 5000 would show:
+Similarly, `project.tags` includes the [module I/O tags](#module-io-tags) using their derived global names. This is what the Controller Tags menu in Studio 5000 would show:
 
 ```python
 # Check if the PLC has a local IO module with a configuration tag and print its type
@@ -264,7 +264,7 @@ True
 ModuleTagRef
 ```
 
-A [Program's](#programs-routines-and-rungs) local tags are nexted under the program in a `tags` property:
+A [Program's](#programs-routines-and-rungs) local tags are nested under the program in a `tags` property:
 
 ```python
 main_program = project.programs["MainProgram"]
@@ -367,7 +367,7 @@ bit(2): False  desc=''
 This is bit 10's description: this is bit 10
 ```
 
-These tags can also have extended tag properties. Booleans can have state labels and numerical values (floats and integers) and can have min and max values.
+These tags can also have extended tag properties. Booleans can have state labels, and numerical values (floats and integers) can have min and max values.
 
 ```python
 bool_tag = main_program.tags["a_bool_with_properties"]
@@ -382,7 +382,7 @@ False Off On
 12.3 -10.0 400.0
 ```
 
-Most properties (`description`, `engineering_unit`, `min`, `max`, `state0`, `state1`, `external_logging`) come from the tag-level `<Tag>` element in the L5X XML. Properties exist where they _can_ in the python objects of `py_l5x`, but the XML does not necessarily contain these values, so these values will be set to `None` or and empty string if the tag was not configured with these extended properties in Studio 5000. More specifically:
+Most properties (`description`, `engineering_unit`, `min`, `max`, `state0`, `state1`, `external_logging`) come from the tag-level `<Tag>` element in the L5X XML. Properties exist where they _can_ in the python objects of `py_l5x`, but the XML does not necessarily contain these values, so these values will be set to `None` or an empty string if the tag was not configured with these extended properties in Studio 5000. More specifically:
 
 - `min` and `max` are only populated when the tag sets them; the data type's natural range is not assumed, so they return `None` otherwise.
 - `description` and `engineering_unit` return `""` when absent (as do `state0` and `state1` on `BoolTag`),
@@ -420,7 +420,7 @@ StructTag('a_udt_instance', 'A_UDT')
   ]
 ```
 
-Members of structures can be accessed the same way as any other collection and will return the appropriate type type:
+Members of structures can be accessed the same way as any other collection and will return the appropriate type:
 
 ```python
 print(tag.members["a_sint_with_props"])
@@ -460,7 +460,7 @@ lint = 0
 
 ### Arrays
 
-Array tags, similar to structure, have `.elements` property will all values in the array. Additionally, `__len__`, `__iter__`, and subscript access are defined for `ArrayTag` meaning the array data can be accessed similar to a python list.
+Array tags, similar to structures, have an `.elements` property with all values in the array. Additionally, `__len__`, `__iter__`, and subscript access are defined for `ArrayTag` meaning the array data can be accessed similar to a python list.
 
 ```python
 arr_tag = main_program.tags["a_2d_array"]
@@ -470,8 +470,6 @@ print(arr_tag.dimensions)
 
 for i, element in enumerate(arr_tag.elements[:4]):
     print(f"[{i}] = {element.value}")
-
-
 ```
 
 ```bash
@@ -479,15 +477,15 @@ True
 6
 (2, 3)
 [0] = 0
-[1] = 10
-[2] = 12
-[3] = 33
+[1] = 0
+[2] = 0
+[3] = 0
 ```
 
 Multi-dimensional arrays are flattened, but can still be indexed with Logix style notation:
 
 ```python
-print(arr_tag[0].value)     # flat index
+print(arr_tag[0].value)  # flat index
 print(arr_tag[1, 2].value)  # row 1, column 2
 ```
 
@@ -537,14 +535,14 @@ DateTimeTag DT#1970-01-01-00:00:00.000_000Z us
 ```python
 string_tag = main_program.tags["a_string"]
 
-print(string_tag.value)
+print(repr(string_tag.value))
 print(string_tag.members["LEN"])
 ```
 
 ```bash
-Hello
+''
 IntegerNode('DINT', path='.LEN')
-  value: 5
+  value: 0
 ```
 
 > [!Note]
@@ -665,7 +663,7 @@ A task has its type, priority, rate and watchdog settings, and the names of the 
 task = project.tasks["MainTask"]
 print(task.type_)
 print(task.priority)
-print(task.rate)      # CONTINUOUS tasks have no fixed rate
+print(task.rate)  # CONTINUOUS tasks have no fixed rate
 print(task.watchdog)
 
 print("Programs:")
@@ -830,7 +828,7 @@ print(project.data_types)
 
 # or loop over them
 for name in project.data_types:
-    print(name)   # prints the same thing
+    print(name)  # prints the same thing
 ```
 
 ```bash
@@ -850,7 +848,6 @@ DataTypesCollection([
 The data type itself is just the definition, so it contains a fairly small list of properties and fields. The members of the structure are available under the `members` property which contains a collection of [tags](#tags), each of which can contain all the information a PLC tag can carry.
 
 ```python
-
 # Print the information in A_UDT
 udts = project.data_types
 
@@ -896,7 +893,7 @@ DataTypeMember('a_Bool', 'BIT')
 > [!NOTE]
 > At this time, nested structures cannot be drilled down into like tags. You cannot see `a_nested_UDT`'s members from within `A_UDT`. Same goes for nested AOI's or built-in structs like `TIMER`. This is a limitation of how L5X files stores UDT's without the child tag's members.
 >
-> As a workaround, either drill down in a tag instance or seach through `data_types` and `aois` for the member's tag type. Built-in type definitions can't be found anywhere in an L5X other than tag instances.
+> As a workaround, either drill down in a tag instance or search through `data_types` and `aois` for the member's tag type. Built-in type definitions can't be found anywhere in an L5X other than tag instances.
 
 ### Hidden Tags
 
@@ -916,7 +913,7 @@ BaseCollection([
 ])
 ```
 
-These are hidden tags that pad the UDT to fill in empty space. These can be largely ignored but are present as they are represented in the `L5X` XML.
+These are hidden `SINT` members that hold the UDT's `BOOL` members: Studio packs up to 8 consecutive BOOLs into each one, and the BOOLs show up as `BIT` members pointing at it (`target` and `bit_number`). They can be largely ignored, but are present as they are represented in the `L5X` XML.
 
 ## Add-On Instructions (AOIs)
 
@@ -957,7 +954,7 @@ onDelay: DINT (Input)
 offDelay: DINT (Input)
 ```
 
-Similarly, local tags (the AOI's internal variables) are in the `aoi.local_tags` property. Each one is a typed class like [tags](#tags) and parameters. So, for example, so you can use on `isinstance()` to check the type:
+Similarly, local tags (the AOI's internal variables) are in the `aoi.local_tags` property. Each one is a typed class like [tags](#tags) and parameters. So, for example, you can use `isinstance()` to check the type:
 
 ```python
 from py_l5x import AOILocalStructTag
@@ -977,7 +974,7 @@ debounceOffTimer: TIMER
   Members: ['PRE', 'ACC', 'EN', 'TT', 'DN']
 ```
 
-Both parameters and local tag type-classes mirror those used by [tags](#tags) with the notable exception that strings and structs are not allowed as Input or Output parameters for AOIs.
+Both parameters and local tag type-classes mirror those used by [tags](#tags) with the notable exception that strings, structs and arrays are not allowed as Input or Output parameters for AOIs.
 
 `InOut` parameters and EnableIn/EnableOut (which have no default data), are plain `AOIParameter` objects that expose identity only: `name`, `data_type`, `usage`, `required`, `visible`, `description`, `tag_type`, and `is_inout`. Their per-operand comments are still available through `operand_comments`, however:
 
@@ -1000,7 +997,7 @@ True
 
 ### AOI Routines
 
-AOI routines work the same as [program routines](#programs-routines-and-rungs). For example: here is the first few rungs of the `Logic` routine is shown:
+AOI routines work the same as [program routines](#programs-routines-and-rungs). For example, here are the first few rungs of the `Logic` routine:
 
 ```python
 print(aoi.routines["Logic"].as_text())
@@ -1096,7 +1093,7 @@ Module IO tags are also exposed under their Studio 5000 global names in `project
 
 The suffix comes from the connection's `InputTagSuffix`/`OutputTagSuffix` when set, otherwise from the tag's data type, otherwise `I`/`O`. Configuration tags always use `C`.
 
-Each entry is a `ModuleTagRef` which references the data in `project.modules` as these tags do not actually exist in the L5X as a `<Tag>` or similar despite what Studio 5000 shows. Note that because of this, the names are derrived as shown above and may not always be correct.
+Each entry is a `ModuleTagRef` which references the data in `project.modules` as these tags do not actually exist in the L5X as a `<Tag>` or similar despite what Studio 5000 shows. Note that because of this, the names are derived as shown above and may not always be correct.
 
 ```python
 ref = project.tags["ValveBank:I"]
@@ -1140,7 +1137,7 @@ ShopRobot:I I
 ShopRobot:O O
 ```
 
-## Component Exports
+## Component exports
 
 Studio 5000 can export individual components (a single Program, Routine, AOI, DataType, Module, Rung, or Tag) rather than an entire project. Component exports are wrapped in the same `<RSLogix5000Content>` envelope as full projects but carry a `TargetType` indicating what was exported (e.g., `"Program"`, `"Routine"`, `"Rung"`) and a `<Controller Use="Context">` section containing all dependencies (UDTs, AOIs, parent programs, etc.). `py_l5x` supports component exports through the same `load()` API and provides a `.target` property to quickly access the exported object.
 
@@ -1206,6 +1203,222 @@ A_UDT
 > [!NOTE]
 > The project may still contain other objects. A program routine may have an AOI definition, for example. The `Project.target` property just shortcuts to the main content of the export. You may need to check other collections in the project to see the full extent of the export.
 
+## Editing and writing L5X files
+
+> [!NOTE]
+> Write support is new and only verified against Studio 5000 **v37**. Values (including whole structures and arrays), documentation, tags, operand metadata, routines and rungs can be edited; UDTs, AOIs, programs and tags can be built from specs, edited and migrated; any object can be exported as a standalone component; and specs can be stamped out as templates.
+
+Any loaded project (full or component export) can be edited in place and written back. The output matches Studio's own export format (UTF-8 BOM, CRLF, CDATA sections), so it can be opened in Studio, or imported with Import Component, and diffs cleanly against the original.
+
+```python
+from py_l5x import load, loads
+
+project = load("my_project.L5X")
+prog = project.programs["MainProgram"]
+
+prog.tags["a_timer"].members["PRE"].value = 5000  # TIMER preset
+prog.tags["a_dint"].value = -77
+prog.tags["a_udt_instance"].members["a_real"].value = 9.5
+prog.tags["a_2d_array"][1, 2].value = 42
+prog.tags["a_string"].value = "Line 1\nLine 2"  # escapes handled ($l, $$, $', $HH)
+project.aois["Debounce"].parameters["onDelay"].value = 250  # AOI default value
+
+prog.tags["a_dint"].description = "Edited description"
+prog.routines["MainRoutine"].rungs[0].comment = "Edited rung comment"
+
+project.write("my_project_edited.L5X")
+text = project.to_string()  # or get the document text
+again = loads(text)  # parse L5X text directly
+```
+
+Value writes are validated: out-of-range integers, the wrong Python type, non-finite floats, and strings that are too long or contain characters outside Latin-1 raise `ValueError`/`TypeError`, and the XML is left unchanged. Values are written in the tag's radix exactly as Studio formats them (for example `16#0000_00ff` for a Hex DINT). When a value changes, the tag's redundant `L5K` data block is removed, except on tags that contain AOI data (AOI-typed tags, or UDTs with AOI members). Studio keeps AOI local-tag values only in that block, and the edited Decorated values take precedence over it. Bits of integers (`tag.bit(3)`) are read-only.
+
+### Structured values
+
+Structures accept a (partial) dict and arrays a list (flat or nested) or a `{index: value}` dict. Members that aren't mentioned keep their current values. The whole assignment is validated first, so a bad value anywhere leaves the tag unchanged. `to_python()` reads any node back as plain Python data.
+
+```python
+tags = project.controller_tags
+tags.add("Delay", "TIMER", value={"PRE": 5000})
+tags.add("Recipe", "DINT", dimensions=(2, 3), value=[[1, 2, 3], [4, 5, 6]])
+# AOI-typed tag: AOI parameter defaults are kept for members you don't set
+tags.add("Seq", "SeqCtrl", value={"startupStep": 10})
+
+udt = project.programs["MainProgram"].tags["a_udt_instance"]
+udt.value = {"a_real": 3.5, "a_nested_UDT": {"lint": 77}, "an_array": {2: 2.5}}
+print(udt.to_python()["a_nested_UDT"])
+```
+
+Studio rounds BOOL arrays up to a multiple of 32 elements, and `add()` does the same. Tags of types with special data formats (`MESSAGE`, `AXIS_*`, `ALARM_*`, …) can be added, but not given values.
+
+### Data types (UDTs)
+
+UDTs are described with plain, JSON-friendly specs. `build_datatype()` produces the exact XML Studio exports, including BOOL members packed into hidden SINT hosts (same layout as GUI-made UDTs), and the `<Dependencies>` Studio needs on import.
+
+```python
+from py_l5x import DataTypeSpec, MemberSpec
+
+spec = DataTypeSpec(
+    "Motor_t",
+    [
+        MemberSpec("Run", "BOOL", description="Run command"),
+        MemberSpec("Fault", "BOOL"),
+        MemberSpec("Speed", "REAL", engineering_unit="rpm", min=0, max=1800),
+        MemberSpec("Delay", "TIMER"),
+    ],
+    description="Motor interface",
+)
+project.data_types.add(spec)
+project.controller_tags.add("Motor1", "Motor_t", value={"Speed": 900.0})
+
+# Change an existing UDT: every instance (nested, arrays, AOI defaults) is migrated by
+# member name, with type conversions done the way Studio does them.
+spec = project.data_types["simple_udt"].to_spec()
+spec.members.append(MemberSpec("added", "DINT"))
+project.data_types.replace(spec)
+
+# Rename updates every reference outside logic; remove refuses while the type is used
+project.data_types.rename("simple_udt", "Simple_t")
+project.data_types.remove("Old_t")
+```
+
+`DataTypeSpec.string(name, length)` creates a string type. Member types are checked when adding or replacing, because Studio silently accepts unknown ones. Operand comments on removed members are left in place, as Studio does.
+
+### Add-On Instructions
+
+AOIs are built from specs the same way. EnableIn/EnableOut are added automatically, the Required/Visible flags follow Studio's rules (InOut parameters are always both), and defaults are written as full value trees.
+
+```python
+from py_l5x import AOISpec, LocalTagSpec, ParameterSpec, RoutineSpec, RungSpec
+
+spec = AOISpec(
+    "MotorCtl",
+    [
+        ParameterSpec("Run", "BOOL", required=True, description="Run command"),
+        ParameterSpec("Delay", "DINT", default=500, visible=True),
+        ParameterSpec("Running", "BOOL", usage="Output", visible=True),
+    ],
+    local_tags=[LocalTagSpec("t", "TIMER")],
+    routines=[
+        RoutineSpec(
+            "Logic",
+            rungs=[
+                RungSpec("MOVE(Delay,t.PRE);"),
+                RungSpec("XIC(Run)TON(t,?,?);", comment="start delay"),
+                RungSpec("XIC(t.DN)OTE(Running);"),
+            ],
+        )
+    ],
+    revision="1.0",
+    description="Motor control",
+)
+project.aois.add(spec)
+
+spec = project.aois["Debounce"].to_spec()  # edit an existing AOI
+spec.parameters.append(ParameterSpec("hold", "DINT"))
+project.aois.replace(spec)  # instances migrated by parameter name
+
+print(project.aois.call_sites("SeqCtrl"))  # where the instruction is called
+project.aois.rename("SeqCtrl", "SeqControl")  # also rewrites call sites in RLL/ST
+```
+
+`replace()` refuses to change the list of Required parameters while the AOI is called anywhere, because Studio doesn't update call sites and the project would then fail to verify. Pass `allow_signature_change=True` to do it anyway. Replacing a UDT or AOI resets the local-tag values of AOI instances that depend on it, because Studio keeps those values only in the `L5K` data block, which py_l5x cannot regenerate. Ordinary value writes keep that block, so AOI local values survive.
+
+### Programs
+
+```python
+from py_l5x import ProgramSpec, RoutineSpec, RungSpec, TagSpec
+
+spec = ProgramSpec(
+    "Motor1",
+    tags=[
+        TagSpec("Run", "BOOL"),
+        TagSpec("Delay", "TIMER", value={"PRE": 2500}),
+        TagSpec("Run_Alias", alias_for="Run"),
+    ],
+    routines=[
+        RoutineSpec(
+            "Main", rungs=[RungSpec("XIC(Run)TON(Delay,?,?);", comment="start delay")]
+        ),
+        RoutineSpec(
+            "Calc", type_="ST", lines=["IF Delay.DN THEN", "    Run := 0;", "END_IF;"]
+        ),
+    ],
+    main_routine="Main",
+    description="Motor 1",
+)
+project.programs.add(spec, task="MainTask")  # unscheduled if no task is given
+
+spec = project.programs["MainProgram"].to_spec()  # specs round-trip existing programs
+project.programs.replace(spec)  # existing tag values are kept
+project.programs.rename("PeriodicProgram", "Periodic")
+project.programs.unschedule("Periodic")
+```
+
+`replace()` keeps the current data of tags whose type is unchanged and whose spec has no value. Studio's own program overwrite resets them. Produced/consumed tags and MESSAGE/AXIS/MOTION_GROUP tags can't be turned into specs yet.
+
+### Component export
+
+`project.export(...)` writes any UDT, AOI, program, routine, rung or tag(s) as a standalone import file, in the same layout as Studio's Export Component. Everything it needs comes along as context: UDTs and AOIs (transitively, including AOIs called in its logic), controller and program tags referenced in its logic (and alias targets), and the I/O modules those tags belong to. Specs can be exported too.
+
+```python
+doc = project.export(project.aois["FanucRobot"])  # AOI + 6 AOIs/UDTs it depends on
+doc.write("FanucRobot_AOI.L5X")
+
+prog = project.programs["MainProgram"]
+project.export(prog.routines["SequenceRoutine"]).write("SequenceRoutine.L5X")
+project.export(prog.routines["SequenceRoutine"].rungs[2]).write("Rung2.L5X")
+# Specs work too: a ProgramSpec, AOISpec, DataTypeSpec or TagSpec
+project.export(spec).write("Motor1_Program.L5X")
+```
+
+Modules are included as references, like Studio does: the target project must already have them, or tags such as `Local:1:I` stay unresolved. Cross-program references (`\Program.Tag`) are not followed.
+
+### Templating repeated programs
+
+`substitute()` returns a copy of any spec with plain-text replacements applied to every string value (names, rung text, ST, descriptions, comments, string values). `stamp()` makes one copy per mapping. Replacements happen in a single pass, longest key first, so `{"Motor1": ..., "M1_": ...}` behaves predictably and results never cascade. Dict keys (member names such as `"PRE"`, operand paths) are left alone unless you pass `keys=True`.
+
+```python
+from py_l5x import stamp
+
+base = project.programs["Motor1"].to_spec()
+instances = [{"Motor1": f"Motor{i}", "M1_": f"M{i}_"} for i in range(2, 11)]
+for spec in stamp(base, instances):
+    project.programs.add(spec, task="MainTask")
+```
+
+Matching is plain, case-sensitive substring matching, so choose keys that can't appear in unrelated text.
+
+### Adding, removing and renaming
+
+```python
+tags = project.controller_tags  # or program.tags
+tags.add("Motor1_Run", "BOOL", description="Run command")
+tags.add("Motor1_Timer", "TIMER")
+tags.add("Recipe", "DINT", dimensions=(4, 10), radix="Hex")
+tags.add_alias("M1_Run", "Motor1_Run")
+tags["Motor1_Run"].value = True
+tags.rename("Recipe", "RecipeTable")
+tags.remove("OldTag")
+
+timer = tags["Motor1_Timer"]
+timer.set_operand_comment(".DN", "Motor started")
+timer.set_operand_metadata(".PRE", "engineering_unit", "ms")
+
+routines = project.programs["MainProgram"].routines
+r = routines.add("Motor1", description="Motor 1 logic")  # RLL by default
+r.add_rung("XIC(Motor1_Run)TON(Motor1_Timer,?,?);", comment="Start delay")
+r.add_rung("NOP();", index=0)  # insert; rungs are renumbered
+r.remove_rung(0)
+st = routines.add("Calc", "ST")
+st.set_st_lines(["IF Motor1_Run THEN", "    Count := Count + 1;", "END_IF;"])
+routines.rename("Calc", "Motor1_Calc")
+```
+
+New tags are written without a data block, so Studio gives them their type's default values. Setting a value, or calling `tag.initialize_data()`, writes the complete default value tree first. The same goes for any UDT, AOI or built-in type, using layouts taken from Studio itself. Names are validated (Logix naming rules, case-insensitive duplicates). Removing or renaming a tag or routine does **not** update references to it in logic, aliases or `JSR` instructions, apart from a program's main and fault routine names, which follow a rename. `add_rung` checks only that the text ends in `;` and that brackets are balanced. Problems like undefined tags show up only when Studio verifies the project.
+
+Rung text can be set with `rung.text = "XIC(a)OTE(b);"`. Note that v37 L5X files use `MOVE` rather than `MOV`, and that a literal preset in rung text (for example `TON(t,3000,0)`) overwrites the timer's preset on import. See [docs/import-format.md](docs/import-format.md) for what Studio accepts on import.
+
 ---
 
 ## Building from source
@@ -1215,14 +1428,14 @@ The project uses [uv](https://docs.astral.sh/uv/) for dependency management and 
 ### Clone and set up
 
 ```bash
-git clone https://github.com/your-org/py_l5x.git
+git clone https://github.com/zwood16/py_l5x.git
 cd py_l5x
 
 # Create a virtual environment and install dev dependencies
 uv sync
 ```
 
-`uv sync` reads `pyproject.toml`, creates `.venv/` in the project root, and installs the package in editable mode along with the `dev` dependency group (pytest).
+`uv sync` reads `pyproject.toml`, creates `.venv/` in the project root, and installs the package in editable mode along with the `dev` dependency group (pytest and ruff).
 
 ### Run the tests
 
@@ -1236,7 +1449,7 @@ uv run pytest
 uv build
 ```
 
-This produces a `.whl` and a `.tar.gz` under `dist/`. Just to be safe, delete the `dist` folder before building a new release to prevent multiple version from being release in the `.whl` file.
+This produces a `.whl` and a `.tar.gz` under `dist/`. Just to be safe, delete the `dist` folder before building a new release so that old versions aren't released alongside the new `.whl` file.
 
 The wheel can be installed in any Python environment:
 
@@ -1253,13 +1466,19 @@ uv run ruff check .
 uv run ruff check --fix .   # auto-fix where possible
 ```
 
-## Known Limitation
+## Known Limitations
 
 ### Not All XML Components Have Parsers
 
-Not all L5X components have wrappers/parsers yet. This is includes several known top level XML tags: - \<ParameterConnection\> - \<Trends\> - \<QuickWatchList\> - \<CommPorts\> - \<WallClockTime\>
+Not all L5X components have wrappers/parsers yet. This includes several known top level XML tags:
 
-> Note that the top level Project object exposes the `Project.root` XML element so you can manually find any extra info you need using Python's build in [XML Element Tree](https://docs.python.org/3/library/xml.etree.elementtree.html).
+- \<ParameterConnection\>
+- \<Trends\>
+- \<QuickWatchList\>
+- \<CommPorts\>
+- \<WallClockTime\>
+
+> Note that the top level Project object exposes the `Project.root` XML element so you can manually find any extra info you need using Python's built-in [XML Element Tree](https://docs.python.org/3/library/xml.etree.elementtree.html).
 
 ### Some Attributes or Tags May Be Missing
 
@@ -1274,6 +1493,19 @@ Additionally, not all features or specialty tag types are supported. For example
 
 These would need to be manually parsed using `project.root`.
 
-### No Write Support
+### Write Support
 
-There is no write support. `py_l5x` can only read L5X files. It cannot write back to them for the time being. This is a planned feature in the future.
+- Write support covers values, documentation, tags, operand metadata, routines, rungs, programs, UDTs and AOIs, and is only verified against Studio 5000 v37. See [Editing and writing L5X files](#editing-and-writing-l5x-files).
+- Replacing a UDT or AOI with `replace()` resets the **local-tag values of AOI instances** that depend on it (for example every GenericInput instance when its Debounce local changes). Studio stores those values only in the tag's `L5K` data block, which py_l5x does not generate. Ordinary value writes keep the block, so AOI local values survive them.
+- Renaming or removing tags, routines, programs and UDTs does not update references to them in logic (renaming an AOI does update its call sites).
+
+## Road Map
+
+- [x] Write L5X files and edit values and documentation in place
+- [x] Add, remove and rename tags, routines and rungs; edit operand metadata
+- [x] Build, add, replace, rename and remove UDTs, migrating existing tag data
+- [x] Build, add, replace, rename and remove AOIs, migrating existing tag data and protecting call sites
+- [x] Build programs and tags from specs; add, replace, rename, remove and schedule programs
+- [x] Component export: write a target with its dependencies as a standalone import file
+- [x] Templating repeated programs (`substitute` / `stamp`)
+- [ ] Support Studio 5000 versions other than v37

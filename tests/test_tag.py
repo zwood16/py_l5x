@@ -1428,8 +1428,9 @@ class TestFallbackUnknownTag:
     """Test UnknownTag fallback for tags lacking recognized value data."""
 
     def test_unknown_tag_no_value_data(self, type_registry: TypeRegistry) -> None:
-        """A tag with no value data falls back to UnknownTag."""
+        """A tag whose Data holds no value falls back to UnknownTag."""
         tag_xml = """<Tag Name="test_empty" TagType="Base" DataType="DINT">
+        <Data Format="Decorated"/>
         </Tag>"""
         tag_el = ET.fromstring(tag_xml)
         from py_l5x.parsers.tag import _make_tag

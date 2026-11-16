@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterator, Mapping
 from typing import Any, cast, overload
 from xml.etree import ElementTree as ET
 
+from py_l5x.parsers.schema import insert_child, new_cdata_element, remove_child
 from py_l5x.parsers.utils import CDATA_TAG, cdata_text
 
 
@@ -378,16 +379,20 @@ class CDataField:
         child = obj._element.find(self.child_tag)
         if not value:
             if child is not None:
-                obj._element.remove(child)
+                remove_child(obj._element, child)
             if self.attr_fallback:
                 obj._element.attrib.pop(self.attr_fallback, None)
             return
         if child is None:
-            child = ET.SubElement(obj._element, self.child_tag)
-        else:
-            child.clear()
+            insert_child(obj._element, new_cdata_element(self.child_tag, value))
+            return
+        # Replace the content in place so the child keeps its attributes and tail.
+        for grandchild in list(child):
+            child.remove(grandchild)
+        child.text = "\n"
         cdata_el = ET.SubElement(child, CDATA_TAG)
         cdata_el.text = value
+        cdata_el.tail = "\n"
 
 
 class BaseElement(XmlAttrMixin):

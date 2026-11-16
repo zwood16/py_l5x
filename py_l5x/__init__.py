@@ -7,7 +7,26 @@ Usage:
     MyController
 """
 
-from py_l5x.parse import load
+from py_l5x.build import (
+    AOISpec,
+    DataTypeSpec,
+    LocalTagSpec,
+    MemberSpec,
+    ParameterSpec,
+    ProgramSpec,
+    RoutineSpec,
+    RungSpec,
+    TagSpec,
+    aoi_call_operands,
+    build_aoi,
+    build_datatype,
+    build_program,
+    build_tag,
+    export_component,
+    stamp,
+    substitute,
+)
+from py_l5x.parse import load, loads
 from py_l5x.parsers.aoi import (
     AOIDefinition,
     AOILocalArrayTag,
@@ -27,6 +46,7 @@ from py_l5x.parsers.aoi import (
     AOIParameterFloatTag,
     AOIParameterIntegerTag,
     AOIParameterTimeTag,
+    CallSite,
 )
 from py_l5x.parsers.controller import ControllerInfo
 from py_l5x.parsers.datatype import DataType, DataTypeMember
@@ -66,6 +86,7 @@ from py_l5x.parsers.tag import (
 from py_l5x.parsers.task import Task
 
 __all__ = [
+    "AOISpec",
     "AOIDefinition",
     "AOILocalArrayTag",
     "AOILocalAtomicTag",
@@ -92,9 +113,11 @@ __all__ = [
     "AxisTag",
     "BoolNode",
     "BoolTag",
+    "CallSite",
     "ConsumeInfo",
     "ControllerInfo",
     "DataType",
+    "DataTypeSpec",
     "DataTypeMember",
     "DateTimeNode",
     "DateTimeTag",
@@ -103,24 +126,40 @@ __all__ = [
     "IntegerNode",
     "IntegerTag",
     "MessageTag",
+    "LocalTagSpec",
+    "MemberSpec",
     "Module",
     "ModuleTagRef",
     "ModuleTagsView",
     "MotionGroupTag",
     "ProduceInfo",
     "Program",
+    "ParameterSpec",
+    "ProgramSpec",
     "Project",
     "ProjectTagsView",
     "Routine",
+    "RoutineSpec",
+    "RungSpec",
     "StringNode",
     "StringTag",
     "StructNode",
     "StructTag",
     "Tag",
     "TagNode",
+    "TagSpec",
     "Task",
     "TimeNode",
     "TimeTag",
     "UnknownTag",
+    "aoi_call_operands",
+    "build_aoi",
+    "build_datatype",
+    "build_program",
+    "build_tag",
+    "export_component",
+    "stamp",
+    "substitute",
     "load",
+    "loads",
 ]

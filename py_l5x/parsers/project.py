@@ -34,8 +34,9 @@ Usage:
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator, Mapping
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Any, Union
 from xml.etree import ElementTree as ET
 
 from py_l5x.parsers.aoi import AOICollection, AOIDataTypesCollection, AOIDefinition
@@ -83,6 +84,10 @@ class ProjectTagsView(Mapping[str, Tag | ModuleTagRef]):
 
     Values are ``Tag`` instances for controller tags and :class:`ModuleTagRef`
     instances for module I/O tags.
+
+    The view stays read-only: it has no ``add``/``remove``/``rename``. Edit
+    controller tags through ``project.controller_tags`` and program tags through
+    ``program.tags`` (both :class:`~py_l5x.parsers.tag.TagsCollection`).
 
     Args:
         controller_tags (TagsCollection): The controller-level tag collection.
@@ -199,6 +204,7 @@ class Project:
 
         # Build the shared TypeRegistry (glue for tag value parsing).
         self._type_registry = TypeRegistry(self._data_types, self._aoi_types)
+        self._data_types._registry = self._type_registry
 
         # Build collections that depend on TypeRegistry.
         self._controller = ControllerInfo(self._controller_element)
@@ -353,6 +359,48 @@ class Project:
             The top-level XML element of the parsed L5X document.
         """
         return self._root
+
+    def to_string(self, **kwargs: Any) -> str:
+        """Serialize the project to L5X document text.
+
+        Args:
+            **kwargs: Passed to ``py_l5x.writer.to_string`` (``newline``).
+
+        Returns:
+            The full L5X document text.
+        """
+        from py_l5x import writer
+
+        return writer.to_string(self._root, **kwargs)
+
+    def write(self, path: str | os.PathLike, **kwargs: Any) -> None:
+        """Write the project to an L5X file.
+
+        Args:
+            path: Destination file path.
+            **kwargs: Passed to ``py_l5x.writer.write`` (``bom``, ``newline``).
+        """
+        from py_l5x import writer
+
+        writer.write(self._root, path, **kwargs)
+
+    def export(self, targets: Any, *, controller_name: str | None = None) -> Project:
+        """Build a component export of objects from this project.
+
+        Shorthand for :func:`py_l5x.build.export.export_component` with this
+        project. Write the result with ``.write(path)``.
+
+        Args:
+            targets: One object or a list of objects of one kind (loaded
+                objects of this project, or specs).
+            controller_name: Name of the exported ``<Controller>``.
+
+        Returns:
+            A new in-memory project.
+        """
+        from py_l5x.build.export import export_component
+
+        return export_component(targets, self, controller_name=controller_name)
 
     @property
     def controller_element(self) -> ET.Element:
