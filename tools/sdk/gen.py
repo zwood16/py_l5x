@@ -3982,6 +3982,121 @@ def exp25():
     x.write()
 
 
+def _exp26_docs(move_mnemonic):
+    """Spec-built UDT + AOI + program as one component file each, logic using the given move mnemonic."""
+    py_l5x = _py_l5x()
+    from py_l5x import (
+        AOISpec,
+        DataTypeSpec,
+        LocalTagSpec,
+        MemberSpec,
+        ParameterSpec,
+        ProgramSpec,
+        RoutineSpec,
+        RungSpec,
+        TagSpec,
+        export_component,
+    )
+
+    udt = DataTypeSpec(
+        "VUdt",
+        [MemberSpec(f"b{i}", "BOOL") for i in range(10)]
+        + [
+            MemberSpec("x", "DINT"),
+            MemberSpec("t", "TIMER"),
+            MemberSpec("s", "STRING"),
+            MemberSpec("r", "REAL", 3),
+        ],
+    )
+    aoi = AOISpec(
+        "VAoi",
+        [
+            ParameterSpec("In", "DINT", default=5),
+            ParameterSpec("Out", "DINT", usage="Output"),
+            ParameterSpec("U", "VUdt", usage="InOut"),
+        ],
+        local_tags=[LocalTagSpec("tm", "TIMER", default={"PRE": 100})],
+        routines=[
+            RoutineSpec(
+                "Logic",
+                rungs=[
+                    RungSpec(f"{move_mnemonic}(In,Out);"),
+                    RungSpec("TON(tm,?,?);"),
+                    RungSpec(f"{move_mnemonic}(In,U.x);"),
+                ],
+            )
+        ],
+    )
+    prog = ProgramSpec(
+        "VProg",
+        tags=[
+            TagSpec("t", "TIMER", value={"PRE": 2500}),
+            TagSpec(
+                "u",
+                "VUdt",
+                value={"x": 7, "b3": True, "s": "hello", "r": [1.5, 2.5, 3.5]},
+            ),
+            TagSpec("a", "VAoi", value={"In": 9}),
+            TagSpec("d", "DINT", value=3),
+            TagSpec("cnt", "COUNTER", value={"PRE": 10}),
+            TagSpec("str", "STRING", value="text"),
+        ],
+        routines=[
+            RoutineSpec(
+                "Main",
+                rungs=[
+                    RungSpec("TON(t,?,?);"),
+                    RungSpec(f"{move_mnemonic}(d,u.x);"),
+                    RungSpec("VAoi(a,u);"),
+                    RungSpec("CTU(cnt,?,?);"),
+                ],
+            )
+        ],
+        main_routine="Main",
+    )
+    # build each into a throwaway project so the registry knows the new types, then export the target
+    p = py_l5x.loads(
+        COMPONENT_TEMPLATE.replace('TargetType="Tag"', 'TargetType="Program"').replace(
+            "Example_PLC", "V"
+        )
+    )
+    p.data_types.add(udt)
+    p.aois.add(aoi)
+    p.programs.add(prog)
+    return {
+        "udt": p.export(p.data_types["VUdt"]),
+        "aoi": p.export(p.aois["VAoi"]),
+        "prog": p.export(p.programs["VProg"]),
+    }
+
+
+def exp26():
+    """Older Logix versions: py_l5x-generated components (written for v37 except the move mnemonic) into blank v33/v35."""
+    py_l5x = _py_l5x()
+    for rev in (33, 35):
+        for mn in ("MOV", "MOVE"):
+            run = f"exp26_v{rev}_{mn}"
+            e = Exp(
+                run, base={"create": {"rev": rev, "proc": "1756-L85E", "name": "V"}}
+            )
+            e.files = {}
+            for k, doc in _exp26_docs(mn).items():
+                e.files[f"{k}.L5X"] = py_l5x.writer.to_bytes(doc.root)
+                e.steps.append(
+                    {
+                        "id": k,
+                        "op": "import",
+                        "file": f"{k}.L5X",
+                        "xpath": "Controller",
+                        "coll": "overwrite",
+                    }
+                )
+            e.raw(id="build", op="build")
+            e.export("prog_out", PR("VProg"))
+            e.export("udt_out", DT("VUdt"))
+            e.write()
+
+
 if __name__ == "__main__":
     for name in sys.argv[1:]:
         globals()[name]()

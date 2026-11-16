@@ -3,15 +3,16 @@
 A pythonic interface for reading and writing Rockwell Automation L5X files.
 
 > [!IMPORTANT]
-> **⚠️ Work in Progress**: This project is currently under active development. APIs are subject to change, and not all features may be fully implemented or tested.
+> **⚠️ Work in Progress**: This project is currently under active development. APIs are subject to change, and not all features may be fully implemented.
 
 `py_l5x` parses Rockwell Automation L5X exports from Studio 5000 Logix Designer and exposes the contents as a typed Python object hierarchy. It handles many of the file's quirks to create `dict`-like collections of all your export's tags, routines, modules, and the like. It also cross references different parts of the file to expose as much metadata (comments, extended tag properties, etc.) as you'd expect to see in Studio 5000 but is spread across the `.L5X` file structure.
 
 Both **full project exports** (a full PLC project) and **component exports** (a single Program, Routine, AOI, DataType, Module, Rung, etc.) are supported through the same `load()` function.
 
 > [!NOTE]
-> Write support (editing loaded files and generating new components) is new and only verified against Studio 5000 v37. See [Editing and writing L5X files](#editing-and-writing-l5x-files).  
-> Ladder Logic and Structured Text are the only supported languages for routine logic.
+> Write support (editing loaded files and generating new components) is new and only verified against Studio 5000 v37, but should work with most modern versions of Studio 5000. See [Editing and writing L5X files](#editing-and-writing-l5x-files).
+>
+> Ladder Logic and Structured Text are the only supported languages for routine logic currently.
 
 ## Installation
 
@@ -1417,7 +1418,9 @@ routines.rename("Calc", "Motor1_Calc")
 
 New tags are written without a data block, so Studio gives them their type's default values. Setting a value, or calling `tag.initialize_data()`, writes the complete default value tree first. The same goes for any UDT, AOI or built-in type, using layouts taken from Studio itself. Names are validated (Logix naming rules, case-insensitive duplicates). Removing or renaming a tag or routine does **not** update references to it in logic, aliases or `JSR` instructions, apart from a program's main and fault routine names, which follow a rename. `add_rung` checks only that the text ends in `;` and that brackets are balanced. Problems like undefined tags show up only when Studio verifies the project.
 
-Rung text can be set with `rung.text = "XIC(a)OTE(b);"`. Note that v37 L5X files use `MOVE` rather than `MOV`, and that a literal preset in rung text (for example `TON(t,3000,0)`) overwrites the timer's preset on import. See [docs/import-format.md](docs/import-format.md) for what Studio accepts on import.
+Rung text can be set with `rung.text = "XIC(a)OTE(b);"`. Note that a literal preset in rung text (for example `TON(t,3000,0)`) overwrites the timer's preset on import. See [docs/import-format.md](docs/import-format.md) for what Studio accepts on import.
+
+It's also worth noting that different versions of Studio 5000 have different available instructions and tag types. v36, for example, changed many instructions such as `MOV` which is now `MOVE`. Please keep this in mind when modifying or creating new logic, otherwise your specific version may reject the import.
 
 ---
 
