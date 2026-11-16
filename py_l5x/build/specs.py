@@ -295,3 +295,125 @@ class AOISpec:
             for r in data.get("routines", [])
         ]
         return cls(**fields)
+
+
+@dataclass
+class TagSpec:
+    """A controller or program tag.
+
+    Exactly one of ``data_type`` and ``alias_for`` is required.
+
+    Attributes:
+        name: Tag name.
+        data_type: Type name for a base tag.
+        dimensions: Array size, or a tuple of up to three sizes. A BOOL array
+            is rounded up to a multiple of 32, as Studio does.
+        description: Tag description.
+        value: Initial value: a scalar, a ``str``, a ``dict`` (structure) or a
+            ``list``/``dict`` (array), as the ``value`` setter accepts. ``None``
+            writes no ``<Data>`` (Studio fills in defaults).
+        radix: Display radix.
+        external_access: ``"Read/Write"``, ``"Read Only"`` or ``"None"``.
+        constant: Whether the tag is a constant; ``None`` omits the attribute.
+        alias_for: The tag or operand path an alias tag refers to.
+        operand_comments: ``{operand: comment}`` (for example ``{".0": "x"}``).
+        operand_metadata: Other operand metadata, ``{operand: {key: text}}``
+            with keys ``max``, ``min``, ``engineering_unit``, ``state0``,
+            ``state1``, ``external_logging`` (or ``comment``). The operand
+            ``""`` is the tag itself (an entry without an ``Operand``).
+        metadata: Other ``<Tag>`` attributes written verbatim (``Class``,
+            ``Usage``, ``OpcUaAccess``, ``Max``, ``Min``, ``ExternalLogging``,
+            ``DataExchangeId``, ...).
+    """
+
+    name: str
+    data_type: str | None = None
+    dimensions: int | tuple[int, ...] | None = None
+    description: str = ""
+    value: Any = None
+    radix: str | None = None
+    external_access: str | None = None
+    constant: bool | None = None
+    alias_for: str | None = None
+    operand_comments: dict[str, str] | None = None
+    operand_metadata: dict[str, dict[str, str]] | None = None
+    metadata: dict[str, str] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to a JSON-friendly ``dict`` (tuples become lists).
+
+        Returns:
+            Nested ``dict``/``list`` of plain values.
+        """
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> TagSpec:
+        """Rebuild a spec from :meth:`to_dict` output (or parsed JSON).
+
+        Args:
+            data: A mapping with ``name`` and optionally the other fields.
+
+        Returns:
+            The spec (a list ``dimensions`` becomes a tuple).
+        """
+        fields = dict(data)
+        if isinstance(fields.get("dimensions"), list):
+            fields["dimensions"] = tuple(fields["dimensions"])
+        return cls(**fields)
+
+
+@dataclass
+class ProgramSpec:
+    """A program.
+
+    Attributes:
+        name: Program name.
+        tags: The program's tags, in order.
+        routines: The routines (written sorted by name, as Studio does).
+        main_routine: Name of the main routine, or ``None``.
+        fault_routine: Name of the fault routine, or ``None``.
+        description: Program description.
+        disabled: Whether the program is disabled.
+        class_: ``"Standard"`` or ``"Safety"``; ``None`` omits the attribute.
+        metadata: Other ``<Program>`` attributes written verbatim
+            (``TestEdits`` and ``UseAsFolder`` default to ``"false"``).
+    """
+
+    name: str
+    tags: list[TagSpec] = field(default_factory=list)
+    routines: list[RoutineSpec] = field(default_factory=list)
+    main_routine: str | None = None
+    fault_routine: str | None = None
+    description: str = ""
+    disabled: bool = False
+    class_: str | None = "Standard"
+    metadata: dict[str, str] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to a JSON-friendly ``dict``.
+
+        Returns:
+            Nested ``dict``/``list`` of plain values.
+        """
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ProgramSpec:
+        """Rebuild a spec from :meth:`to_dict` output (or parsed JSON).
+
+        Args:
+            data: A mapping with ``name`` and optionally the other fields.
+
+        Returns:
+            The spec.
+        """
+        fields = dict(data)
+        fields["tags"] = [TagSpec.from_dict(t) for t in data.get("tags", [])]
+        fields["routines"] = [
+            RoutineSpec(
+                **{**r, "rungs": [RungSpec(**rung) for rung in r.get("rungs", [])]}
+            )
+            for r in data.get("routines", [])
+        ]
+        return cls(**fields)

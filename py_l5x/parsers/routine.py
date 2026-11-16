@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
+from typing import TYPE_CHECKING
 from xml.etree import ElementTree as ET
 
 from py_l5x.parsers.base import (
@@ -81,6 +82,10 @@ def _check_rung_text(text: str) -> None:
         raise ValueError("unterminated string literal in rung text")
     if stack:
         raise ValueError(f"unclosed {stack[-1]!r} in rung text")
+
+
+if TYPE_CHECKING:
+    from py_l5x.build.specs import RoutineSpec
 
 
 def build_rung(text: str, comment: str | None = None, number: int = 0) -> ET.Element:
@@ -349,6 +354,40 @@ class Routine(BaseElement):
             content.text = None
         for number, item in enumerate(items):
             insert_child_at(content, number, build_st_line(item, number))
+
+    def to_spec(self) -> RoutineSpec:
+        """Convert this routine to a spec that rebuilds it.
+
+        Rung and line text and comments are read as raw CDATA.
+
+        Returns:
+            A :class:`~py_l5x.build.specs.RoutineSpec`.
+
+        Raises:
+            ValueError: For a routine that is neither RLL nor ST.
+        """
+        from py_l5x.build.specs import RoutineSpec, RungSpec
+        from py_l5x.parsers.migrate import _raw_cdata
+
+        kind = self.type_
+        if kind not in ("RLL", "ST"):
+            raise ValueError(f"routine {self.name!r}: unsupported type {kind!r}")
+
+        def text(parent: ET.Element, tag: str) -> str:
+            found = parent.find(tag)
+            return _raw_cdata(found) if found is not None else ""
+
+        element = self._element
+        return RoutineSpec(
+            name=self.name,
+            type_=kind,
+            rungs=[
+                RungSpec(text(rung, "Text"), text(rung, "Comment"))
+                for rung in element.findall("RLLContent/Rung")
+            ],
+            lines=[_raw_cdata(line) for line in element.findall("STContent/Line")],
+            description=text(element, "Description"),
+        )
 
     @property
     def target_rung(self) -> Rung | None:

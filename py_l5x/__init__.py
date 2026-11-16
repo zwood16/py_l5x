@@ -13,11 +13,15 @@ from py_l5x.build import (
     LocalTagSpec,
     MemberSpec,
     ParameterSpec,
+    ProgramSpec,
     RoutineSpec,
     RungSpec,
+    TagSpec,
     aoi_call_operands,
     build_aoi,
     build_datatype,
+    build_program,
+    build_tag,
 )
 from py_l5x.parse import load, loads
 from py_l5x.parsers.aoi import (
@@ -128,6 +132,7 @@ __all__ = [
     "ProduceInfo",
     "Program",
     "ParameterSpec",
+    "ProgramSpec",
     "Project",
     "ProjectTagsView",
     "Routine",
@@ -139,6 +144,7 @@ __all__ = [
     "StructTag",
     "Tag",
     "TagNode",
+    "TagSpec",
     "Task",
     "TimeNode",
     "TimeTag",
@@ -146,6 +152,8 @@ __all__ = [
     "aoi_call_operands",
     "build_aoi",
     "build_datatype",
+    "build_program",
+    "build_tag",
     "load",
     "loads",
 ]

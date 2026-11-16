@@ -164,6 +164,7 @@ from py_l5x.parsers.specialty_tags import (
 from py_l5x.parsers.utils import CDATA_TAG, cdata_text, convert_numeric
 
 if TYPE_CHECKING:
+    from py_l5x.build.specs import TagSpec
     from py_l5x.parsers.aoi import (
         AOIDataTypesCollection,
         AOIParameter,
@@ -441,6 +442,87 @@ def _operand_sort_key(operand: str) -> list[str | int]:
         int(part) if i % 2 else part
         for i, part in enumerate(re.split(r"(\d+)", operand.upper()))
     ]
+
+
+def _fill_override(entry: ET.Element, key: str, value: str) -> None:
+    """Set an override entry's text, keeping its attributes and tail.
+
+    Args:
+        entry: The ``<Comment>``/``<Max>``/... element.
+        key: The metadata key, which decides CDATA versus plain text.
+        value: The new text.
+    """
+    for child in list(entry):
+        entry.remove(child)
+    if key in _CDATA_OVERRIDE_KEYS:
+        built = new_cdata_element(entry.tag, value)
+        entry.text = built.text
+        entry.append(built[0])
+    else:
+        entry.text = value
+
+
+def set_override(owner: ET.Element, operand: str, key: str, value: str | None) -> None:
+    """Set, update or remove one operand metadata entry on an element.
+
+    The entry goes in the right container (created at its schema position),
+    sorted by operand. The operand is upper-cased; ``""`` addresses the element
+    itself (an entry without an ``Operand``). See
+    :meth:`_RootMetadataMixin.set_operand_metadata`, which adds the operand
+    prefix check and refreshes the cached overrides.
+
+    Args:
+        owner: A ``Tag``, ``Parameter`` or ``LocalTag`` element.
+        operand: The operand (``""`` for none).
+        key: One of the ``_OVERRIDE_CONTAINERS`` keys.
+        value: The new text, or ``None``/``""`` to remove the entry.
+
+    Raises:
+        ValueError: If *key* is unknown.
+    """
+    spec = next(
+        (
+            (container_tag, child_tag)
+            for container_tag, (child_tag, k) in _OVERRIDE_CONTAINERS.items()
+            if k == key
+        ),
+        None,
+    )
+    if spec is None:
+        valid = ", ".join(k for _, k in _OVERRIDE_CONTAINERS.values())
+        raise ValueError(f"unknown operand metadata key {key!r}; use one of {valid}")
+    container_tag, child_tag = spec
+    wanted = operand.upper()
+    container = owner.find(container_tag)
+    entry = None
+    if container is not None:
+        entry = next(
+            (e for e in container if e.get("Operand", "").upper() == wanted), None
+        )
+    if not value:
+        if entry is not None and container is not None:
+            remove_child(container, entry)
+            if len(container) == 0:
+                remove_child(owner, container)
+    elif entry is not None:
+        _fill_override(entry, key, value)
+    else:
+        entry = ET.Element(child_tag)
+        if wanted:
+            entry.set("Operand", wanted)
+        _fill_override(entry, key, value)
+        new_container = container is None
+        if container is None:
+            container = ET.Element(container_tag)
+        position = sum(
+            1
+            for existing in container
+            if _operand_sort_key(existing.get("Operand", ""))
+            <= _operand_sort_key(wanted)
+        )
+        insert_child_at(container, position, entry)
+        if new_container:
+            insert_child(owner, container)
 
 
 def _relative_operand(operand_path: str, anchor: str) -> str | None:
@@ -919,73 +1001,10 @@ class TagNode:
             ValueError: If *key* is unknown or *operand* does not start with
                 ``"."`` or ``"["``.
         """
-        spec = next(
-            (
-                (container_tag, child_tag)
-                for container_tag, (child_tag, k) in _OVERRIDE_CONTAINERS.items()
-                if k == key
-            ),
-            None,
-        )
-        if spec is None:
-            valid = ", ".join(k for _, k in _OVERRIDE_CONTAINERS.values())
-            raise ValueError(
-                f"unknown operand metadata key {key!r}; use one of {valid}"
-            )
         if not isinstance(operand, str) or operand[:1] not in (".", "["):
             raise ValueError(f"operand must start with '.' or '[': {operand!r}")
-        container_tag, child_tag = spec
-        owner = self._overrides.owner
-        wanted = operand.upper()
-        container = owner.find(container_tag)
-        entry = None
-        if container is not None:
-            entry = next(
-                (e for e in container if e.get("Operand", "").upper() == wanted), None
-            )
-
-        if not value:
-            if entry is not None and container is not None:
-                remove_child(container, entry)
-                if len(container) == 0:
-                    remove_child(owner, container)
-        elif entry is not None:
-            self._fill_override(entry, key, value)
-        else:
-            entry = ET.Element(child_tag)
-            entry.set("Operand", wanted)
-            self._fill_override(entry, key, value)
-            new_container = container is None
-            if container is None:
-                container = ET.Element(container_tag)
-            position = sum(
-                1
-                for existing in container
-                if _operand_sort_key(existing.get("Operand", ""))
-                <= _operand_sort_key(wanted)
-            )
-            insert_child_at(container, position, entry)
-            if new_container:
-                insert_child(owner, container)
+        set_override(self._overrides.owner, operand, key, value)
         self._overrides.refresh()
-
-    @staticmethod
-    def _fill_override(entry: ET.Element, key: str, value: str) -> None:
-        """Set an override entry's text, keeping its attributes and tail.
-
-        Args:
-            entry: The ``<Comment>``/``<Max>``/... element.
-            key: The metadata key, which decides CDATA versus plain text.
-            value: The new text.
-        """
-        for child in list(entry):
-            entry.remove(child)
-        if key in _CDATA_OVERRIDE_KEYS:
-            built = new_cdata_element(entry.tag, value)
-            entry.text = built.text
-            entry.append(built[0])
-        else:
-            entry.text = value
 
     def set_operand_comment(self, operand: str, text: str | None) -> None:
         """Set or remove the comment on an operand.
@@ -2537,6 +2556,107 @@ class Tag(_RootMetadataMixin, BaseElement):
 
         return lines
 
+    #: Child elements ``to_spec`` can represent.
+    _SPEC_CHILDREN = frozenset(
+        {
+            "Description",
+            "Comments",
+            "EngineeringUnits",
+            "Maxes",
+            "Mins",
+            "State0s",
+            "State1s",
+            "ExternalLoggings",
+            "Data",
+        }
+    )
+
+    def to_spec(self) -> TagSpec:
+        """Convert this tag to a spec that rebuilds it.
+
+        Attributes are kept as written (no default is elided), so the rebuilt
+        element is identical: the modelled ones become spec fields
+        (``Dimensions`` as an ``int`` or tuple) and everything else goes to
+        ``metadata`` (``Class``, ``Usage``, ``OpcUaAccess``, ``Max``, ``Min``,
+        ``ExternalLogging``, ``DataExchangeId``, ...), except the component
+        export marker ``Use``. The value is read back
+        with ``to_python()`` and is ``None`` for a tag with no data. L5K data
+        is not carried (the builder never writes it).
+
+        Returns:
+            A :class:`~py_l5x.build.specs.TagSpec`.
+
+        Raises:
+            ValueError: For produced and consumed tags, specialty tags
+                (MESSAGE, AXIS, MOTION_GROUP, ...), tags with unknown data,
+                and tags with child elements the spec cannot hold.
+        """
+        from py_l5x.build.specs import TagSpec
+        from py_l5x.parsers.migrate import _raw_cdata
+
+        element = self._element
+        tag_type = element.get("TagType", "Base")
+        if tag_type not in ("Base", "Alias"):
+            raise ValueError(f"tag {self.name!r}: {tag_type} tags are not supported")
+        if isinstance(self, _SpecialDataTag):
+            raise ValueError(
+                f"tag {self.name!r}: {self.data_type} tags have no spec "
+                "(specialty or unrecognised data)"
+            )
+        for child in element:
+            if child.tag not in self._SPEC_CHILDREN:
+                raise ValueError(f"tag {self.name!r}: unsupported element {child.tag}")
+
+        comments: dict[str, str] = {}
+        metadata: dict[str, dict[str, str]] = {}
+        for container_tag, (child_tag, key) in _OVERRIDE_CONTAINERS.items():
+            for entry in element.findall(f"{container_tag}/{child_tag}"):
+                operand = entry.get("Operand", "")
+                text = (
+                    _raw_cdata(entry)
+                    if key in _CDATA_OVERRIDE_KEYS
+                    else entry.text or ""
+                )
+                if key == "comment" and operand:
+                    comments[operand] = text
+                else:
+                    metadata.setdefault(operand, {})[key] = text
+
+        modelled = {
+            "Name",
+            "TagType",
+            "DataType",
+            "Dimensions",
+            "Radix",
+            "AliasFor",
+            "Constant",
+            "ExternalAccess",
+            "Use",
+        }
+        sizes = tuple(int(n) for n in element.get("Dimensions", "").split())
+        constant = element.get("Constant")
+        description = element.find("Description")
+        value = (
+            self.to_python()
+            if isinstance(self, TagNode) and self.value_element is not None
+            else None
+        )
+        return TagSpec(
+            name=self.name,
+            data_type=element.get("DataType") if tag_type == "Base" else None,
+            dimensions=(sizes[0] if len(sizes) == 1 else sizes) if sizes else None,
+            description=_raw_cdata(description) if description is not None else "",
+            value=value,
+            radix=element.get("Radix"),
+            external_access=element.get("ExternalAccess"),
+            constant=None if constant is None else constant == "true",
+            alias_for=element.get("AliasFor") if tag_type == "Alias" else None,
+            operand_comments=comments or None,
+            operand_metadata=metadata or None,
+            metadata={k: v for k, v in element.attrib.items() if k not in modelled}
+            or None,
+        )
+
 
 class _ValueTag(Tag):
     """Base for tags that are also their root value node (private, not exported).
@@ -3038,6 +3158,7 @@ class TagsCollection(BaseCollection[Tag]):
         super().__init__(
             scope_element, "Tags/Tag", _make_tag, item_args=(type_registry,)
         )
+        self._registry = type_registry
 
     # ------------------------------------------------------------------
     # Edits
@@ -3144,51 +3265,21 @@ class TagsCollection(BaseCollection[Tag]):
             LayoutError: If *value* is given for a type with no decorated
                 layout.
         """
+        from py_l5x.build.specs import TagSpec
+        from py_l5x.build.tag import build_tag
+
         self._check_new_name(name)
-        element = ET.Element("Tag")
-        element.set("Name", name)
-        element.set("TagType", "Base")
-        element.set("DataType", data_type)
-        if dimensions is not None:
-            sizes = (
-                tuple(dimensions)
-                if isinstance(dimensions, tuple | list)
-                else (dimensions,)
-            )
-            if (
-                not 1 <= len(sizes) <= 3
-                or not all(
-                    isinstance(n, int) and not isinstance(n, bool) for n in sizes
-                )
-                or any(n < 1 for n in sizes)
-            ):
-                raise ValueError(
-                    f"dimensions must be one to three positive integers: {dimensions!r}"
-                )
-            if data_type == "BOOL":
-                if len(sizes) > 1:
-                    raise ValueError("multi-dimensional BOOL arrays are not supported")
-                sizes = (-(-sizes[0] // 32) * 32,)
-            element.set("Dimensions", " ".join(str(n) for n in sizes))
-        if radix is not None:
-            element.set("Radix", radix)
-        if constant is not None:
-            element.set("Constant", "true" if constant else "false")
-        if external_access is not None:
-            element.set("ExternalAccess", external_access)
-        tag = self._append(element)
-        if description:
-            tag.description = description
-        if value is not None:
-            if not isinstance(tag, TagNode):
-                self.remove(name)
-                raise LayoutError(f"cannot assign a value to {data_type} tags")
-            try:
-                tag.value = value
-            except BaseException:
-                self.remove(name)
-                raise
-        return tag
+        spec = TagSpec(
+            name,
+            data_type,
+            dimensions=dimensions,
+            description=description or "",
+            value=value,
+            radix=radix,
+            external_access=external_access,
+            constant=constant,
+        )
+        return self._append(build_tag(spec, self._registry))
 
     def add_alias(
         self, name: str, alias_for: str, *, description: str | None = None
@@ -3206,15 +3297,12 @@ class TagsCollection(BaseCollection[Tag]):
         Raises:
             ValueError: If the name is invalid or taken.
         """
+        from py_l5x.build.specs import TagSpec
+        from py_l5x.build.tag import build_tag
+
         self._check_new_name(name)
-        element = ET.Element("Tag")
-        element.set("Name", name)
-        element.set("TagType", "Alias")
-        element.set("AliasFor", alias_for)
-        tag = self._append(element)
-        if description:
-            tag.description = description
-        return cast("AliasTag", tag)
+        spec = TagSpec(name, alias_for=alias_for, description=description or "")
+        return cast("AliasTag", self._append(build_tag(spec, self._registry)))
 
     def _find_element(self, name: str) -> ET.Element:
         """Return the ``<Tag>`` element with exactly this name.

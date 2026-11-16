@@ -438,8 +438,8 @@ def _local_tag(local: LocalTagSpec, registry: Any) -> ET.Element:
     return _fill(element, children)
 
 
-def _routine(routine: RoutineSpec) -> ET.Element:
-    """Build one ``<Routine>`` element.
+def build_routine(routine: RoutineSpec) -> ET.Element:
+    """Build one ``<Routine>`` element (shared by AOI and program builders).
 
     Args:
         routine: The routine.
@@ -561,7 +561,7 @@ def build_aoi(spec: AOISpec, registry: TypeRegistry | None = None) -> ET.Element
     children.append(
         _fill(
             ET.Element("Routines"),
-            [_routine(r) for r in sorted(spec.routines, key=lambda r: r.name)],
+            [build_routine(r) for r in sorted(spec.routines, key=lambda r: r.name)],
         )
     )
     if dependencies:

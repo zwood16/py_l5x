@@ -3668,6 +3668,143 @@ def exp21_check():
         )
 
 
+def exp23_spec():
+    from py_l5x import ProgramSpec, RoutineSpec, RungSpec, TagSpec
+
+    return ProgramSpec(
+        "BuiltProg",
+        tags=[
+            TagSpec("go", "BOOL", description="start"),
+            TagSpec("t", "TIMER", value={"PRE": 2500}),
+            TagSpec("cnt", "DINT", value=5),
+            TagSpec("arr", "REAL", dimensions=3, value=[1.5, 2.5, 3.5]),
+            TagSpec("u", "simple_udt", value={"Dint": 9, "bool2": True}),
+            TagSpec("deb", "Debounce", value={"onDelay": 200}),
+            TagSpec("msg", "STRING", value="built"),
+            TagSpec("go_alias", alias_for="go"),
+            TagSpec("tc", "TIMER", operand_comments={".DN": "done"}),
+        ],
+        routines=[
+            RoutineSpec(
+                "Main",
+                rungs=[
+                    RungSpec("XIC(go)TON(t,?,?);", comment="timer"),
+                    RungSpec("XIC(t.DN)ADD(cnt,1,cnt);"),
+                    RungSpec("JSR(Calc,0);"),
+                    RungSpec("XIC(go)Debounce(deb);"),
+                    RungSpec("JSR(Fault,0);"),
+                ],
+            ),
+            RoutineSpec(
+                "Calc",
+                type_="ST",
+                lines=[
+                    "IF cnt > 100 THEN",
+                    "    cnt := 0;",
+                    "END_IF;",
+                    "arr[0] := arr[1] + arr[2];",
+                ],
+            ),
+            RoutineSpec("Fault", rungs=[RungSpec("NOP();")]),
+        ],
+        main_routine="Main",
+        fault_routine="Fault",
+        description="built by py_l5x",
+    )
+
+
+def exp23():
+    """Programs: built from spec + scheduled, replace from own spec, rename, remove; component import."""
+    py_l5x = _py_l5x()
+    from py_l5x import RungSpec, build_program
+    from py_l5x.parsers import schema
+
+    p = py_l5x.load(str(FIX / "example.L5X"))
+    p.programs.add(exp23_spec(), task="MainTask")
+    mp = p.programs["MainProgram"].to_spec()
+    main = next(r for r in mp.routines if r.name == "MainRoutine")
+    main.rungs.append(RungSpec("NOP();", comment="added via replace"))
+    p.programs.replace(mp)
+    p.programs.rename("PeriodicProgram", "PeriodicRenamed")
+    p.programs.remove("Unscheduled")
+    d = HERE / "exp23"
+    d.mkdir(exist_ok=True)
+    p.write(d / "edited.L5X")
+    e = Exp("exp23", base="C:/Users/zwood/ldsdk/projects/exp23/edited.L5X")
+    e.files = {"edited.L5X": (d / "edited.L5X").read_bytes()}
+    e.raw(id="build", op="build")
+    e.export("built", PR("BuiltProg"))
+    e.export("mainprog", PR("MainProgram"))
+    e.export("tasks", "Controller/Tasks/Task")
+    e.export("periodic", PR("PeriodicRenamed"))
+    e.write()
+    # component: the built program on its own, imported into the example base (unscheduled)
+    ref = py_l5x.load(str(FIX / "example.L5X"))
+    comp = py_l5x.loads(
+        COMPONENT_TEMPLATE.replace('TargetType="Tag"', 'TargetType="Program"')
+    )
+    progs_el = ET.Element("Programs")
+    schema.insert_child(comp.root.find("Controller"), progs_el)
+    spec = exp23_spec()
+    spec.name = "BuiltProgComp"
+    schema.insert_child(progs_el, build_program(spec, ref._type_registry))
+    x = Exp("exp23b")
+    x.files = {"comp.L5X": py_l5x.writer.to_bytes(comp.root)}
+    x.steps.append(
+        {
+            "id": "C1_program_component",
+            "op": "import",
+            "file": "comp.L5X",
+            "xpath": "Controller",
+            "coll": "overwrite",
+        }
+    )
+    x.raw(id="build", op="build")
+    x.export("comp", PR("BuiltProgComp"))
+    x.write()
+
+
+def exp23_check():
+    py_l5x = _py_l5x()
+    exp = py_l5x.load(str(HERE / "exp23" / "edited.L5X"))
+    for res, name in (("exp23", "built"), ("exp23b", "comp")):
+        got = py_l5x.load(str(HERE / "results" / res / f"{name}.L5X"))
+        gp = next(iter(got.programs.values()))
+        ep = exp.programs["BuiltProg"]
+        bad = [
+            t
+            for t in ep.tags
+            if t not in gp.tags
+            or (
+                hasattr(ep.tags[t], "to_python")
+                and ep.tags[t].to_python() != gp.tags[t].to_python()
+            )
+        ]
+        rd = [
+            r
+            for r in ep.routines
+            if [x.text for x in ep.routines[r].rungs]
+            != [x.text for x in gp.routines[r].rungs]
+            or ep.routines[r].st_code != gp.routines[r].st_code
+        ]
+        print(
+            res,
+            "tag value diffs:",
+            bad,
+            "| routine diffs:",
+            rd,
+            "| main/fault:",
+            gp.main_routine_name,
+            gp._element.get("FaultRoutineName"),
+        )
+    t = (HERE / "results" / "exp23" / "tasks.L5X").read_text(encoding="utf-8-sig")
+    import re as _re
+
+    print("MainTask schedule:", _re.findall(r'ScheduledProgram Name="([^"]+)"', t))
+    mp = (HERE / "results" / "exp23" / "mainprog.L5X").read_text(encoding="utf-8-sig")
+    print("replace rung present:", "added via replace" in mp)
+
+
 if __name__ == "__main__":
     for name in sys.argv[1:]:
         globals()[name]()

@@ -894,6 +894,39 @@ project.aois.rename("SeqCtrl", "SeqControl")  # also rewrites call sites in RLL/
 
 `replace()` refuses to change the list of Required parameters while the AOI is called anywhere, because Studio doesn't update call sites and the project would then fail to verify. Pass `allow_signature_change=True` to do it anyway. Replacing a UDT or AOI resets the local-tag values of AOI instances that depend on it, because Studio keeps those values only in the `L5K` data block, which py_l5x cannot regenerate. Ordinary value writes keep that block, so AOI local values survive.
 
+### Programs
+
+```python
+from py_l5x import ProgramSpec, RoutineSpec, RungSpec, TagSpec
+
+spec = ProgramSpec(
+    "Motor1",
+    tags=[
+        TagSpec("Run", "BOOL"),
+        TagSpec("Delay", "TIMER", value={"PRE": 2500}),
+        TagSpec("Run_Alias", alias_for="Run"),
+    ],
+    routines=[
+        RoutineSpec(
+            "Main", rungs=[RungSpec("XIC(Run)TON(Delay,?,?);", comment="start delay")]
+        ),
+        RoutineSpec(
+            "Calc", type_="ST", lines=["IF Delay.DN THEN", "    Run := 0;", "END_IF;"]
+        ),
+    ],
+    main_routine="Main",
+    description="Motor 1",
+)
+project.programs.add(spec, task="MainTask")  # unscheduled if no task is given
+
+spec = project.programs["MainProgram"].to_spec()  # specs round-trip existing programs
+project.programs.replace(spec)  # existing tag values are kept
+project.programs.rename("PeriodicProgram", "Periodic")
+project.programs.unschedule("Periodic")
+```
+
+`replace()` keeps the current data of tags whose type is unchanged and whose spec has no value. Studio's own program overwrite resets them. Produced/consumed tags and MESSAGE/AXIS/MOTION_GROUP tags can't be turned into specs yet.
+
 ### Adding, removing and renaming
 
 ```python
@@ -1089,7 +1122,7 @@ uv run ruff check --fix .   # auto-fix where possible
 - Not all features or specialty tag types are supported. For example:
     - Alarms
     - Motion Coordinate Groups
-- Write support covers values, documentation, tags, operand metadata, routines and rungs, verified against v37 only.  See [Editing and writing L5X files](#editing-and-writing-l5x-files).
+- Write support covers values, documentation, tags, operand metadata, routines, rungs, UDTs and AOIs, verified against v37 only. See [Editing and writing L5X files](#editing-and-writing-l5x-files).
 - Replacing a UDT or AOI with `replace()` resets the **local-tag values of AOI instances** that depend on it (for example every GenericInput instance when its Debounce local changes). Studio stores those values only in the tag's `L5K` data block, which py_l5x does not generate. Ordinary value writes keep the block, so AOI local values survive them.
 - Renaming or removing tags, routines and UDTs does not update references to them in logic (renaming an AOI does update its call sites).
 
@@ -1099,4 +1132,6 @@ uv run ruff check --fix .   # auto-fix where possible
 - [x] Add, remove and rename tags, routines and rungs; edit operand metadata
 - [x] Build, add, replace, rename and remove UDTs, migrating existing tag data
 - [x] Build, add, replace, rename and remove AOIs, migrating existing tag data and protecting call sites
-- [ ] Implement a generate component feature to go along with write allowing users to create component imports using python.
+- [x] Build programs and tags from specs; add, replace, rename, remove and schedule programs
+- [ ] Component export: write a target with its dependencies as a standalone import file
+- [ ] Templating repeated programs (name/tag substitution)
