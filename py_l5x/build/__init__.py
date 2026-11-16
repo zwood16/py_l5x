@@ -2,6 +2,7 @@
 
 from py_l5x.build.aoi import aoi_call_operands, build_aoi
 from py_l5x.build.datatype import build_datatype
+from py_l5x.build.export import export_component
 from py_l5x.build.program import build_program
 from py_l5x.build.specs import (
     AOISpec,
@@ -31,4 +32,5 @@ __all__ = [
     "build_datatype",
     "build_program",
     "build_tag",
+    "export_component",
 ]

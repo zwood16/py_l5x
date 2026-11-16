@@ -384,6 +384,24 @@ class Project:
 
         writer.write(self._root, path, **kwargs)
 
+    def export(self, targets: Any, *, controller_name: str | None = None) -> Project:
+        """Build a component export of objects from this project.
+
+        Shorthand for :func:`py_l5x.build.export.export_component` with this
+        project. Write the result with ``.write(path)``.
+
+        Args:
+            targets: One object or a list of objects of one kind (loaded
+                objects of this project, or specs).
+            controller_name: Name of the exported ``<Controller>``.
+
+        Returns:
+            A new in-memory project.
+        """
+        from py_l5x.build.export import export_component
+
+        return export_component(targets, self, controller_name=controller_name)
+
     @property
     def controller_element(self) -> ET.Element:
         """Raw XML ``<Controller>`` element.

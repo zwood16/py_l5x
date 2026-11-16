@@ -237,6 +237,9 @@ text, while the other operand metadata is CDATA.
 ### Programs from specs (exp23)
 A program built from a spec (atomic, TIMER, array, UDT, AOI, STRING and alias tags with values; RLL and ST routines; main and fault routines; JSR and AOI calls), added and scheduled in a full project, builds. So does the same program imported as a component (0 warnings). A replaced, renamed and removed program in the same project also builds, and the task schedules follow. Data-less tags get Studio's type defaults.
 
+### Component export (exp24)
+py_l5x's component exports of A_UDT, GenericRobotIO, FanucRobot (6 dependent AOIs/UDTs), GenericInput, PeriodicProgram, MainProgram, Robot, SequenceRoutine, rung 2, two controller tags, a program UDT tag, and an AOI spec all import into a **blank** v37 project with 0 warnings. Built in isolation, the ones without I/O references build. MainProgram and Robot fail the build only on module tags (`Local:1:I`, `ShopRobot:I/O`). Modules are carried with `Use="Reference"`, as in Studio's own exports, and a reference does not create the module.
+
 ## Not yet tested
 - Logix versions other than v37 (the VM has v30–v37 installed; the SDK supports v31 and later).
 - Whether a full-project L5X with a tag whose `<Data>` disagrees with a changed UDT still opens. In exp07b the `simple_udt` instance data didn't include the new member; the project opened, but the instance's value wasn't checked.

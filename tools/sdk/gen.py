@@ -3805,6 +3805,95 @@ def exp23_check():
     print("replace rung present:", "added via replace" in mp)
 
 
+def exp24():
+    """Component exports from py_l5x imported into a BLANK project: are they self-contained?"""
+    py_l5x = _py_l5x()
+    from py_l5x import AOISpec, ParameterSpec, RoutineSpec, RungSpec
+
+    p = py_l5x.load(str(FIX / "example.L5X"))
+    mp = p.programs["MainProgram"]
+    cases = {
+        "udt_A_UDT": p.data_types["A_UDT"],
+        "udt_GenericRobotIO": p.data_types["GenericRobotIO"],
+        "aoi_FanucRobot": p.aois["FanucRobot"],
+        "aoi_GenericInput": p.aois["GenericInput"],
+        "prog_PeriodicProgram": p.programs["PeriodicProgram"],
+        "prog_MainProgram": mp,
+        "prog_Robot": p.programs["Robot"],
+        "routine_SequenceRoutine": mp.routines["SequenceRoutine"],
+        "rung_seq2": mp.routines["SequenceRoutine"].rungs[2],
+        "tags_ctrl": [
+            p.controller_tags["ALLOWABLE_ALARMS"],
+            p.controller_tags["message_data"],
+        ],
+        "tag_prog_udt": mp.tags["a_udt_instance"],
+        "spec_aoi_calls_debounce": AOISpec(
+            "NewDeb",
+            [ParameterSpec("In", "BOOL"), ParameterSpec("Out", "BOOL", usage="Output")],
+            local_tags=[],
+            routines=[RoutineSpec("Logic", rungs=[RungSpec("XIC(In)OTE(Out);")])],
+        ),
+    }
+    e = Exp("exp24", base=BLANK_ACD)
+    e.files = {}
+    for name, target in cases.items():
+        doc = p.export(target)
+        e.files[f"{name}.L5X"] = py_l5x.writer.to_bytes(doc.root)
+        e.steps.append(
+            {
+                "id": name,
+                "op": "import",
+                "file": f"{name}.L5X",
+                "xpath": "Controller",
+                "coll": "overwrite",
+            }
+        )
+    e.raw(id="build", op="build")
+    e.write()
+
+
+def exp24b():
+    """Build each logic-bearing export alone in a blank project, deleting its program between cases."""
+    src = HERE / "exp24"
+    e = Exp("exp24b", base=BLANK_ACD)
+    e.files = {}
+    for name, prog in [
+        ("prog_PeriodicProgram", "PeriodicProgram"),
+        ("prog_MainProgram", "MainProgram"),
+        ("prog_Robot", "Robot"),
+        ("routine_SequenceRoutine", "MainProgram"),
+        ("aoi_FanucRobot", None),
+        ("aoi_GenericInput", None),
+    ]:
+        e.files[f"{name}.L5X"] = (src / f"{name}.L5X").read_bytes()
+        e.steps.append(
+            {
+                "id": name,
+                "op": "import",
+                "file": f"{name}.L5X",
+                "xpath": "Controller",
+                "coll": "overwrite",
+            }
+        )
+        e.raw(id=f"build_{name}", op="build")
+        if prog:
+            e.files[f"del_{name}.L5X"] = (
+                env("Program", prog, progs(f'<Program Use="Delete" Name="{prog}"/>'))
+                .replace('Name="Example_PLC"', 'Name="Blank"')
+                .encode()
+            )
+            e.steps.append(
+                {
+                    "id": f"del_{name}",
+                    "op": "import",
+                    "file": f"del_{name}.L5X",
+                    "xpath": "Controller",
+                    "coll": "overwrite",
+                }
+            )
+    e.write()
+
+
 if __name__ == "__main__":
     for name in sys.argv[1:]:
         globals()[name]()

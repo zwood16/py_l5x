@@ -927,6 +927,24 @@ project.programs.unschedule("Periodic")
 
 `replace()` keeps the current data of tags whose type is unchanged and whose spec has no value. Studio's own program overwrite resets them. Produced/consumed tags and MESSAGE/AXIS/MOTION_GROUP tags can't be turned into specs yet.
 
+### Component export
+
+`project.export(...)` writes any UDT, AOI, program, routine, rung or tag(s) as a standalone import file, in the same layout as Studio's Export Component. Everything it needs comes along as context: UDTs and AOIs (transitively, including AOIs called in its logic), controller and program tags referenced in its logic (and alias targets), and the I/O modules those tags belong to. Specs can be exported too.
+
+```python
+doc = project.export(project.aois["FanucRobot"])  # AOI + 6 AOIs/UDTs it depends on
+doc.write("FanucRobot_AOI.L5X")
+
+prog = project.programs["MainProgram"]
+project.export(prog.routines["SequenceRoutine"]).write("SequenceRoutine.L5X")
+project.export(prog.routines["SequenceRoutine"].rungs[2]).write("Rung2.L5X")
+project.export(spec).write(
+    "Motor1_Program.L5X"
+)  # a ProgramSpec/AOISpec/DataTypeSpec/TagSpec
+```
+
+Modules are included as references, like Studio does: the target project must already have them, or tags such as `Local:1:I` stay unresolved. Cross-program references (`\Program.Tag`) are not followed.
+
 ### Adding, removing and renaming
 
 ```python
@@ -1133,5 +1151,5 @@ uv run ruff check --fix .   # auto-fix where possible
 - [x] Build, add, replace, rename and remove UDTs, migrating existing tag data
 - [x] Build, add, replace, rename and remove AOIs, migrating existing tag data and protecting call sites
 - [x] Build programs and tags from specs; add, replace, rename, remove and schedule programs
-- [ ] Component export: write a target with its dependencies as a standalone import file
+- [x] Component export: write a target with its dependencies as a standalone import file
 - [ ] Templating repeated programs (name/tag substitution)

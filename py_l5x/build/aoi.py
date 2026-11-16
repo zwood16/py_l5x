@@ -104,6 +104,25 @@ class _NoTypes:
         """
         return False
 
+    def contains_aoi(self, name: str) -> bool:
+        """Return ``False``: no AOIs are known.
+
+        Args:
+            name: Ignored.
+
+        Returns:
+            Always ``False``.
+        """
+        return False
+
+    def type_names(self) -> list[str]:
+        """Return no names: no project types are known.
+
+        Returns:
+            An empty list.
+        """
+        return []
+
     def string_max_length(self, name: str) -> None:
         """Return ``None``: no sizes are known.
 
