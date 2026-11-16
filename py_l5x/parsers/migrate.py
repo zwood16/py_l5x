@@ -298,6 +298,41 @@ def _merge(
                     _merge(old_struct, new_struct, registry, max_lengths)
 
 
+def type_dependents(root: ET.Element, type_name: str) -> set[str]:
+    """Find every type that depends on a type, transitively.
+
+    A type depends on ``T`` through a UDT member, an AOI parameter (any
+    usage) or an AOI local tag of type ``T``, or of a type that depends on
+    ``T``.
+
+    Args:
+        root: The ``<Controller>`` element.
+        type_name: The type ``T``.
+
+    Returns:
+        ``T`` itself plus every UDT and AOI that reaches it.
+    """
+    uses: list[tuple[str, str]] = []
+    for data_type in root.findall("DataTypes/DataType"):
+        for member in data_type.findall("Members/Member"):
+            uses.append((data_type.get("Name", ""), member.get("DataType", "")))
+    for aoi in root.findall("AddOnInstructionDefinitions/AddOnInstructionDefinition"):
+        for item in [
+            *aoi.findall("Parameters/Parameter"),
+            *aoi.findall("LocalTags/LocalTag"),
+        ]:
+            uses.append((aoi.get("Name", ""), item.get("DataType", "")))
+    closure = {type_name}
+    changed = True
+    while changed:
+        changed = False
+        for owner, used in uses:
+            if used in closure and owner not in closure:
+                closure.add(owner)
+                changed = True
+    return closure
+
+
 def _swap(parent: ET.Element, old: ET.Element, new: ET.Element) -> None:
     """Replace *old* by *new* in *parent*, keeping the position and tail.
 
@@ -365,8 +400,12 @@ def plan_instance_migration(
 
     Returns:
         The edits that replace each instance with a fresh default subtree
-        carrying the old values, truncate root strings, and drop the stale
-        L5K blocks of the touched tags.
+        carrying the old values, truncate root strings, and drop the L5K
+        block of every tag, AOI parameter and AOI local tag whose type is the
+        migrated type or depends on it (through UDT members, AOI parameters or
+        AOI local tags), touched or not. That resets the local-tag instance
+        values of AOIs that depend on the type: their only copy is the L5K
+        data, which cannot be regenerated.
 
     Raises:
         LayoutError: If the type has no decorated layout.
@@ -411,6 +450,17 @@ def plan_instance_migration(
             if truncate is not None:
                 ops.append(truncate)
                 owners.append(owner)
+    # Every owner whose type reaches the migrated type through UDT members or
+    # AOI parameters and local tags carries L5K data in the old layout. An AOI
+    # instance's L5K also holds its local tags' values, which only L5K has, so
+    # this resets them to the AOI defaults. Without it Studio may fail to open
+    # the project (measured in Studio, exp21/exp22).
+    closure = type_dependents(root, type_name)
+    for element in root.iter():
+        if element.tag in ("Tag", "Parameter", "LocalTag") and (
+            element.get("DataType") in closure
+        ):
+            owners.append(element)
     seen: set[int] = set()
     for owner in owners:
         if id(owner) not in seen:

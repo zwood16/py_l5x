@@ -774,7 +774,7 @@ for prog_name in task.scheduled_program_names:
 ## Editing and writing L5X files
 
 > [!NOTE]
-> Write support is new and only verified against Studio 5000 **v37**. Values (including whole structures and arrays), documentation, tags, operand metadata, routines and rungs can be edited. Editing AOI parameters is not supported yet.
+> Write support is new and only verified against Studio 5000 **v37**. Values (including whole structures and arrays), documentation, tags, operand metadata, routines and rungs can be edited; UDTs and AOIs can be built from specs, edited and migrated.
 
 Any loaded project (full or component export) can be edited in place and written back. The output matches Studio's own export format (UTF-8 BOM, CRLF, CDATA sections), so it can be opened in Studio, or imported with Import Component, and diffs cleanly against the original.
 
@@ -853,6 +853,46 @@ project.data_types.remove("Old_t")  # refuses while the type is still used
 ```
 
 `DataTypeSpec.string(name, length)` creates a string type. Member types are checked when adding or replacing, because Studio silently accepts unknown ones. Operand comments on removed members are left in place, as Studio does.
+
+### Add-On Instructions
+
+AOIs are built from specs the same way. EnableIn/EnableOut are added automatically, the Required/Visible flags follow Studio's rules (InOut parameters are always both), and defaults are written as full value trees.
+
+```python
+from py_l5x import AOISpec, LocalTagSpec, ParameterSpec, RoutineSpec, RungSpec
+
+spec = AOISpec(
+    "MotorCtl",
+    [
+        ParameterSpec("Run", "BOOL", required=True, description="Run command"),
+        ParameterSpec("Delay", "DINT", default=500, visible=True),
+        ParameterSpec("Running", "BOOL", usage="Output", visible=True),
+    ],
+    local_tags=[LocalTagSpec("t", "TIMER")],
+    routines=[
+        RoutineSpec(
+            "Logic",
+            rungs=[
+                RungSpec("MOVE(Delay,t.PRE);"),
+                RungSpec("XIC(Run)TON(t,?,?);", comment="start delay"),
+                RungSpec("XIC(t.DN)OTE(Running);"),
+            ],
+        )
+    ],
+    revision="1.0",
+    description="Motor control",
+)
+project.aois.add(spec)
+
+spec = project.aois["Debounce"].to_spec()  # edit an existing AOI
+spec.parameters.append(ParameterSpec("hold", "DINT"))
+project.aois.replace(spec)  # instances migrated by parameter name
+
+print(project.aois.call_sites("SeqCtrl"))  # where the instruction is called
+project.aois.rename("SeqCtrl", "SeqControl")  # also rewrites call sites in RLL/ST
+```
+
+`replace()` refuses to change the list of Required parameters while the AOI is called anywhere, because Studio doesn't update call sites and the project would then fail to verify. Pass `allow_signature_change=True` to do it anyway. Replacing a UDT or AOI resets the local-tag values of AOI instances that depend on it, because Studio keeps those values only in the `L5K` data block, which py_l5x cannot regenerate. Ordinary value writes keep that block, so AOI local values survive.
 
 ### Adding, removing and renaming
 
@@ -1049,12 +1089,14 @@ uv run ruff check --fix .   # auto-fix where possible
 - Not all features or specialty tag types are supported. For example:
     - Alarms
     - Motion Coordinate Groups
-- Write support covers values, documentation, tags, operand metadata, routines and rungs, verified against v37 only. AOI parameters cannot be edited yet. See [Editing and writing L5X files](#editing-and-writing-l5x-files).
+- Write support covers values, documentation, tags, operand metadata, routines and rungs, verified against v37 only.  See [Editing and writing L5X files](#editing-and-writing-l5x-files).
+- Replacing a UDT or AOI with `replace()` resets the **local-tag values of AOI instances** that depend on it (for example every GenericInput instance when its Debounce local changes). Studio stores those values only in the tag's `L5K` data block, which py_l5x does not generate. Ordinary value writes keep the block, so AOI local values survive them.
+- Renaming or removing tags, routines and UDTs does not update references to them in logic (renaming an AOI does update its call sites).
 
 ## Road Map
 
 - [x] Write L5X files and edit values and documentation in place
 - [x] Add, remove and rename tags, routines and rungs; edit operand metadata
 - [x] Build, add, replace, rename and remove UDTs, migrating existing tag data
-- [ ] Build and edit AOIs (parameters, local tags, logic), migrating existing tag data
+- [x] Build, add, replace, rename and remove AOIs, migrating existing tag data and protecting call sites
 - [ ] Implement a generate component feature to go along with write allowing users to create component imports using python.

@@ -2,6 +2,7 @@
 
 import copy
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 import pytest
 from test_layout import first_difference
@@ -217,16 +218,28 @@ class TestAssignment:
         assert alarms.to_python()[2] == "SYST-043"
 
     def test_l5k_dropped_and_round_trip(self) -> None:
-        """The owner's L5K goes and the values survive a reload."""
+        """A tag without AOI data loses its L5K; values survive a reload."""
         project = _example()
-        tag = _main(project, "a_udt_instance")
+        tag = _main(project, "a_2d_array")
         assert tag._element.find("Data[@Format='L5K']") is not None
         before = project.to_string().count('Format="L5K"')
-        tag.value = {"a_dint": 11}
+        tag.value = {(0, 1): 11}
         assert tag._element.find("Data[@Format='L5K']") is None
         text = project.to_string()
         assert text.count('Format="L5K"') == before - 1
-        again = loads(text).programs["MainProgram"].tags["a_udt_instance"]
+        again = loads(text).programs["MainProgram"].tags["a_2d_array"]
+        assert again.to_python() == tag.to_python()
+
+    def test_l5k_kept_for_tags_containing_aoi_instances(self) -> None:
+        """A UDT with an AOI member keeps its L5K block through a write."""
+        project = _example()
+        tag = _main(project, "a_udt_instance")
+        l5k = ET.tostring(tag._element.find("Data[@Format='L5K']"))
+        tag.value = {"a_dint": 11, "an_aoi": {"onDelay": 3}}
+        assert ET.tostring(tag._element.find("Data[@Format='L5K']")) == l5k
+        again = (
+            loads(project.to_string()).programs["MainProgram"].tags["a_udt_instance"]
+        )
         assert again.to_python() == tag.to_python()
 
     def test_mixed_defaults_on_dataless(self) -> None:

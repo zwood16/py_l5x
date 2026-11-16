@@ -226,6 +226,14 @@ text, while the other operand metadata is CDATA.
 - Member value conversion when a UDT member's type changes on overwrite (exp18, exp18b): REAL→integer rounds half to even, then saturates; integer→integer wraps in two's complement (DINT 300 → SINT 44, SINT -5 → UINT 65531); integer→REAL uses float32 rounding; BOOL→numeric is 0/1; numeric→BOOL is nonzero→1 (REAL 0.5 → 1).
 - py_l5x's `data_types.replace()` migration gives exactly the same values as Studio's own migration on import, for a reorder, an insert, a removal, DINT→REAL, DINT→SINT wrapping and a nested instance (exp19).
 
+### AOI building and editing (exp20–exp22)
+- AOI parameter rules (exp20, exp20b): an `InOut` parameter must be `Required="true" Visible="true"`; any other combination aborts with `RxE_INVALID_TAG_USAGE_TYPE`. Input/Output with `Required="true" Visible="false"` aborts with `RxE_ILLEGAL_OPERATIONS`. Input/Output parameters must be elementary types with no dimensions (`RxE_ARRAY_INVALID_FOR_PARAMETER`, `RxE_INVALID_DATATYPE_FOR_PARAMETER`).
+- An RLL AOI call is `Name(instance, <Required parameters in definition order>)` (checked on every call in example.L5X). Calling with extra arguments fails the build with `RxCMP_E_AUDIT_INVALIDNOOFOPS`.
+- AOIs built from specs import with 0 warnings and build. Studio's export is byte-identical apart from what Studio adds itself (L5K DefaultData, Created/Edited dates and users, SoftwareRevision, Class).
+- **L5K holds AOI local-tag instance values** (exp22). An AOI instance's Decorated data covers only its Input/Output parameters. On a full-project open, Studio takes parameters from Decorated and local tags from L5K: an edited Decorated parameter (999) and a value planted in the L5K local timer (4321) both survived. So keeping a stale-but-compatible L5K block preserves locals, and dropping it resets them to the AOI defaults.
+- **A full project with an L5K layout that no longer matches its type does not open** (exp21). After an AOI changed shape, tags that contain it only through an AOI local (GenericInput has a Debounce local) still had the old layout in L5K, and the open failed with `XMLSrv_E_IMPORT_ABORTED_NO_CHANGES` and no ImportLog. Removing L5K from those tags fixed it. When a type changes, every tag whose type depends on it through UDT members, AOI parameters or AOI local tags must lose its L5K block.
+- Renaming an AOI and rewriting its call sites in logic gives a project that opens and builds (exp21c).
+
 ## Not yet tested
 - Logix versions other than v37 (the VM has v30–v37 installed; the SDK supports v31 and later).
 - Whether a full-project L5X with a tag whose `<Data>` disagrees with a changed UDT still opens. In exp07b the `simple_udt` instance data didn't include the new member; the project opened, but the instance's value wasn't checked.

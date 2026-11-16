@@ -140,7 +140,20 @@ async def main(manifest_path: str) -> None:
             col,
         )
     else:
-        proj = await LogixProject.open_logix_project(base, col)
+        try:
+            proj = await LogixProject.open_logix_project(base, col)
+        except LogixSdkError:
+            step("OPEN FAILED; SDK log:")
+            for m in col.take():
+                if (
+                    "Exception" in m
+                    or "Text" in m
+                    or "CDATA" in m
+                    or "Target" in m
+                    or "ERROR" in m
+                ):
+                    print("   ", m[:300])
+            raise
     step(f"opened base; startup msgs: {len(col.take())}")
     results = []
     with proj as p:

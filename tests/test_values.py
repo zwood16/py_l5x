@@ -132,6 +132,10 @@ CASES: dict[str, tuple[Callable[[Project], TagNode], object]] = {
 }
 
 
+#: Cases whose tag type is, or contains, an AOI (so its L5K data is kept).
+AOI_DATA_CASES = {"udt_bool", "udt_real", "array_1d", "nested_udt", "aoi_member"}
+
+
 def _l5k_count(text: str) -> int:
     """Count ``Format="L5K"`` sections in serialized text.
 
@@ -166,22 +170,31 @@ class TestWrites:
 
     @pytest.mark.parametrize("case", list(CASES))
     def test_write(self, case: str) -> None:
-        """A write reads back, survives a round trip and drops only its L5K."""
+        """A write reads back, survives a round trip and drops only its L5K.
+
+        Data that contains AOI instances keeps its L5K block (it holds the
+        AOI local tags' values, see ``TagNode._owner_has_aoi_data``).
+        """
         get, new_value = CASES[case]
         project = _example()
         before_text = project.to_string()
         node = get(project)
         stale = _owner_l5k(node)
         assert stale >= 1
+        keeps_l5k = project._type_registry.contains_aoi(
+            node._overrides.owner.get("DataType", "")
+        )
+        assert keeps_l5k == (case in AOI_DATA_CASES)
         node.value = new_value
 
         assert get(project).value == new_value
-        assert _owner_l5k(node) == 0
+        assert _owner_l5k(node) == (stale if keeps_l5k else 0)
 
         text = project.to_string()
         assert get(loads(text)).value == new_value
-        # Only the owner's L5K sections are gone.
-        assert _l5k_count(text) == _l5k_count(before_text) - stale
+        # Only the owner's L5K sections are gone (none if it holds AOI data).
+        removed = 0 if keeps_l5k else stale
+        assert _l5k_count(text) == _l5k_count(before_text) - removed
         # No two elements share a line (outside CDATA), as before the write.
         without_cdata = re.sub(r"<!\[CDATA\[.*?\]\]>", "", text, flags=re.DOTALL)
         baseline = re.sub(r"<!\[CDATA\[.*?\]\]>", "", before_text, flags=re.DOTALL)

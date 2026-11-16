@@ -2,6 +2,7 @@
 
 import json
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 HERE = Path(__file__).parent
@@ -3299,6 +3300,372 @@ def exp19_check():
             lv,
         )
     print("all identical" if not bad else f"{bad} differ")
+
+
+def exp20():
+    """Built AOIs imported as components; Studio's export compared to the builder output."""
+    py_l5x = _py_l5x()
+    from py_l5x import (
+        AOISpec,
+        DataTypeSpec,
+        LocalTagSpec,
+        MemberSpec,
+        ParameterSpec,
+        RoutineSpec,
+        RungSpec,
+        build_aoi,
+        build_datatype,
+    )
+    from py_l5x.parsers import schema
+
+    ref = py_l5x.load(str(FIX / "example.L5X"))
+    reg = ref._type_registry
+    aois_ = [
+        AOISpec(
+            "BaMin",
+            [
+                ParameterSpec("In1", "BOOL"),
+                ParameterSpec("Out1", "BOOL", usage="Output"),
+            ],
+            routines=[RoutineSpec("Logic", rungs=[RungSpec("XIC(In1)OTE(Out1);")])],
+        ),
+        AOISpec(
+            "BaFull",
+            [
+                ParameterSpec(
+                    "Run", "BOOL", required=True, visible=True, description="run cmd"
+                ),
+                ParameterSpec(
+                    "Speed",
+                    "REAL",
+                    default=12.5,
+                    engineering_unit="rpm",
+                    min=0,
+                    max=100,
+                    visible=True,
+                ),
+                ParameterSpec("Data", "simple_udt", usage="InOut", required=True),
+                ParameterSpec(
+                    "Done",
+                    "BOOL",
+                    usage="Output",
+                    visible=True,
+                    state0="no",
+                    state1="yes",
+                ),
+            ],
+            local_tags=[
+                LocalTagSpec("t", "TIMER", default={"PRE": 1500}),
+                LocalTagSpec("arr", "DINT", dimension=4, default=[1, 2, 3, 4]),
+                LocalTagSpec("deb", "Debounce"),
+                LocalTagSpec("s", "STRING", default="hi"),
+            ],
+            routines=[
+                RoutineSpec(
+                    "Logic",
+                    rungs=[
+                        RungSpec("XIC(Run)TON(t,?,?);", comment="delay"),
+                        RungSpec("XIC(t.DN)OTE(Done);"),
+                        RungSpec("MOVE(Speed,Data.real);"),
+                        RungSpec("Debounce(deb);"),
+                    ],
+                ),
+                RoutineSpec("Prescan", type_="ST", lines=["Done := 0;"]),
+                RoutineSpec("EnableInFalse", rungs=[RungSpec("OTU(Done);")]),
+            ],
+            revision="2.3",
+            revision_note="built by py_l5x",
+            description="full featured",
+            vendor="AIC",
+        ),
+    ]
+    comp = py_l5x.loads(
+        COMPONENT_TEMPLATE.replace(
+            'TargetType="Tag"', 'TargetType="AddOnInstructionDefinition"'
+        )
+    )
+    c = comp.root.find("Controller")
+    aoi_el = ET.Element("AddOnInstructionDefinitions")
+    schema.insert_child(c, aoi_el)
+    for a in aois_:
+        schema.insert_child(aoi_el, build_aoi(a, reg))
+    e = Exp("exp20")
+    e.files = {"aois.L5X": py_l5x.writer.to_bytes(comp.root)}
+    e.steps.append(
+        {
+            "id": "A1_built_aois",
+            "op": "import",
+            "file": "aois.L5X",
+            "xpath": "Controller",
+            "coll": "overwrite",
+        }
+    )
+    for a in aois_:
+        e.export(a.name, AOI(a.name))
+    # calls + tags so the build exercises them
+    e.files["prog.L5X"] = env(
+        "Program",
+        "BaProg",
+        progs(
+            prog(
+                "BaProg",
+                '<Tag Name="m" DataType="BaMin"/><Tag Name="f" DataType="BaFull"/><Tag Name="u" DataType="simple_udt"/><Tag Name="go" DataType="BOOL"/>',
+                rll("MainRoutine", "BaMin(m);", "BaFull(f,go,u);"),
+            )
+        ),
+    ).encode()
+    e.steps.append(
+        {
+            "id": "A2_prog",
+            "op": "import",
+            "file": "prog.L5X",
+            "xpath": "Controller",
+            "coll": "overwrite",
+        }
+    )
+    e.raw(id="build", op="build")
+    # questionable: Input array parameter (hand-made, builder refuses it)
+    e.case(
+        "Q1_input_array_param",
+        env(
+            "AddOnInstructionDefinition",
+            "BaQ1",
+            aois(
+                aoi(
+                    "BaQ1",
+                    par("Arr", "DINT", extra=' Dimensions="4"')
+                    + par("O", "BOOL", "Output"),
+                    routines=rll("Logic", "OTE(O);"),
+                )
+            ),
+        ),
+        export=[AOI("BaQ1")],
+    )
+    e.case(
+        "Q2_input_udt_param",
+        env(
+            "AddOnInstructionDefinition",
+            "BaQ2",
+            aois(
+                aoi(
+                    "BaQ2",
+                    par("U", "simple_udt") + par("O", "BOOL", "Output"),
+                    routines=rll("Logic", "OTE(O);"),
+                )
+            ),
+        ),
+        export=[AOI("BaQ2")],
+    )
+    e.write()
+    (HERE / "exp20" / "built").mkdir(exist_ok=True)
+    for a in aois_:
+        (HERE / "exp20" / "built" / f"{a.name}.xml").write_text(
+            py_l5x.writer.to_string(build_aoi(a, reg))
+        )
+
+
+def exp20_check():
+    """Compare Studio's exports of the built AOIs with the builder output."""
+    import difflib
+    import re as _re
+
+    def norm(t):
+        t = t.replace("\r\n", "\n")
+        # Studio adds dates/users/SoftwareRevision/Class and L5K DefaultData; py_l5x writes neither
+        t = _re.sub(
+            r'\s*(CreatedDate|CreatedBy|EditedDate|EditedBy|SoftwareRevision|Class)="[^"]*"',
+            "",
+            t,
+        )
+        t = _re.sub(
+            r'<DefaultData Format="L5K">\n<!\[CDATA\[.*?\]\]>\n</DefaultData>\n',
+            "",
+            t,
+            flags=_re.S,
+        )
+        return _re.sub(r"\s+>", ">", t)
+
+    for n in ["BaMin", "BaFull"]:
+        built = (
+            (HERE / "exp20" / "built" / f"{n}.xml")
+            .read_text()
+            .split("\n", 1)[1]
+            .strip()
+        )
+        exp = (
+            (HERE / "results" / "exp20" / f"{n}.L5X")
+            .read_text(encoding="utf-8-sig")
+            .replace("\r\n", "\n")
+        )
+        m = _re.search(
+            r'<AddOnInstructionDefinition Use="Target" (.*?)\n</AddOnInstructionDefinition>',
+            exp,
+            _re.S,
+        )
+        got, b = (
+            norm(
+                "<AddOnInstructionDefinition "
+                + m[1]
+                + "\n</AddOnInstructionDefinition>"
+            ),
+            norm(built),
+        )
+        print(n, "IDENTICAL" if got == b else "DIFF")
+        if got != b:
+            print(
+                "\n".join(
+                    list(
+                        difflib.unified_diff(
+                            b.splitlines(), got.splitlines(), lineterm=""
+                        )
+                    )[:40]
+                )
+            )
+
+
+def exp20b():
+    """Which Required/Visible combinations Studio accepts per usage."""
+    e = Exp("exp20b")
+    combos = [
+        ("InOut", "true", "false"),
+        ("InOut", "false", "true"),
+        ("InOut", "false", "false"),
+        ("InOut", "true", "true"),
+        ("Input", "true", "false"),
+        ("Input", "false", "true"),
+        ("Output", "true", "false"),
+        ("Output", "false", "true"),
+    ]
+    for i, (usage, req, vis) in enumerate(combos):
+        n = f"RV{i}"
+        dt = "simple_udt" if usage == "InOut" else "DINT"
+        extra = f' Required="{req}" Visible="{vis}"'
+        e.case(
+            f"RV{i}_{usage}_req{req}_vis{vis}",
+            env(
+                "AddOnInstructionDefinition",
+                n,
+                aois(
+                    aoi(
+                        n,
+                        par("P", dt, usage, extra=extra) + par("O", "BOOL", "Output"),
+                        routines=rll("Logic", "OTE(O);"),
+                    )
+                ),
+            ),
+            export=[AOI(n)],
+        )
+    e.write()
+
+
+def exp21_spec(p):
+    from py_l5x import ParameterSpec
+
+    sp = p.aois["Debounce"].to_spec()
+    params = {x.name: x for x in sp.parameters}
+    params["onDelay"].data_type = "REAL"
+    params["onDelay"].radix = None
+    params["onDelay"].min = None
+    params["onDelay"].max = None
+    sp.parameters = [
+        params["state"],
+        ParameterSpec("hold", "DINT", default=42),
+        params["onDelay"],
+        params["offDelay"],
+    ]
+    sp.revision = "1.5"
+    return sp
+
+
+def exp21():
+    """AOI replace: our migration vs Studio's import migration; AOI rename builds."""
+    py_l5x = _py_l5x()
+    from py_l5x import build_aoi
+    from py_l5x.parsers import schema
+
+    p = py_l5x.load(str(FIX / "example.L5X"))
+    p.controller_tags.add(
+        "deb_tag", "Debounce", value={"state": True, "onDelay": 1234, "offDelay": 77}
+    )
+    gi = p.aois["GenericInput"]
+    gi.local_tags["debounce"].value = {"onDelay": 555, "offDelay": 66}
+    d = HERE / "exp21"
+    d.mkdir(exist_ok=True)
+    p.write(d / "seeded.L5X")
+    ours = py_l5x.load(str(d / "seeded.L5X"))
+    ours.aois.replace(exp21_spec(ours))
+    ours.write(d / "ours.L5X")
+    ren = py_l5x.load(str(FIX / "example.L5X"))
+    ren.aois.rename("SeqCtrl", "SeqControl")
+    ren.write(d / "renamed.L5X")
+    ref = py_l5x.load(str(d / "seeded.L5X"))
+    comp = py_l5x.loads(
+        COMPONENT_TEMPLATE.replace(
+            'TargetType="Tag"', 'TargetType="AddOnInstructionDefinition"'
+        )
+    )
+    el = ET.Element("AddOnInstructionDefinitions")
+    schema.insert_child(comp.root.find("Controller"), el)
+    schema.insert_child(el, build_aoi(exp21_spec(ref), ref._type_registry))
+    e = Exp("exp21", base="C:/Users/zwood/ldsdk/projects/exp21/seeded.L5X")
+    e.files = {
+        "seeded.L5X": (d / "seeded.L5X").read_bytes(),
+        "ours.L5X": (d / "ours.L5X").read_bytes(),
+        "renamed.L5X": (d / "renamed.L5X").read_bytes(),
+        "studio_aoi.L5X": py_l5x.writer.to_bytes(comp.root),
+    }
+    e.steps.append(
+        {
+            "id": "S1_studio_migrates",
+            "op": "import",
+            "file": "studio_aoi.L5X",
+            "xpath": "Controller",
+            "coll": "overwrite",
+        }
+    )
+    e.raw(id="build_studio", op="build")
+    e.export("studio_deb_tag", CT("deb_tag"))
+    e.export("studio_gi", AOI("GenericInput"))
+    e.write()
+    for run, f in (("exp21b", "ours.L5X"), ("exp21c", "renamed.L5X")):
+        x = Exp(run, base=f"C:/Users/zwood/ldsdk/projects/exp21/{f}")
+        x.raw(id="build", op="build")
+        if run == "exp21b":
+            x.export("ours_deb_tag", CT("deb_tag"))
+            x.export("ours_gi", AOI("GenericInput"))
+        else:
+            x.export("seq", AOI("SeqControl"))
+        x.write()
+
+
+def exp21_check():
+    py_l5x = _py_l5x()
+    st = (
+        py_l5x.load(str(HERE / "results" / "exp21" / "studio_deb_tag.L5X"))
+        .controller_tags["deb_tag"]
+        .to_python()
+    )
+    ou = (
+        py_l5x.load(str(HERE / "results" / "exp21b" / "ours_deb_tag.L5X"))
+        .controller_tags["deb_tag"]
+        .to_python()
+    )
+    sg = (
+        py_l5x.load(str(HERE / "results" / "exp21" / "studio_gi.L5X"))
+        .aois["GenericInput"]
+        .local_tags["debounce"]
+        .to_python()
+    )
+    og = (
+        py_l5x.load(str(HERE / "results" / "exp21b" / "ours_gi.L5X"))
+        .aois["GenericInput"]
+        .local_tags["debounce"]
+        .to_python()
+    )
+    for label, a, b in (("deb_tag", st, ou), ("GenericInput.debounce", sg, og)):
+        print(
+            ("SAME " if a == b else "DIFF ") + label, "\n  studio:", a, "\n  ours  :", b
+        )
 
 
 if __name__ == "__main__":

@@ -383,6 +383,50 @@ class DataType(BaseElement):
         return lines
 
 
+def find_type_users(controller: ET.Element, name: str) -> list[str]:
+    """List the tags, members, parameters and local tags of a type.
+
+    Args:
+        controller: The ``<Controller>`` element.
+        name: A UDT or AOI name.
+
+    Returns:
+        Descriptions such as ``"controller tag X"``,
+        ``"program P tag X"``, ``"data type U member m"``,
+        ``"AOI A parameter p"`` and ``"AOI A local tag l"``. The type's own
+        definition is not searched.
+    """
+    found: list[str] = []
+    for tag in controller.findall("Tags/Tag"):
+        if tag.get("DataType") == name:
+            found.append(f"controller tag {tag.get('Name')}")
+    for program in controller.findall("Programs/Program"):
+        for tag in program.findall("Tags/Tag"):
+            if tag.get("DataType") == name:
+                found.append(f"program {program.get('Name')} tag {tag.get('Name')}")
+    for data_type in controller.findall("DataTypes/DataType"):
+        if data_type.get("Name") == name:
+            continue
+        for member in data_type.findall("Members/Member"):
+            if member.get("DataType") == name:
+                found.append(
+                    f"data type {data_type.get('Name')} member {member.get('Name')}"
+                )
+    for aoi in controller.findall(
+        "AddOnInstructionDefinitions/AddOnInstructionDefinition"
+    ):
+        if aoi.get("Name") == name:
+            continue
+        for kind, path in (
+            ("parameter", "Parameters/Parameter"),
+            ("local tag", "LocalTags/LocalTag"),
+        ):
+            for item in aoi.findall(path):
+                if item.get("DataType") == name:
+                    found.append(f"AOI {aoi.get('Name')} {kind} {item.get('Name')}")
+    return found
+
+
 class DataTypesCollection(BaseCollection[DataType]):
     """A ``Mapping`` over every ``<DataType>`` in the ``<DataTypes>`` section.
 
@@ -639,34 +683,7 @@ class DataTypesCollection(BaseCollection[DataType]):
             Descriptions of every tag (controller and program scope), UDT
             member, AOI parameter and AOI local tag that has this type.
         """
-        found: list[str] = []
-        controller = self._parent
-        for tag in controller.findall("Tags/Tag"):
-            if tag.get("DataType") == name:
-                found.append(f"controller tag {tag.get('Name')}")
-        for program in controller.findall("Programs/Program"):
-            for tag in program.findall("Tags/Tag"):
-                if tag.get("DataType") == name:
-                    found.append(f"program {program.get('Name')} tag {tag.get('Name')}")
-        for data_type in controller.findall("DataTypes/DataType"):
-            if data_type.get("Name") == name:
-                continue
-            for member in data_type.findall("Members/Member"):
-                if member.get("DataType") == name:
-                    found.append(
-                        f"data type {data_type.get('Name')} member {member.get('Name')}"
-                    )
-        for aoi in controller.findall(
-            "AddOnInstructionDefinitions/AddOnInstructionDefinition"
-        ):
-            for kind, path in (
-                ("parameter", "Parameters/Parameter"),
-                ("local tag", "LocalTags/LocalTag"),
-            ):
-                for item in aoi.findall(path):
-                    if item.get("DataType") == name:
-                        found.append(f"AOI {aoi.get('Name')} {kind} {item.get('Name')}")
-        return found
+        return find_type_users(self._parent, name)
 
     def remove(self, name: str, *, force: bool = False) -> None:
         """Delete a data type.

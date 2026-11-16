@@ -83,6 +83,41 @@ def _check_rung_text(text: str) -> None:
         raise ValueError(f"unclosed {stack[-1]!r} in rung text")
 
 
+def build_rung(text: str, comment: str | None = None, number: int = 0) -> ET.Element:
+    """Create a ``<Rung>`` element in Studio's layout.
+
+    Args:
+        text: The rung's neutral text (stored as given; not validated here).
+        comment: Optional rung comment.
+        number: The ``Number`` attribute.
+
+    Returns:
+        ``<Rung Number=".." Type="N">`` with ``Comment`` (if any) then ``Text``.
+    """
+    element = ET.Element("Rung")
+    element.set("Number", str(number))
+    element.set("Type", "N")
+    if comment:
+        insert_child(element, new_cdata_element("Comment", comment))
+    insert_child(element, new_cdata_element("Text", text))
+    return element
+
+
+def build_st_line(text: str, number: int) -> ET.Element:
+    """Create a structured text ``<Line>`` element in Studio's layout.
+
+    Args:
+        text: The line (leading indentation kept; empty gives empty CDATA).
+        number: The ``Number`` attribute.
+
+    Returns:
+        ``<Line Number="..">`` with the text as CDATA.
+    """
+    line = new_cdata_element("Line", text)
+    line.set("Number", str(number))
+    return line
+
+
 class Rung(BaseElement):
     """A single ladder rung in ``<RLLContent>``.
 
@@ -262,12 +297,7 @@ class Routine(BaseElement):
         position = count if index is None else index
         if not 0 <= position <= count:
             raise IndexError(f"rung index {index} out of range for {count} rungs")
-        element = ET.Element("Rung")
-        element.set("Number", str(position))
-        element.set("Type", "N")
-        if comment:
-            insert_child(element, new_cdata_element("Comment", comment))
-        insert_child(element, new_cdata_element("Text", text))
+        element = build_rung(text, comment, position)
         insert_child_at(content, position, element)
         self._renumber(content)
         return Rung(element)
@@ -318,9 +348,7 @@ class Routine(BaseElement):
         if not items:
             content.text = None
         for number, item in enumerate(items):
-            line = new_cdata_element("Line", item)
-            line.set("Number", str(number))
-            insert_child_at(content, number, line)
+            insert_child_at(content, number, build_st_line(item, number))
 
     @property
     def target_rung(self) -> Rung | None:

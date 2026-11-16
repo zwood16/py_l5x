@@ -7,7 +7,18 @@ Usage:
     MyController
 """
 
-from py_l5x.build import DataTypeSpec, MemberSpec, build_datatype
+from py_l5x.build import (
+    AOISpec,
+    DataTypeSpec,
+    LocalTagSpec,
+    MemberSpec,
+    ParameterSpec,
+    RoutineSpec,
+    RungSpec,
+    aoi_call_operands,
+    build_aoi,
+    build_datatype,
+)
 from py_l5x.parse import load, loads
 from py_l5x.parsers.aoi import (
     AOIDefinition,
@@ -28,6 +39,7 @@ from py_l5x.parsers.aoi import (
     AOIParameterFloatTag,
     AOIParameterIntegerTag,
     AOIParameterTimeTag,
+    CallSite,
 )
 from py_l5x.parsers.controller import ControllerInfo
 from py_l5x.parsers.datatype import DataType, DataTypeMember
@@ -67,6 +79,7 @@ from py_l5x.parsers.tag import (
 from py_l5x.parsers.task import Task
 
 __all__ = [
+    "AOISpec",
     "AOIDefinition",
     "AOILocalArrayTag",
     "AOILocalAtomicTag",
@@ -93,6 +106,7 @@ __all__ = [
     "AxisTag",
     "BoolNode",
     "BoolTag",
+    "CallSite",
     "ConsumeInfo",
     "ControllerInfo",
     "DataType",
@@ -105,6 +119,7 @@ __all__ = [
     "IntegerNode",
     "IntegerTag",
     "MessageTag",
+    "LocalTagSpec",
     "MemberSpec",
     "Module",
     "ModuleTagRef",
@@ -112,9 +127,12 @@ __all__ = [
     "MotionGroupTag",
     "ProduceInfo",
     "Program",
+    "ParameterSpec",
     "Project",
     "ProjectTagsView",
     "Routine",
+    "RoutineSpec",
+    "RungSpec",
     "StringNode",
     "StringTag",
     "StructNode",
@@ -125,6 +143,8 @@ __all__ = [
     "TimeNode",
     "TimeTag",
     "UnknownTag",
+    "aoi_call_operands",
+    "build_aoi",
     "build_datatype",
     "load",
     "loads",

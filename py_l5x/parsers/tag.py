@@ -222,6 +222,29 @@ class TypeRegistry:
         """
         return [*self._data_types, *self._aoi_types]
 
+    def contains_aoi(self, type_name: str, _seen: set[str] | None = None) -> bool:
+        """Report whether data of a type holds AOI instance data.
+
+        True for an AOI, and for a UDT that has (at any depth) a member of an
+        AOI type.
+
+        Args:
+            type_name: The data type name.
+
+        Returns:
+            ``True`` if the type is or contains an AOI.
+        """
+        seen = _seen if _seen is not None else set()
+        if type_name in seen:
+            return False
+        seen.add(type_name)
+        if self.aoi(type_name) is not None:
+            return True
+        udt = self.udt(type_name)
+        if udt is None:
+            return False
+        return any(self.contains_aoi(m.data_type, seen) for m in udt.members.values())
+
     def udt(self, type_name: str) -> DataType | None:
         """Look up a user-defined data type by name.
 
@@ -813,12 +836,35 @@ class TagNode:
         """
         raise TypeError(f"{type(self).__name__} has no data to assign to")
 
+    def _owner_has_aoi_data(self) -> bool:
+        """Report whether the owner's data contains AOI instance data.
+
+        An AOI instance's decorated data holds only its Input/Output
+        parameters. Its L5K data also holds the instance values of the AOI's
+        local tags, and on a full-project open Studio takes parameter values
+        from the decorated data but local-tag values from L5K (measured in
+        Studio, exp22). L5K is therefore the only copy of those values.
+
+        Returns:
+            ``True`` if the owner's data type is an AOI, or a UDT containing
+            an AOI member (at any depth).
+        """
+        registry = self._type_registry
+        data_type = self._overrides.owner.get("DataType", "")
+        return registry is not None and registry.contains_aoi(data_type)
+
     def _drop_stale_l5k(self) -> None:
         """Remove the owner's ``Format="L5K"`` ``Data``/``DefaultData`` siblings.
 
         The reader ignores L5K, but Studio would import it instead of the
         decorated value that was just written, so it must go after any write.
+        The exception is data that contains AOI instances
+        (:meth:`_owner_has_aoi_data`): there Studio takes the written
+        parameter values from the decorated data and still needs the L5K
+        block for the AOI local tags' values, so L5K is kept.
         """
+        if self._owner_has_aoi_data():
+            return
         owner = self._overrides.owner
         for tag in ("Data", "DefaultData"):
             for child in owner.findall(tag):
