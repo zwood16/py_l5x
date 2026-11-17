@@ -7,9 +7,9 @@
 Both **full project exports** (a full PLC project) and **component exports** (a single Program, Routine, AOI, DataType, Module, Rung, etc.) are supported through the same `load()` function.
 
 > [!NOTE]
-> Write support (editing loaded files and generating new components) is new and verified against Studio 5000 v37 and v38, but should work with most modern versions of Studio 5000. See [Editing and writing L5X files](#editing-and-writing-l5x-files).
+> Studio 5000 versions up to v38 supported. Version below v30 are untested but should largely work similarly so long as the limitations of older versions are kept in mind.
 >
-> Ladder Logic and Structured Text are the only supported languages for routine logic currently.
+> Ladder Logic and Structured Text are currently the only supported languages for routine logic.
 
 **Related Projects**
 
