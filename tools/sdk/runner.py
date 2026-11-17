@@ -5,7 +5,8 @@ Usage: uv run python scripts/runner.py <manifest.json>
 Manifest:
 {
   "run": "exp01",                       # output -> out/<run>/
-  "base": "C:/.../base.ACD"  |  {"create": {"rev": 37, "proc": "1756-L85E", "name": "Exp"}},
+  "base": "C:/.../base.ACD"  |  {"create": {"rev": 37, "proc": "1756-L85E", "name": "Exp"}}
+          |  {"convert": {"path": "C:/.../copy.ACD", "rev": 38}},   # converts that file (use a copy)
   "dir":  "C:/.../projects/exp01",      # where relative case files live
   "steps": [
     {"id": "t1", "op": "import", "file": "t1.L5X", "xpath": "Controller", "coll": "overwrite", "coe": false},
@@ -129,7 +130,11 @@ async def main(manifest_path: str) -> None:
     case_dir = Path(m.get("dir", Path(manifest_path).parent))
     col = Collector()
     base = m["base"]
-    if isinstance(base, dict):
+    if isinstance(base, dict) and "convert" in base:
+        # {"convert": {"path": ".../in.ACD", "rev": 38}}: SDK converts in place to a new major revision
+        cv = base["convert"]
+        proj = await LogixProject.convert(cv["path"], cv["rev"], col)
+    elif isinstance(base, dict):
         c = base["create"]
         acd = out / f"base_{time.strftime('%H%M%S')}.ACD"
         proj = await LogixProject.create_new_project(

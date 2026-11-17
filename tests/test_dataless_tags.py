@@ -345,18 +345,18 @@ class TestAggregateWritesOnDataless:
 
 
 #: Tag classes across every fixture, recorded before data-less classification
-#: was added (plus the type_defaults fixture, whose tags all carry data). No
+#: was added (plus the type_defaults and v38 fixtures, whose tags all carry data). No
 #: fixture tag lacks data, so none may change class.
 _FIXTURE_CLASSES = {
     "IntegerTag": 173,
     "FloatTag": 50,
-    "StructTag": 44,
+    "StructTag": 48,
     "StringTag": 23,
     "BoolTag": 14,
     "TimeTag": 9,
     "DateTimeTag": 6,
     "AliasTag": 4,
-    "ArrayTag": 13,
+    "ArrayTag": 14,
     "MessageTag": 2,
     "MotionGroupTag": 1,
     "AxisTag": 1,

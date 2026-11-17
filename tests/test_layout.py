@@ -149,8 +149,8 @@ class TestBuiltins:
         assert first_difference(generated, table) is None
 
     def test_table_size(self) -> None:
-        """The table holds all 206 built-in types."""
-        assert len(builtin_table()) == 206
+        """The table holds all 207 built-in types."""
+        assert len(builtin_table()) == 207
 
     @pytest.mark.parametrize("name", ["STRING", "STRING_16", "STRING_32"])
     def test_builtin_strings(self, golden: Project, name: str) -> None:

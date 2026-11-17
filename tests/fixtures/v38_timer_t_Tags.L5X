@@ -1,0 +1,209 @@
+﻿<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<RSLogix5000Content SchemaRevision="1.0" SoftwareRevision="38.03" TargetName="d_UdtTT" TargetType="Tag" ContainsContext="true" ExportDate="Mon Nov 16 20:24:27 2026" ExportOptions="References NoRawData L5KData DecoratedData Context ProductDefinedTypes IOTags Dependencies ForceProtectedEncoding AllProjDocTrans">
+<Controller Use="Context" Name="Blank38">
+<DataTypes Use="Context">
+<DataType Name="BOOL" Family="NoFamily" Class="ProductDefined"/>
+<DataType Name="DINT" Family="NoFamily" Class="ProductDefined"/>
+<DataType Name="LINT" Family="NoFamily" Class="ProductDefined"/>
+<DataType Name="SINT" Family="NoFamily" Class="ProductDefined"/>
+<DataType Name="TIME" Family="NoFamily" Class="ProductDefined"/>
+<DataType Name="TIMER" Family="NoFamily" Class="ProductDefined">
+<Members>
+<Member Name="Control" DataType="DINT" Dimension="0" Radix="Decimal" Hidden="true" ExternalAccess="Read/Write"/>
+<Member Name="PRE" DataType="DINT" Dimension="0" Radix="Decimal" Hidden="false" ExternalAccess="Read/Write"/>
+<Member Name="ACC" DataType="DINT" Dimension="0" Radix="Decimal" Hidden="false" ExternalAccess="Read/Write"/>
+<Member Name="EN" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="Control" BitNumber="31" ExternalAccess="Read/Write"/>
+<Member Name="TT" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="Control" BitNumber="30" ExternalAccess="Read/Write"/>
+<Member Name="DN" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="Control" BitNumber="29" ExternalAccess="Read/Write"/>
+</Members>
+</DataType>
+<DataType Name="TIMER_T" Family="NoFamily" Class="ProductDefined">
+<Members>
+<Member Name="Control" DataType="LINT" Dimension="0" Radix="Decimal" Hidden="true" ExternalAccess="Read/Write"/>
+<Member Name="ACC" DataType="TIME" Dimension="0" Radix="Time (us)" Hidden="false" ExternalAccess="Read/Write"/>
+<Member Name="PRE" DataType="TIME" Dimension="0" Radix="Time (us)" Hidden="false" ExternalAccess="Read/Write"/>
+<Member Name="EN" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="Control" BitNumber="63" ExternalAccess="Read/Write"/>
+<Member Name="TT" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="Control" BitNumber="62" ExternalAccess="Read/Write"/>
+<Member Name="DN" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="Control" BitNumber="61" ExternalAccess="Read/Write"/>
+</Members>
+</DataType>
+<DataType Name="UdtTT" Family="NoFamily" Class="User">
+<Members>
+<Member Name="ZZZZZZZZZZUdtTT0" DataType="SINT" Dimension="0" Radix="Decimal" Hidden="true" ExternalAccess="Read/Write"/>
+<Member Name="run" DataType="BIT" Dimension="0" Radix="Decimal" Hidden="false" Target="ZZZZZZZZZZUdtTT0" BitNumber="0" ExternalAccess="Read/Write"/>
+<Member Name="t" DataType="TIMER_T" Dimension="0" Radix="NullType" Hidden="false" ExternalAccess="Read/Write">
+<Description>
+<![CDATA[an IEC timer]]>
+</Description>
+</Member>
+<Member Name="ta" DataType="TIMER_T" Dimension="2" Radix="NullType" Hidden="false" ExternalAccess="Read/Write"/>
+<Member Name="legacy" DataType="TIMER" Dimension="0" Radix="NullType" Hidden="false" ExternalAccess="Read/Write"/>
+</Members>
+</DataType>
+</DataTypes>
+<AddOnInstructionDefinitions Use="Context">
+<AddOnInstructionDefinition Name="AoiTT" Revision="1.0" ExecutePrescan="false" ExecutePostscan="false" ExecuteEnableInFalse="false" CreatedDate="2026-11-17T03:24:26.754Z" CreatedBy="Not Available" EditedDate="2026-11-17T03:24:26.754Z" EditedBy="Not Available" SoftwareRevision="v38.03">
+<Parameters>
+<Parameter Name="EnableIn" TagType="Base" DataType="BOOL" Usage="Input" Radix="Decimal" Required="false" Visible="false" ExternalAccess="Read Only"/>
+<Parameter Name="EnableOut" TagType="Base" DataType="BOOL" Usage="Output" Radix="Decimal" Required="false" Visible="false" ExternalAccess="Read Only"/>
+<Parameter Name="In" TagType="Base" DataType="BOOL" Usage="Input" Radix="Decimal" Required="false" Visible="false" ExternalAccess="Read/Write">
+<DefaultData Format="L5K">
+<![CDATA[0]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<DataValue DataType="BOOL" Radix="Decimal" Value="0"/>
+</DefaultData>
+</Parameter>
+<Parameter Name="Done" TagType="Base" DataType="BOOL" Usage="Output" Radix="Decimal" Required="false" Visible="false" ExternalAccess="Read Only">
+<DefaultData Format="L5K">
+<![CDATA[0]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<DataValue DataType="BOOL" Radix="Decimal" Value="0"/>
+</DefaultData>
+</Parameter>
+</Parameters>
+<LocalTags>
+<LocalTag Name="t" DataType="TIMER_T" ExternalAccess="Read/Write">
+<DefaultData Format="L5K">
+<![CDATA[[0,0,0]]]>
+</DefaultData>
+<DefaultData Format="Decorated">
+<Structure DataType="TIMER_T">
+<DataValueMember Name="ACC" DataType="TIME" Radix="Time (us)" Value="T#0us"/>
+<DataValueMember Name="PRE" DataType="TIME" Radix="Time (us)" Value="T#0us"/>
+<DataValueMember Name="EN" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TT" DataType="BOOL" Value="0"/>
+<DataValueMember Name="DN" DataType="BOOL" Value="0"/>
+</Structure>
+</DefaultData>
+</LocalTag>
+</LocalTags>
+<Routines>
+<Routine Name="Logic" Type="RLL">
+<RLLContent>
+<Rung Number="0" Type="N">
+<Text>
+<![CDATA[XIC(In)TON(t,?,?);]]>
+</Text>
+</Rung>
+<Rung Number="1" Type="N">
+<Text>
+<![CDATA[XIC(t.DN)OTE(Done);]]>
+</Text>
+</Rung>
+</RLLContent>
+</Routine>
+</Routines>
+</AddOnInstructionDefinition>
+</AddOnInstructionDefinitions>
+<Tags Use="Context">
+<Tag Use="Target" Name="a_TIMER_T_3" TagType="Base" DataType="TIMER_T" Dimensions="3" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="Decorated">
+<Array DataType="TIMER_T" Dimensions="3">
+<Element Index="[0]">
+<Structure DataType="TIMER_T">
+<DataValueMember Name="ACC" DataType="TIME" Radix="Time (us)" Value="T#0us"/>
+<DataValueMember Name="PRE" DataType="TIME" Radix="Time (us)" Value="T#0us"/>
+<DataValueMember Name="EN" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TT" DataType="BOOL" Value="0"/>
+<DataValueMember Name="DN" DataType="BOOL" Value="0"/>
+</Structure>
+</Element>
+<Element Index="[1]">
+<Structure DataType="TIMER_T">
+<DataValueMember Name="ACC" DataType="TIME" Radix="Time (us)" Value="T#0us"/>
+<DataValueMember Name="PRE" DataType="TIME" Radix="Time (us)" Value="T#0us"/>
+<DataValueMember Name="EN" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TT" DataType="BOOL" Value="0"/>
+<DataValueMember Name="DN" DataType="BOOL" Value="0"/>
+</Structure>
+</Element>
+<Element Index="[2]">
+<Structure DataType="TIMER_T">
+<DataValueMember Name="ACC" DataType="TIME" Radix="Time (us)" Value="T#0us"/>
+<DataValueMember Name="PRE" DataType="TIME" Radix="Time (us)" Value="T#0us"/>
+<DataValueMember Name="EN" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TT" DataType="BOOL" Value="0"/>
+<DataValueMember Name="DN" DataType="BOOL" Value="0"/>
+</Structure>
+</Element>
+</Array>
+</Data>
+</Tag>
+<Tag Use="Target" Name="d_AoiTT" TagType="Base" DataType="AoiTT" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="Decorated">
+<Structure DataType="AoiTT">
+<DataValueMember Name="EnableIn" DataType="BOOL" Value="1"/>
+<DataValueMember Name="EnableOut" DataType="BOOL" Value="0"/>
+<DataValueMember Name="In" DataType="BOOL" Value="0"/>
+<DataValueMember Name="Done" DataType="BOOL" Value="0"/>
+</Structure>
+</Data>
+</Tag>
+<Tag Use="Target" Name="d_TIMER_T" TagType="Base" DataType="TIMER_T" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="Decorated">
+<Structure DataType="TIMER_T">
+<DataValueMember Name="ACC" DataType="TIME" Radix="Time (us)" Value="T#0us"/>
+<DataValueMember Name="PRE" DataType="TIME" Radix="Time (us)" Value="T#0us"/>
+<DataValueMember Name="EN" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TT" DataType="BOOL" Value="0"/>
+<DataValueMember Name="DN" DataType="BOOL" Value="0"/>
+</Structure>
+</Data>
+</Tag>
+<Tag Use="Target" Name="d_UdtTT" TagType="Base" DataType="UdtTT" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="Decorated">
+<Structure DataType="UdtTT">
+<DataValueMember Name="run" DataType="BOOL" Value="0"/>
+<StructureMember Name="t" DataType="TIMER_T">
+<DataValueMember Name="ACC" DataType="TIME" Radix="Time (us)" Value="T#0us"/>
+<DataValueMember Name="PRE" DataType="TIME" Radix="Time (us)" Value="T#0us"/>
+<DataValueMember Name="EN" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TT" DataType="BOOL" Value="0"/>
+<DataValueMember Name="DN" DataType="BOOL" Value="0"/>
+</StructureMember>
+<ArrayMember Name="ta" DataType="TIMER_T" Dimensions="2">
+<Element Index="[0]">
+<Structure DataType="TIMER_T">
+<DataValueMember Name="ACC" DataType="TIME" Radix="Time (us)" Value="T#0us"/>
+<DataValueMember Name="PRE" DataType="TIME" Radix="Time (us)" Value="T#0us"/>
+<DataValueMember Name="EN" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TT" DataType="BOOL" Value="0"/>
+<DataValueMember Name="DN" DataType="BOOL" Value="0"/>
+</Structure>
+</Element>
+<Element Index="[1]">
+<Structure DataType="TIMER_T">
+<DataValueMember Name="ACC" DataType="TIME" Radix="Time (us)" Value="T#0us"/>
+<DataValueMember Name="PRE" DataType="TIME" Radix="Time (us)" Value="T#0us"/>
+<DataValueMember Name="EN" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TT" DataType="BOOL" Value="0"/>
+<DataValueMember Name="DN" DataType="BOOL" Value="0"/>
+</Structure>
+</Element>
+</ArrayMember>
+<StructureMember Name="legacy" DataType="TIMER">
+<DataValueMember Name="PRE" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="ACC" DataType="DINT" Radix="Decimal" Value="0"/>
+<DataValueMember Name="EN" DataType="BOOL" Value="0"/>
+<DataValueMember Name="TT" DataType="BOOL" Value="0"/>
+<DataValueMember Name="DN" DataType="BOOL" Value="0"/>
+</StructureMember>
+</Structure>
+</Data>
+</Tag>
+<Tag Use="Target" Name="tt_values" TagType="Base" DataType="TIMER_T" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+<Data Format="Decorated">
+<Structure DataType="TIMER_T">
+<DataValueMember Name="ACC" DataType="TIME" Radix="Time (us)" Value="T#1s_250ms"/>
+<DataValueMember Name="PRE" DataType="TIME" Radix="Time (us)" Value="T#1h_30m"/>
+<DataValueMember Name="EN" DataType="BOOL" Value="1"/>
+<DataValueMember Name="TT" DataType="BOOL" Value="1"/>
+<DataValueMember Name="DN" DataType="BOOL" Value="0"/>
+</Structure>
+</Data>
+</Tag>
+</Tags>
+</Controller>
+</RSLogix5000Content>

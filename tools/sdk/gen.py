@@ -4097,6 +4097,614 @@ def exp26():
             e.write()
 
 
+BLANK38_ACD = "C:/Users/zwood/ldsdk/projects/base/blank_v38.ACD"
+
+
+def exp30():
+    """v38 baseline: blank v38 project saved for reuse; all ProductDefined types exported (with a TIMER_T tag)."""
+    e = Exp(
+        "exp30", base={"create": {"rev": 38, "proc": "1756-L85E", "name": "Blank38"}}
+    )
+    e.raw(id="save_blank", op="save_as", name="blank_v38.ACD")
+    e.export(
+        "all_product_defined", "Controller/DataTypes/DataType[@Class='ProductDefined']"
+    )
+    e.case(
+        "T1_timer_t_tag",
+        env(
+            "Tag",
+            "tt",
+            ctag('<Tag Use="Target" Name="tt" DataType="TIMER_T"/>').replace(
+                "Example_PLC", "Blank38"
+            ),
+        ),
+        export=[CT("tt")],
+    )
+    e.raw(id="save_l5x", op="save_as", name="blank_v38.L5X")
+    e.write()
+
+
+def exp30b():
+    """Convert a copy of the v37 example project to v38, build it, save as ACD (reusable base) and as a full L5X."""
+    e = Exp(
+        "exp30b",
+        base={
+            "convert": {
+                "path": "C:/Users/zwood/ldsdk/projects/exp30b/example_v37_copy.ACD",
+                "rev": 38,
+            }
+        },
+    )
+    e.raw(id="build", op="build")
+    e.raw(id="save_acd", op="save_as", name="example_base_v38.ACD")
+    e.raw(id="save_l5x", op="save_as", name="example_v38.L5X")
+    e.write()
+
+
+def _v38_names():
+    import re as _re
+
+    t = (HERE / "results" / "exp30" / "all_product_defined.L5X").read_text(
+        encoding="utf-8-sig"
+    )
+    return _re.findall(r'<DataType Use="Target" Name="([^"]+)"', t)
+
+
+def exp31():
+    """v38: per-type default trees (table regen), TIMER_T values/UDT/AOI/TON, v37-made components into blank v38."""
+
+    def c38(xml):
+        return xml.replace('Name="Example_PLC"', 'Name="Blank38"')
+
+    e = Exp("exp31", base=BLANK38_ACD)
+    for t in _v38_names():
+        e.case(
+            f"std_{t}",
+            c38(
+                env(
+                    "Tag",
+                    f"bt_{t}",
+                    ctag(f'<Tag Use="Target" Name="bt_{t}" DataType="{t}"/>'),
+                )
+            ),
+        )
+    e.export("all_type_tags", "Controller/Tags/Tag")
+    # TIMER_T values in different TIME literal spellings (full Decorated member list, ACC before PRE)
+    lits = [
+        "T#5s",
+        "T#1500ms",
+        "T#1d2h3m4s5ms6us",
+        "T#0us",
+        "T#2.5s",
+        "T#100us",
+        "5000",
+    ]
+    for i, lit in enumerate(lits):
+        struct = (
+            f'<Structure DataType="TIMER_T"><DataValueMember Name="ACC" DataType="TIME" Value="T#0us"/>'
+            f'<DataValueMember Name="PRE" DataType="TIME" Value="{lit}"/><DataValueMember Name="EN" DataType="BOOL" Value="0"/>'
+            f'<DataValueMember Name="TT" DataType="BOOL" Value="0"/><DataValueMember Name="DN" DataType="BOOL" Value="0"/></Structure>'
+        )
+        e.case(
+            f"V{i}_timer_t_value",
+            c38(
+                env(
+                    "Tag",
+                    f"tv{i}",
+                    ctag(
+                        f'<Tag Use="Target" Name="tv{i}" DataType="TIMER_T">{dec(struct)}</Tag>'
+                    ),
+                )
+            ),
+            export=[CT(f"tv{i}")],
+        )
+    # PRE before ACC (TIMER order) - expected to be dropped
+    bad = (
+        '<Structure DataType="TIMER_T"><DataValueMember Name="PRE" DataType="TIME" Value="T#5s"/><DataValueMember Name="ACC" DataType="TIME" Value="T#0us"/>'
+        '<DataValueMember Name="EN" DataType="BOOL" Value="0"/><DataValueMember Name="TT" DataType="BOOL" Value="0"/><DataValueMember Name="DN" DataType="BOOL" Value="0"/></Structure>'
+    )
+    e.case(
+        "V9_timer_t_wrong_order",
+        c38(
+            env(
+                "Tag",
+                "tvbad",
+                ctag(
+                    f'<Tag Use="Target" Name="tvbad" DataType="TIMER_T">{dec(bad)}</Tag>'
+                ),
+            )
+        ),
+        export=[CT("tvbad")],
+    )
+    # TIMER_T in a UDT (with packed BOOLs), as an AOI local, and in TON
+    host = mem("ZZZZZZZZZZUdtTT0", "SINT", extra=' Hidden="true"') + mem(
+        "run", "BIT", extra=' Target="ZZZZZZZZZZUdtTT0" BitNumber="0"'
+    )
+    e.case(
+        "U1_udt_timer_t",
+        c38(
+            env(
+                "DataType",
+                "UdtTT",
+                dts(udt("UdtTT", host + mem("t", "TIMER_T") + mem("ta", "TIMER_T", 2))),
+            )
+        ),
+        export=[DT("UdtTT")],
+    )
+    e.case(
+        "A1_aoi_timer_t",
+        c38(
+            env(
+                "AddOnInstructionDefinition",
+                "AoiTT",
+                aois(
+                    aoi(
+                        "AoiTT",
+                        par("In", "BOOL") + par("Done", "BOOL", "Output"),
+                        '<LocalTag Name="t" DataType="TIMER_T"/>',
+                        rll("Logic", "XIC(In)TON(t,?,?);", "XIC(t.DN)OTE(Done);"),
+                    )
+                ),
+            )
+        ),
+        export=[AOI("AoiTT")],
+    )
+    e.case(
+        "P1_prog_timer_t",
+        c38(
+            env(
+                "Program",
+                "ProgTT",
+                progs(
+                    prog(
+                        "ProgTT",
+                        '<Tag Name="go" DataType="BOOL"/><Tag Name="tt" DataType="TIMER_T"/><Tag Name="u" DataType="UdtTT"/><Tag Name="a" DataType="AoiTT"/>',
+                        rll(
+                            "MainRoutine",
+                            "XIC(go)TON(tt,?,?);",
+                            "XIC(go)TON(u.t,?,?);",
+                            "XIC(go)RTO(u.ta[1],?,?);",
+                            "AoiTT(a);",
+                            "XIC(tt.DN)RES(tt);",
+                        ),
+                    )
+                ),
+            )
+        ),
+        export=[PR("ProgTT"), DT("UdtTT")],
+    )
+    e.raw(id="build_tt", op="build")
+    # v37-made component exports from exp24 (SoftwareRevision 37.00) into blank v38
+    for name in [
+        "udt_A_UDT",
+        "aoi_FanucRobot",
+        "prog_PeriodicProgram",
+        "routine_SequenceRoutine",
+        "spec_aoi_calls_debounce",
+    ]:
+        e.files[f"{name}.L5X"] = (HERE / "exp24" / f"{name}.L5X").read_bytes()
+        e.steps.append(
+            {
+                "id": f"C_{name}",
+                "op": "import",
+                "file": f"{name}.L5X",
+                "xpath": "Controller",
+                "coll": "overwrite",
+            }
+        )
+    e.raw(id="build_all", op="build")
+    e.write()
+
+
+EXP32_CASES = {
+    "TIME": [
+        "T#5s",
+        "T#0us",
+        "T#1d2h3m4s5ms6us",
+        "T#1d_2h_3m_4s_5ms_6us",
+        "T#90m",
+        "T#25h",
+        "T#1500ms",
+        "T#1000us",
+        "T#999ms",
+        "T#59s",
+        "T#60s",
+        "T#2.5s",
+        "T#-5s",
+        "-T#5s",
+        "t#5s",
+        "T#5S",
+        "T#5MS",
+        "TIME#5s",
+        "T#5s500ms",
+        "T#500ms5s",
+        "T#1h_30m",
+        "T#1h30m",
+        "T#1d",
+        "T#100d",
+        "T#106751d",
+        "T#106752d",
+        "T#5 s",
+        "5000",
+        "-5000",
+        "0",
+        "9223372036854775807",
+        "T#106751d_23h_47m_16s_854ms_775us",
+        "T#-106751d_23h_47m_16s_854ms_776us",
+        "T#5ns",
+        "T#5us",
+    ],
+    "TIME32": [
+        "T32#5s",
+        "T32#35m",
+        "T32#36m",
+        "T32#35m_47s_483ms_647us",
+        "T32#35m_47s_483ms_648us",
+        "T32#-5s",
+        "T#5s",
+        "5000",
+        "2147483647",
+        "2147483648",
+        "T32#1500ms",
+        "T32#1d",
+    ],
+    "LTIME": [
+        "LT#5s",
+        "LT#5ns",
+        "LT#1ms_2us_3ns",
+        "LT#1500ns",
+        "LT#999ns",
+        "LT#1d",
+        "LT#-5s",
+        "T#5s",
+        "5000",
+        "LT#2.5s",
+        "LT#106751d_23h_47m_16s_854ms_775us_807ns",
+    ],
+    "DT": [
+        "DT#1970-01-01-00:00:00.000_000Z",
+        "DT#2026-11-16-12:30:00.000_000Z",
+        "DT#2026-11-16-12:30:00Z",
+        "DT#2026-11-16-12:30:00.5Z",
+        "DT#2026-11-16-12:30:00.000_000",
+        "0",
+        "1000000",
+    ],
+    "LDT": [
+        "LDT#1970-01-01-00:00:00.000_000_000Z",
+        "LDT#2026-11-16-12:30:00.000_000_001Z",
+        "LDT#2026-11-16-12:30:00Z",
+    ],
+}
+
+
+def exp32():
+    """TIME/TIME32/LTIME/DT/LDT literal rules on v37 (reference): which spellings import, canonical form."""
+    e = Exp("exp32", base=BLANK_ACD)
+    rows = []
+    for dt, lits in EXP32_CASES.items():
+        for lit in lits:
+            i = len(rows)
+            rows.append((dt, lit))
+            n = f"tl{i:03d}"
+            xml = f'<Tag Use="Target" Name="{n}" DataType="{dt}"><Data Format="Decorated"><DataValue DataType="{dt}" Value="{lit}"/></Data></Tag>'
+            e.case(
+                f"L{i:03d}",
+                env("Tag", n, ctag(xml)).replace('Name="Example_PLC"', 'Name="Blank"'),
+            )
+    e.export("all", "Controller/Tags/Tag")
+    e.write()
+    (HERE / "exp32" / "rows.json").write_text(json.dumps(rows))
+
+
+def exp32_check():
+    import re as _re
+
+    rows = json.loads((HERE / "exp32" / "rows.json").read_text())
+    res = {
+        r["id"]: r
+        for r in json.loads((HERE / "results" / "exp32" / "results.json").read_text())
+    }
+    t = (HERE / "results" / "exp32" / "all.L5X").read_text(encoding="utf-8-sig")
+    vals = dict(
+        _re.findall(
+            r'<Tag Use="Target" Name="(tl\d+)".*?<DataValue [^>]*Value="([^"]*)"',
+            t,
+            _re.S,
+        )
+    )
+    for i, (dt, lit) in enumerate(rows):
+        r = res[f"L{i:03d}"]
+        warn = [l for l in r["log"] if "Warning" in l or "Exception Severity" in l]
+        msg = ""
+        if not r["ok"]:
+            msg = "IMPORT ERROR"
+        else:
+            m = [
+                l for l in r["log"] if "CDATA[" in l and ("Rx" in l or "data for" in l)
+            ]
+            if any("will not be imported" in l for l in r["log"]):
+                msg = "DATA DROPPED"
+        print(f"{dt:6} {lit:45} -> {vals.get(f'tl{i:03d}', '-'):45} {msg}")
+
+
+def exp32b():
+    """Bisect TIME/LTIME maxima and recheck underscore input."""
+    global EXP32_CASES
+    saved = EXP32_CASES
+    EXP32_CASES = {
+        "TIME": [
+            "T#1000d",
+            "T#10000d",
+            "T#50000d",
+            "T#99999d",
+            "T#100000d",
+            "T#106750d",
+            "T#106751d_0h",
+            "T#1h_30m",
+            "T#2d_3h",
+            "4611686018427387904",
+            "9007199254740992",
+            "9223372036854775806",
+            "T#-1000d",
+            "-9223372036854775807",
+            "T#106750d_23h_59m_59s_999ms_999us",
+        ],
+        "LTIME": [
+            "LT#1000d",
+            "LT#100000d",
+            "LT#106751d",
+            "LT#106752d",
+            "9223372036854775807",
+            "LT#106751d_23h_47m_16s_854ms_775us_807ns",
+        ],
+    }
+    try:
+        exp32()
+    finally:
+        EXP32_CASES = saved
+    import shutil
+
+    src, dst = HERE / "exp32", HERE / "exp32b"
+    if dst.exists():
+        shutil.rmtree(dst)
+    shutil.move(src, dst)
+    m = json.loads((dst / "manifest.json").read_text())
+    m["run"] = "exp32b"
+    m["dir"] = m["dir"].replace("exp32", "exp32b")
+    (dst / "manifest.json").write_text(json.dumps(m, indent=1))
+
+
+def exp33():
+    """v38 golden fixture: TIMER_T in tags (values + data-less), a UDT, an AOI local; exported with definitions."""
+
+    def c38(xml):
+        return xml.replace('Name="Example_PLC"', 'Name="Blank38"')
+
+    e = Exp("exp33", base=BLANK38_ACD)
+    host = mem("ZZZZZZZZZZUdtTT0", "SINT", extra=' Hidden="true"') + mem(
+        "run", "BIT", extra=' Target="ZZZZZZZZZZUdtTT0" BitNumber="0"'
+    )
+    e.case(
+        "U1",
+        c38(
+            env(
+                "DataType",
+                "UdtTT",
+                dts(
+                    udt(
+                        "UdtTT",
+                        host
+                        + mem("t", "TIMER_T", desc="an IEC timer")
+                        + mem("ta", "TIMER_T", 2)
+                        + mem("legacy", "TIMER"),
+                    )
+                ),
+            )
+        ),
+    )
+    e.case(
+        "A1",
+        c38(
+            env(
+                "AddOnInstructionDefinition",
+                "AoiTT",
+                aois(
+                    aoi(
+                        "AoiTT",
+                        par("In", "BOOL") + par("Done", "BOOL", "Output"),
+                        '<LocalTag Name="t" DataType="TIMER_T"/>',
+                        rll("Logic", "XIC(In)TON(t,?,?);", "XIC(t.DN)OTE(Done);"),
+                    )
+                ),
+            )
+        ),
+    )
+    tt = (
+        '<Structure DataType="TIMER_T"><DataValueMember Name="ACC" DataType="TIME" Value="T#1s_250ms"/>'
+        '<DataValueMember Name="PRE" DataType="TIME" Value="T#1h_30m"/><DataValueMember Name="EN" DataType="BOOL" Value="1"/>'
+        '<DataValueMember Name="TT" DataType="BOOL" Value="1"/><DataValueMember Name="DN" DataType="BOOL" Value="0"/></Structure>'
+    )
+    tags = (
+        f'<Tag Name="tt_values" DataType="TIMER_T">{dec(tt)}</Tag>'
+        '<Tag Name="d_TIMER_T" DataType="TIMER_T"/><Tag Name="a_TIMER_T_3" DataType="TIMER_T" Dimensions="3"/>'
+        '<Tag Name="d_UdtTT" DataType="UdtTT"/><Tag Name="d_AoiTT" DataType="AoiTT"/>'
+    )
+    e.case("T1", c38(env("Tag", "x", ctag(tags))))
+    e.export("all_tags", "Controller/Tags/Tag")
+    e.write()
+
+
+def _exp34_project(base_l5x, with_timer_t=True):
+    import datetime as _dt
+
+    py_l5x = _py_l5x()
+    from py_l5x import (
+        AOISpec,
+        DataTypeSpec,
+        LocalTagSpec,
+        MemberSpec,
+        ParameterSpec,
+        ProgramSpec,
+        RoutineSpec,
+        RungSpec,
+        TagSpec,
+    )
+
+    p = py_l5x.load(str(base_l5x))
+    ct = p.controller_tags
+    ct.add("tm_int", "TIME", value=90_000_000)  # 90 s in us -> T#1m_30s
+    ct.add("tm_str", "TIME", value="t#1H30M")  # normalized -> T#1h_30m
+    ct.add("tm_td", "TIME", value=_dt.timedelta(days=2, milliseconds=5))
+    ct.add("tm_neg", "TIME", value=-5000)
+    ct.add("t32", "TIME32", value="T32#35m_47s_483ms_647us")
+    ct.add("lt", "LTIME", value=1_002_003)  # ns -> LT#1ms_2us_3ns
+    ct.add("dt", "DT", value=_dt.datetime(2026, 11, 16, 12, 30, tzinfo=_dt.UTC))
+    if with_timer_t:
+        ct.add(
+            "tt1", "TIMER_T", value={"PRE": _dt.timedelta(minutes=90), "ACC": 250_000}
+        )
+        ct.add(
+            "tt_arr", "TIMER_T", dimensions=2, value=[{"PRE": "T#5s"}, {"PRE": "T#10s"}]
+        )
+        p.data_types.add(
+            DataTypeSpec(
+                "PyTT",
+                [
+                    MemberSpec("run", "BOOL"),
+                    MemberSpec("t", "TIMER_T"),
+                    MemberSpec("legacy", "TIMER"),
+                ],
+            )
+        )
+        p.aois.add(
+            AOISpec(
+                "PyAoiTT",
+                [
+                    ParameterSpec("In", "BOOL"),
+                    ParameterSpec("Done", "BOOL", usage="Output"),
+                ],
+                local_tags=[LocalTagSpec("t", "TIMER_T", default={"PRE": "T#2s"})],
+                routines=[
+                    RoutineSpec(
+                        "Logic",
+                        rungs=[
+                            RungSpec("XIC(In)TON(t,?,?);"),
+                            RungSpec("XIC(t.DN)OTE(Done);"),
+                        ],
+                    )
+                ],
+            )
+        )
+        p.programs.add(
+            ProgramSpec(
+                "PyTTProg",
+                tags=[
+                    TagSpec("go", "BOOL"),
+                    TagSpec(
+                        "u",
+                        "PyTT",
+                        value={"t": {"PRE": "T#3s"}, "legacy": {"PRE": 3000}},
+                    ),
+                    TagSpec("a", "PyAoiTT"),
+                ],
+                routines=[
+                    RoutineSpec(
+                        "Main",
+                        rungs=[
+                            RungSpec("XIC(go)TON(tt1,?,?);"),
+                            RungSpec("XIC(go)RTO(u.t,?,?);"),
+                            RungSpec("XIC(go)TON(u.legacy,?,?);"),
+                            RungSpec("PyAoiTT(a);"),
+                            RungSpec("XIC(tt1.DN)RES(tt1);"),
+                        ],
+                    )
+                ],
+                main_routine="Main",
+            ),
+            task="MainTask",
+        )
+    return py_l5x, p
+
+
+def exp34():
+    """TIMER_T + TIME literals via the py_l5x API: v38 full project, v38 component into blank v38, TIME-only on v37."""
+    py_l5x, p = _exp34_project(HERE / "results" / "exp30b" / "example_v38.L5X")
+    d = HERE / "exp34"
+    d.mkdir(exist_ok=True)
+    p.write(d / "v38_full.L5X")
+    expected = {
+        n: p.controller_tags[n].to_python()
+        for n in [
+            "tm_int",
+            "tm_str",
+            "tm_td",
+            "tm_neg",
+            "t32",
+            "lt",
+            "dt",
+            "tt1",
+            "tt_arr",
+        ]
+    }
+    expected["u"] = p.programs["PyTTProg"].tags["u"].to_python()
+    (d / "expected.json").write_text(json.dumps(expected, default=str))
+    e = Exp("exp34", base="C:/Users/zwood/ldsdk/projects/exp34/v38_full.L5X")
+    e.files = {"v38_full.L5X": (d / "v38_full.L5X").read_bytes()}
+    e.raw(id="build", op="build")
+    e.export("ctrl_tags", "Controller/Tags/Tag")
+    e.export("prog", PR("PyTTProg"))
+    e.write()
+    # component export of the program (pulls PyTT, PyAoiTT, tt1) into blank v38
+    x = Exp("exp34b", base=BLANK38_ACD)
+    x.files = {
+        "comp.L5X": py_l5x.writer.to_bytes(p.export(p.programs["PyTTProg"]).root)
+    }
+    x.steps.append(
+        {
+            "id": "C1_component",
+            "op": "import",
+            "file": "comp.L5X",
+            "xpath": "Controller",
+            "coll": "overwrite",
+        }
+    )
+    x.raw(id="build", op="build")
+    x.export("prog", PR("PyTTProg"))
+    x.write()
+    # v37 reference: TIME-family values only
+    _, p37 = _exp34_project(FIX / "example.L5X", with_timer_t=False)
+    p37.write(d / "v37_full.L5X")
+    y = Exp("exp34c", base="C:/Users/zwood/ldsdk/projects/exp34/v37_full.L5X")
+    y.raw(id="build", op="build")
+    y.export("ctrl_tags", "Controller/Tags/Tag")
+    y.write()
+
+
+def exp34_check():
+    py_l5x = _py_l5x()
+    exp = json.loads((HERE / "exp34" / "expected.json").read_text())
+    for run in ("exp34", "exp34c"):
+        got = py_l5x.load(str(HERE / "results" / run / "ctrl_tags.L5X")).controller_tags
+        for n, v in exp.items():
+            if n == "u" or (run == "exp34c" and n.startswith("tt")):
+                continue
+            g = json.loads(json.dumps(got[n].to_python(), default=str))
+            print(
+                ("SAME " if g == v else "DIFF ")
+                + f"{run} {n}: {g}"
+                + ("" if g == v else f"  expected {v}")
+            )
+    for run in ("exp34", "exp34b"):
+        g = (
+            py_l5x.load(str(HERE / "results" / run / "prog.L5X"))
+            .programs["PyTTProg"]
+            .tags["u"]
+            .to_python()
+        )
+        print(("SAME " if g == exp["u"] else "DIFF ") + f"{run} u: {g}")
+
+
 if __name__ == "__main__":
     for name in sys.argv[1:]:
         globals()[name]()

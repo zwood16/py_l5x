@@ -99,7 +99,8 @@ Value-tree nodes (members, array elements, bits) are organized in a typed hierar
 
 - :class:`FloatNode`: Float value; adds ``min`` and ``max``.
 
-- :class:`TimeNode`: String time literal (e.g. ``"T#0us"``); adds ``unit``.
+- :class:`TimeNode`: String time literal (e.g. ``"T#0us"``); adds ``unit``,
+  ``count`` and ``as_timedelta()``; writes ``int``/``timedelta``/``str``.
 
 - :class:`DateTimeNode`: String datetime literal; adds ``unit``.
 
@@ -119,6 +120,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Callable, Iterator, Mapping, Sequence
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Self, cast, overload
 from xml.etree import ElementTree as ET
 
@@ -129,10 +131,12 @@ from py_l5x.parsers.atomic_types import (
     format_float_literal,
     format_integer_literal,
     format_string_literal,
-    format_time_literal,
+    normalize_datetime_literal,
+    normalize_time_literal,
     parse_float_literal,
     parse_integer_literal,
     parse_string_literal,
+    parse_time_literal,
 )
 from py_l5x.parsers.base import (
     BaseCollection,
@@ -1481,7 +1485,14 @@ class FloatNode(AtomicNode):
 
 
 class TimeNode(AtomicNode):
-    """A TIME/TIME32/LTIME atomic node with a time literal string."""
+    """A TIME/TIME32/LTIME atomic node with a time literal string.
+
+    Reading gives the stored literal. Writing accepts an ``int``
+    (microseconds, or nanoseconds for LTIME), a ``datetime.timedelta`` or a
+    literal ``str``, and always stores Studio's canonical literal (``"T#1h30m"``
+    becomes ``"T#1h_30m"``); anything Studio would drop is rejected (see
+    :func:`~py_l5x.parsers.atomic_types.parse_time_literal`).
+    """
 
     @property
     def value(self) -> str | None:
@@ -1489,21 +1500,23 @@ class TimeNode(AtomicNode):
         return self.raw_value
 
     @value.setter
-    def value(self, new_value: str) -> None:
+    def value(self, new_value: int | timedelta | str) -> None:
         """Write the value to the ``Value`` attribute.
 
         Args:
-            new_value: The new value.
+            new_value: An ``int`` (microseconds; nanoseconds for LTIME), a
+                ``timedelta`` or a time literal.
 
         Raises:
             TypeError: If the node is not writable or *new_value* has the
                 wrong type.
-            ValueError: If *new_value* is out of range.
+            ValueError: If *new_value* is not a literal Studio accepts or is
+                out of range.
         """
         self._write_value(new_value)
 
     def _format_value(self, new_value: object) -> str:
-        """Validate *new_value* and return the ``Value`` text to store.
+        """Validate *new_value* and return the canonical literal to store.
 
         Args:
             new_value: The value being assigned.
@@ -1511,7 +1524,42 @@ class TimeNode(AtomicNode):
         Returns:
             The text for the ``Value`` attribute.
         """
-        return format_time_literal(new_value, self.data_type)  # type: ignore[arg-type]
+        return normalize_time_literal(new_value, self.data_type)
+
+    @property
+    def count(self) -> int | None:
+        """The value as an integer count.
+
+        Returns:
+            Microseconds (TIME, TIME32) or nanoseconds (LTIME), or ``None`` if
+            no value was exported or the literal is not one Studio accepts.
+        """
+        text = self.raw_value
+        if text is None:
+            return None
+        try:
+            return parse_time_literal(text, self.data_type)
+        except ValueError:
+            return None
+
+    def as_timedelta(self) -> timedelta | None:
+        """The value as a ``datetime.timedelta``.
+
+        Returns:
+            The duration, or ``None`` if there is no parsable value.
+
+        Raises:
+            ValueError: For an LTIME that is not a whole number of microseconds
+                (a ``timedelta`` cannot hold nanoseconds).
+        """
+        count = self.count
+        if count is None:
+            return None
+        if self.unit == "ns":
+            if count % 1000:
+                raise ValueError(f"{count} ns is not a whole number of microseconds")
+            count //= 1000
+        return timedelta(microseconds=count)
 
     @property
     def unit(self) -> str | None:
@@ -1529,16 +1577,18 @@ class DateTimeNode(AtomicNode):
         return self.raw_value
 
     @value.setter
-    def value(self, new_value: str) -> None:
+    def value(self, new_value: str | datetime) -> None:
         """Write the value to the ``Value`` attribute.
 
         Args:
-            new_value: The new value.
+            new_value: A literal ending in ``Z`` (kept verbatim) or a
+                timezone-aware ``datetime`` (converted to UTC).
 
         Raises:
             TypeError: If the node is not writable or *new_value* has the
                 wrong type.
-            ValueError: If *new_value* is out of range.
+            ValueError: If the literal has the wrong shape (the trailing ``Z``
+                is required), or the ``datetime`` is naive.
         """
         self._write_value(new_value)
 
@@ -1551,7 +1601,7 @@ class DateTimeNode(AtomicNode):
         Returns:
             The text for the ``Value`` attribute.
         """
-        return format_time_literal(new_value, self.data_type)  # type: ignore[arg-type]
+        return normalize_datetime_literal(new_value, self.data_type)
 
     @property
     def unit(self) -> str | None:

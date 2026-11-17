@@ -1,22 +1,25 @@
 # py_l5x
 
-A pythonic interface for reading and writing Rockwell Automation L5X files.
-
-> [!IMPORTANT]
-> **⚠️ Work in Progress**: This project is currently under active development. APIs are subject to change, and not all features may be fully implemented.
+> A pythonic interface for reading and writing Rockwell Automation L5X files.
 
 `py_l5x` parses Rockwell Automation L5X exports from Studio 5000 Logix Designer and exposes the contents as a typed Python object hierarchy. It handles many of the file's quirks to create `dict`-like collections of all your export's tags, routines, modules, and the like. It also cross references different parts of the file to expose as much metadata (comments, extended tag properties, etc.) as you'd expect to see in Studio 5000 but is spread across the `.L5X` file structure.
 
 Both **full project exports** (a full PLC project) and **component exports** (a single Program, Routine, AOI, DataType, Module, Rung, etc.) are supported through the same `load()` function.
 
 > [!NOTE]
-> Write support (editing loaded files and generating new components) is new and only verified against Studio 5000 v37, but should work with most modern versions of Studio 5000. See [Editing and writing L5X files](#editing-and-writing-l5x-files).
+> Write support (editing loaded files and generating new components) is new and verified against Studio 5000 v37 and v38, but should work with most modern versions of Studio 5000. See [Editing and writing L5X files](#editing-and-writing-l5x-files).
 >
 > Ladder Logic and Structured Text are the only supported languages for routine logic currently.
 
+**Related Projects**
+
+- [Studio 5000 Doc MCP](https://github.com/zwood16/studio5000-docs-mcp): and MCP server to allow AI to read through all Studio 5000 docs installed on your PC
+- [L5X MCP](https://github.com/zwood16/l5x-mcp): an extension of this project that exposes reading and editing tools to an AI agent
+- [ACD Auto Export](https://github.com/zwood16/acd-auto-export): a companion script that automatically exports your active Studio 5000 project (`.acd` file) to the more usable `.l5x` file format using the Studio 5000 SDK every time you save.
+
 ## Installation
 
-I don't yet have plans to upload this to PyPi. For now, download the latest `.whl` from the [releases](https://github.com/zwood16/py_l5x/releases) page and install it manually:
+For now I don't have plans to upload this to PyPi. Download the latest `.whl` from the [releases](https://github.com/zwood16/py_l5x/releases) page and install it manually:
 
 ```bash
 pip install py_l5x-x.x.x-py3-none-any.whl
@@ -31,7 +34,7 @@ uv add py_l5x-x.x.x-py3-none-any.whl
 Or pull it straight from the Github release:
 
 ```bash
-uv add https://github.com/zwood16/py_l5x/releases/download/v0.3.0/py_l5x-0.3.0-py3-none-any.whl
+uv add https://github.com/zwood16/py_l5x/releases/download/vx.x.x/py_l5x-x.x.x-py3-none-any.whl
 ```
 
 ## Quick start
@@ -1207,7 +1210,7 @@ A_UDT
 ## Editing and writing L5X files
 
 > [!NOTE]
-> Write support is new and only verified against Studio 5000 **v37**. Values (including whole structures and arrays), documentation, tags, operand metadata, routines and rungs can be edited; UDTs, AOIs, programs and tags can be built from specs, edited and migrated; any object can be exported as a standalone component; and specs can be stamped out as templates.
+> Write support is new and verified against Studio 5000 **v37** and **v38**. Values (including whole structures and arrays), documentation, tags, operand metadata, routines and rungs can be edited; UDTs, AOIs, programs and tags can be built from specs, edited and migrated; any object can be exported as a standalone component; and specs can be stamped out as templates.
 
 Any loaded project (full or component export) can be edited in place and written back. The output matches Studio's own export format (UTF-8 BOM, CRLF, CDATA sections), so it can be opened in Studio, or imported with Import Component, and diffs cleanly against the original.
 
@@ -1233,6 +1236,8 @@ again = loads(text)  # parse L5X text directly
 ```
 
 Value writes are validated: out-of-range integers, the wrong Python type, non-finite floats, and strings that are too long or contain characters outside Latin-1 raise `ValueError`/`TypeError`, and the XML is left unchanged. Values are written in the tag's radix exactly as Studio formats them (for example `16#0000_00ff` for a Hex DINT). When a value changes, the tag's redundant `L5K` data block is removed, except on tags that contain AOI data (AOI-typed tags, or UDTs with AOI members). Studio keeps AOI local-tag values only in that block, and the edited Decorated values take precedence over it. Bits of integers (`tag.bit(3)`) are read-only.
+
+Time values (`TIME`, `TIME32`, `LTIME`, and the `PRE`/`ACC` members of v38's `TIMER_T`) accept an `int` (microseconds, or nanoseconds for `LTIME`), a `datetime.timedelta` or a literal string, and are stored in Studio's canonical form (`"t#1h30m"` is stored as `"T#1h_30m"`). Literals Studio would silently discard are rejected with a `ValueError`: units out of order (`T#500ms5s`), units out of range (`T#90m`, `T#1500ms`; only days may exceed their range), and fractions (`T#2.5s`). `DT`/`LDT` take a timezone-aware `datetime` or a literal ending in `Z`. `TimeNode.count` and `as_timedelta()` read a time back as a number.
 
 ### Structured values
 
@@ -1420,7 +1425,7 @@ New tags are written without a data block, so Studio gives them their type's def
 
 Rung text can be set with `rung.text = "XIC(a)OTE(b);"`. Note that a literal preset in rung text (for example `TON(t,3000,0)`) overwrites the timer's preset on import. See [docs/import-format.md](docs/import-format.md) for what Studio accepts on import.
 
-It's also worth noting that different versions of Studio 5000 have different available instructions and tag types. v36, for example, changed many instructions such as `MOV` which is now `MOVE`. Please keep this in mind when modifying or creating new logic, otherwise your specific version may reject the import.
+It's also worth noting that different versions of Studio 5000 have different available instructions and tag types. v36, for example, changed many instructions such as `MOV` which is now `MOVE`, and v38 no longer accepts `=>`/`=<` in Structured Text (use `>=`/`<=`). v38 also adds the `TIMER_T` type (a timer with `TIME` presets), which py_l5x supports. Note that its `ACC` member comes before `PRE`, unlike `TIMER`. Please keep this in mind when modifying or creating new logic, otherwise your specific version may reject the import.
 
 ---
 
@@ -1498,7 +1503,7 @@ These would need to be manually parsed using `project.root`.
 
 ### Write Support
 
-- Write support covers values, documentation, tags, operand metadata, routines, rungs, programs, UDTs and AOIs, and is only verified against Studio 5000 v37. See [Editing and writing L5X files](#editing-and-writing-l5x-files).
+- Write support covers values, documentation, tags, operand metadata, routines, rungs, programs, UDTs and AOIs, and is verified against Studio 5000 v37 and v38. See [Editing and writing L5X files](#editing-and-writing-l5x-files).
 - Replacing a UDT or AOI with `replace()` resets the **local-tag values of AOI instances** that depend on it (for example every GenericInput instance when its Debounce local changes). Studio stores those values only in the tag's `L5K` data block, which py_l5x does not generate. Ordinary value writes keep the block, so AOI local values survive them.
 - Renaming or removing tags, routines, programs and UDTs does not update references to them in logic (renaming an AOI does update its call sites).
 

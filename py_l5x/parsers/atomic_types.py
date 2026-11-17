@@ -19,9 +19,10 @@ import re
 import struct
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from decimal import ROUND_DOWN, Decimal
 from types import MappingProxyType
-from typing import Literal
+from typing import Any, Literal
 
 AtomicFamily = Literal["bool", "integer", "float", "time", "datetime"]
 
@@ -527,29 +528,312 @@ def format_float_literal(value: int | float, data_type: str, radix: str | None) 
     return _exponential(float(text), 8 if single else 16, truncate=not single)
 
 
-def format_time_literal(value: str, data_type: str) -> str:
-    """Validate a TIME/DT-family literal and return it unchanged.
+#: Time units and their size in microseconds (TIME, TIME32) or nanoseconds
+#: (LTIME), in the descending order the literal requires.
+_TIME_UNITS: dict[str, dict[str, int]] = {
+    "us": {
+        "d": 86_400_000_000,
+        "h": 3_600_000_000,
+        "m": 60_000_000,
+        "s": 1_000_000,
+        "ms": 1_000,
+        "us": 1,
+    },
+    "ns": {
+        "d": 86_400_000_000_000,
+        "h": 3_600_000_000_000,
+        "m": 60_000_000_000,
+        "s": 1_000_000_000,
+        "ms": 1_000_000,
+        "us": 1_000,
+        "ns": 1,
+    },
+}
+
+#: Exclusive upper bound of each unit except days.
+_UNIT_LIMITS = {"h": 24, "m": 60, "s": 60, "ms": 1000, "us": 1000, "ns": 1000}
+
+#: Largest magnitude accepted per type, in microseconds (TIME, TIME32) or
+#: nanoseconds (LTIME). TIME32 is exact (a 32-bit count). For TIME the limit is
+#: ``T#106750d_23h_59m_59s_999ms_999us``: Studio kept ``T#106750d`` and dropped
+#: ``T#106751d``, so the true maximum lies between them and is not measured
+#: more precisely. For LTIME 100000 days is a deliberately conservative limit
+#: (``LT#106751d`` was dropped, the exact edge is unverified).
+_TIME_LIMITS: dict[str, int] = {
+    "TIME": 106_751 * 86_400_000_000 - 1,
+    "TIME32": 2_147_483_647,
+    "LTIME": 100_000 * 86_400 * 10**9,
+}
+
+_TIME_TOKEN = re.compile(r"(\d+)(ms|us|ns|d|h|m|s)", re.IGNORECASE)
+_BARE_INT = re.compile(r"[+-]?\d+")
+_DATETIME_RE = {
+    "DT": re.compile(
+        r"DT#(\d{4})-(\d{2})-(\d{2})-(\d{2}):(\d{2}):(\d{2})\.\d{3}_\d{3}Z"
+    ),
+    "LDT": re.compile(
+        r"LDT#(\d{4})-(\d{2})-(\d{2})-(\d{2}):(\d{2}):(\d{2})"
+        r"\.\d{3}_\d{3}_\d{3}Z"
+    ),
+}
+
+
+def _time_kind(data_type: str) -> str:
+    """Return the upper-case TIME-family type name.
 
     Args:
-        value: The literal (for example ``"T#5s"``).
-        data_type: One of ``TIME32``, ``TIME``, ``LTIME``, ``DT``, ``LDT``.
+        data_type: ``TIME``, ``TIME32`` or ``LTIME`` (any case).
 
     Returns:
-        *value* as given.
+        The upper-case name.
 
     Raises:
-        TypeError: If *value* is not a ``str`` or the type is unknown.
-        ValueError: If *value* lacks the type's literal prefix.
+        TypeError: If the type is not one of those three.
     """
-    prefix = TIME_PREFIXES.get(data_type.upper())
-    if prefix is None:
-        raise TypeError(f"{data_type} values are not writable")
+    kind = data_type.upper()
+    if kind not in _TIME_LIMITS:
+        raise TypeError(f"{data_type} is not a TIME, TIME32 or LTIME type")
+    return kind
+
+
+def _time_base(kind: str) -> str:
+    """Return the base unit of a TIME-family type.
+
+    Args:
+        kind: ``TIME``, ``TIME32`` or ``LTIME``.
+
+    Returns:
+        ``"ns"`` for LTIME, else ``"us"``.
+    """
+    return "ns" if kind == "LTIME" else "us"
+
+
+def _check_time_range(count: int, kind: str) -> int:
+    """Check a count against the type's (conservative) range.
+
+    Args:
+        count: Microseconds (TIME, TIME32) or nanoseconds (LTIME).
+        kind: The upper-case type name.
+
+    Returns:
+        *count*.
+
+    Raises:
+        ValueError: If ``abs(count)`` exceeds the limit.
+    """
+    if abs(count) > _TIME_LIMITS[kind]:
+        raise ValueError(
+            f"{count} is out of range for {kind} (at most +/-{_TIME_LIMITS[kind]})"
+        )
+    return count
+
+
+def parse_time_literal(text: str, data_type: str) -> int:
+    """Parse a TIME, TIME32 or LTIME value the way Studio does.
+
+    Accepts exactly what Studio keeps, as measured on v37:
+
+    - a bare integer, meaning microseconds (TIME, TIME32) or nanoseconds
+      (LTIME), possibly negative;
+    - ``T#``, ``T32#`` or ``LT#`` (the type's own prefix, any case), an
+      optional ``-`` right after it, then one or more ``<digits><unit>``
+      groups with units ``d h m s ms us`` (plus ``ns`` for LTIME, any case),
+      each at most once and in descending order, optionally separated by
+      ``_``. Every unit except ``d`` must be in range (hours below 24,
+      minutes and seconds below 60, the others below 1000), even as the first
+      unit: ``T#90m`` is rejected.
+
+    Everything Studio drops or zeroes raises: fractions (``T#2.5s``), spaces,
+    ``-T#5s``, ``TIME#5s``, units out of order (``T#500ms5s``), ``ns`` in a
+    TIME, a wrong prefix (``T#5s`` for TIME32 or LTIME), and counts beyond the
+    range (TIME32 +/-2147483647 us; TIME up to just under 106751 days, and
+    LTIME up to 100000 days, whose true edges are unverified).
+
+    Args:
+        text: The literal or bare integer text.
+        data_type: ``TIME``, ``TIME32`` or ``LTIME``.
+
+    Returns:
+        The count in microseconds (TIME, TIME32) or nanoseconds (LTIME).
+
+    Raises:
+        TypeError: If *data_type* is not a TIME-family type.
+        ValueError: If *text* is not accepted.
+    """
+    kind = _time_kind(data_type)
+    prefix = TIME_PREFIXES[kind]
+    text = text.strip()
+    if _BARE_INT.fullmatch(text):
+        return _check_time_range(int(text), kind)
+    if not text.upper().startswith(prefix):
+        raise ValueError(f"{kind} literal must start with {prefix!r}: {text!r}")
+    body = text[len(prefix) :]
+    sign = 1
+    if body.startswith("-"):
+        sign, body = -1, body[1:]
+    units = _TIME_UNITS[_time_base(kind)]
+    order = list(units)
+    position = 0
+    last = -1
+    total = 0
+    while True:
+        match = _TIME_TOKEN.match(body, position)
+        if match is None:
+            raise ValueError(f"invalid {kind} literal: {text!r}")
+        unit = match.group(2).lower()
+        if unit not in units:
+            raise ValueError(f"unit {unit!r} is not valid for {kind}: {text!r}")
+        index = order.index(unit)
+        if index <= last:
+            raise ValueError(f"units out of order or repeated in {text!r}")
+        value = int(match.group(1))
+        if unit in _UNIT_LIMITS and value >= _UNIT_LIMITS[unit]:
+            raise ValueError(f"{value}{unit} is out of range in {text!r}")
+        total += value * units[unit]
+        last = index
+        position = match.end()
+        if position == len(body):
+            break
+        if body[position] == "_":
+            position += 1
+            if position == len(body):
+                raise ValueError(f"invalid {kind} literal: {text!r}")
+    return _check_time_range(sign * total, kind)
+
+
+def format_time_literal(count: int, data_type: str) -> str:
+    """Format a count as Studio's canonical TIME, TIME32 or LTIME literal.
+
+    Units are in descending order, joined by ``_``, zero-valued units are left
+    out and units are lower case. The sign goes right after the prefix, and
+    zero is written with the smallest unit (``T#0us``, ``T32#0us``,
+    ``LT#0ns``).
+
+    Args:
+        count: Microseconds (TIME, TIME32) or nanoseconds (LTIME).
+        data_type: ``TIME``, ``TIME32`` or ``LTIME``.
+
+    Returns:
+        For example ``"T#1h_30m"`` or ``"LT#5us"``.
+
+    Raises:
+        TypeError: If *count* is not an ``int`` (or is a ``bool``), or
+            *data_type* is not a TIME-family type.
+        ValueError: If *count* is out of range.
+    """
+    kind = _time_kind(data_type)
+    if isinstance(count, bool) or not isinstance(count, int):
+        raise TypeError(f"{kind} count must be an int, not {type(count).__name__}")
+    _check_time_range(count, kind)
+    base = _time_base(kind)
+    prefix = TIME_PREFIXES[kind]
+    if count == 0:
+        return f"{prefix}0{base}"
+    remaining = abs(count)
+    parts = []
+    for unit, size in _TIME_UNITS[base].items():
+        amount, remaining = divmod(remaining, size)
+        if amount:
+            parts.append(f"{amount}{unit}")
+    return f"{prefix}{'-' if count < 0 else ''}{'_'.join(parts)}"
+
+
+def time_count(value: Any, data_type: str) -> int:
+    """Convert an ``int``, ``timedelta`` or ``str`` to a TIME-family count.
+
+    Args:
+        value: An ``int`` (microseconds, or nanoseconds for LTIME), a
+            ``datetime.timedelta`` (exact: its resolution is one microsecond,
+            so TIME and TIME32 never lose precision) or a literal ``str`` (see
+            :func:`parse_time_literal`).
+        data_type: ``TIME``, ``TIME32`` or ``LTIME``.
+
+    Returns:
+        The count in microseconds (TIME, TIME32) or nanoseconds (LTIME).
+
+    Raises:
+        TypeError: If *value* is another type (``bool`` included).
+        ValueError: If a string is not accepted or the count is out of range.
+    """
+    kind = _time_kind(data_type)
+    if isinstance(value, bool):
+        raise TypeError(f"{kind} value must not be a bool")
+    if isinstance(value, int):
+        return _check_time_range(value, kind)
+    if isinstance(value, timedelta):
+        micros = value // timedelta(microseconds=1)
+        return _check_time_range(micros * 1000 if kind == "LTIME" else micros, kind)
+    if isinstance(value, str):
+        return parse_time_literal(value, kind)
+    raise TypeError(
+        f"{kind} value must be an int, timedelta or str, not {type(value).__name__}"
+    )
+
+
+def normalize_time_literal(value: Any, data_type: str) -> str:
+    """Turn an ``int``, ``timedelta`` or ``str`` into the canonical literal.
+
+    Args:
+        value: See :func:`time_count`.
+        data_type: ``TIME``, ``TIME32`` or ``LTIME``.
+
+    Returns:
+        The canonical literal, so ``"T#1h30m"`` becomes ``"T#1h_30m"``.
+
+    Raises:
+        TypeError: If *value* has the wrong type.
+        ValueError: If *value* is not accepted or out of range.
+    """
+    return format_time_literal(time_count(value, data_type), data_type)
+
+
+def normalize_datetime_literal(value: Any, data_type: str) -> str:
+    """Validate a DT or LDT value, or format a ``datetime``.
+
+    A ``str`` must have the canonical shape
+    ``DT#YYYY-MM-DD-hh:mm:ss.ffffff_Z`` (``LDT#...ffffffffff_Z`` with nine
+    fraction digits, shown as ``fff_fff_fff``), including the trailing ``Z``:
+    without it Studio applies the local time zone. It is kept verbatim. A
+    ``datetime`` must be timezone-aware; it is converted to UTC and formatted
+    canonically (an LDT gets zero nanoseconds beyond the microseconds).
+
+    Args:
+        value: A ``str`` or an aware ``datetime``.
+        data_type: ``DT`` or ``LDT``.
+
+    Returns:
+        The literal.
+
+    Raises:
+        TypeError: If *value* has the wrong type or *data_type* is not DT/LDT.
+        ValueError: If the string does not have the required shape, names an
+            impossible date or time, or the ``datetime`` is naive.
+    """
+    kind = data_type.upper()
+    if kind not in _DATETIME_RE:
+        raise TypeError(f"{data_type} is not a DT or LDT type")
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            raise ValueError("a datetime must be timezone-aware (it is stored in UTC)")
+        utc = value.astimezone(UTC)
+        micro = f"{utc.microsecond:06d}"
+        fraction = f"{micro[:3]}_{micro[3:]}" + ("_000" if kind == "LDT" else "")
+        return f"{kind}#{utc:%Y-%m-%d-%H:%M:%S}.{fraction}Z"
     if not isinstance(value, str):
         raise TypeError(
-            f"{data_type} value must be a str literal, not {type(value).__name__}"
+            f"{kind} value must be a str or datetime, not {type(value).__name__}"
         )
-    if not value.startswith(prefix):
-        raise ValueError(f"{data_type} literal must start with {prefix!r}: {value!r}")
+    match = _DATETIME_RE[kind].fullmatch(value)
+    if match is None:
+        raise ValueError(
+            f"{kind} literal must look like "
+            f"{kind}#2026-11-16-12:30:00.000_000{'_000' if kind == 'LDT' else ''}Z "
+            f"(the trailing Z is required): {value!r}"
+        )
+    try:
+        datetime(*(int(part) for part in match.groups()))
+    except ValueError as exc:
+        raise ValueError(f"{kind} literal is not a valid date: {value!r}") from exc
     return value
 
 

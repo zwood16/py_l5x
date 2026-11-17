@@ -21,7 +21,8 @@ Layout rules, taken from Studio's own exports:
   ``<Data Format="String" Length="0">`` with ``''`` at a tag root, and a
   ``Structure`` with ``LEN`` and ``DATA`` anywhere else.
 - **Built-in structures** (``TIMER``, ``PID``, ...) are copied from a table
-  Studio generated, ``data/builtin_types_v37.L5X.gz``.
+  Studio generated, ``data/builtin_types.L5X.gz`` (cumulative: the
+  v37 types plus those added since, such as ``TIMER_T`` from v38).
 - ``Dimensions`` in decorated data are comma separated (``"2,3"``), and
   element indexes are row-major.
 
@@ -57,7 +58,7 @@ if TYPE_CHECKING:
     from py_l5x.parsers.tag import TypeRegistry
 
 #: Package data file holding Studio's default tree for each built-in type.
-BUILTIN_TABLE_RESOURCE = "data/builtin_types_v37.L5X.gz"
+BUILTIN_TABLE_RESOURCE = "data/builtin_types.L5X.gz"
 
 #: Default value text for the time and date-time types.
 _TIME_DEFAULTS: dict[str, str] = {

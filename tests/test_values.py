@@ -387,11 +387,11 @@ class TestErrors:
         assert tag.value_element.get("Value") == "T#5s"
 
     def test_time_wrong_type(self, project: Project) -> None:
-        """A non-str is rejected for a TIME."""
+        """Floats and bools are rejected for a TIME (ints are microseconds)."""
         tag = _main(project, "duration")
 
         def go() -> None:
-            tag.value = 5
+            tag.value = 5.5
 
         self._unchanged(project, go, TypeError)
 
