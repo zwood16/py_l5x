@@ -18,6 +18,20 @@ This module provides rich AOI inspection surfaces similar to program parsing:
   ``AOILocal*Tag`` classes. InOut parameters have no value tree and remain
   plain ``AOIParameter`` instances.
 
+A source-protected AOI is saved by Studio 5000 not as an
+``<AddOnInstructionDefinition>`` but as ``<EncodedData EncodedType=
+"AddOnInstructionDefinition" Name=..>`` under the same
+``<AddOnInstructionDefinitions>`` container. ``ProtectedAOI`` wraps it and
+``ProtectedAOICollection`` (``project.protected_aois``) lists them. A real v37
+export carries a few attributes, a ``RevisionNote`` and the complete
+``Parameters`` (read through the normal parameter wrappers); the encoded
+payload follows as text and is never interpreted. Only ``Name`` and
+``EncodedType`` are required, so everything else is read defensively.
+``project.aois`` deliberately holds definitions only. (Not to be confused with
+``AOIDefinition._PROTECTED_CHILDREN``, which handles ``EncodedData`` *inside* a
+definition.) Encoded *routines* are the program-level counterpart
+(``ProtectedRoutine`` in :mod:`py_l5x.parsers.routine`).
+
 AOI routines reuse :class:`py_l5x.parsers.routine.RoutinesCollection`.
 ``AOIParametersCollection`` maps one AOI's parameters by name, and
 ``AOIDataTypesCollection`` maps every AOI name to its parameters; the latter
@@ -620,6 +634,119 @@ class AOIDefinition(BaseElement):
     def __repr__(self) -> str:
         """Return a concise representation including the AOI name."""
         return f"{type(self).__name__}({self.name!r})"
+
+
+#: ``EncodedType`` of an encoded Add-On Instruction definition.
+PROTECTED_AOI_TYPE = "AddOnInstructionDefinition"
+
+#: XPath (from ``<Controller>``) of the encoded AOI elements.
+PROTECTED_AOI_XPATH = (
+    f"AddOnInstructionDefinitions/EncodedData[@EncodedType='{PROTECTED_AOI_TYPE}']"
+)
+
+
+class ProtectedAOI(BaseElement):
+    """A source-protected AOI: an ``<EncodedData>`` element.
+
+    Studio 5000 (v37) writes the attributes below, a ``RevisionNote`` and the
+    full ``Parameters`` definitions as readable children, and the encoded
+    payload as the text after ``</Parameters>``. The payload is not
+    interpreted. Only ``Name`` and ``EncodedType`` are required here; every
+    other attribute and child is read if present and has an empty or ``None``
+    default otherwise (``Description``, ``Vendor`` and ``Dependencies`` were
+    not seen in a real export but are handled if they appear).
+
+    Args:
+        element: The XML ``<EncodedData EncodedType="AddOnInstructionDefinition">``
+            element.
+        type_registry: Shared type registry for resolving data type metadata
+            (optional; parameter identity does not need it).
+    """
+
+    name = str_attr("Name", doc="AOI name.")
+    encoded_type = str_attr("EncodedType", doc="Encoded component type.")
+    class_ = str_attr("Class", default=None, doc="AOI class, if given.")
+    revision = str_attr("Revision", default=None, doc="AOI revision, if given.")
+    vendor = str_attr("Vendor", default=None, doc="AOI vendor, if given.")
+    signature_id = str_attr("SignatureID", default=None, doc="Signature ID, if given.")
+    signature_timestamp = str_attr(
+        "SignatureTimestamp", default=None, doc="Signature timestamp, if given."
+    )
+    edited_date = str_attr("EditedDate", default=None, doc="Last edit timestamp.")
+    software_revision = str_attr(
+        "SoftwareRevision", default=None, doc="Studio/Logix software revision string."
+    )
+    encryption_config = str_attr(
+        "EncryptionConfig", default=None, doc="Encryption configuration, if given."
+    )
+    description = CDataField("Description", doc="AOI description text, if visible.")
+    revision_note = CDataField("RevisionNote", doc="AOI revision note, if visible.")
+
+    def __init__(
+        self, element: ET.Element, type_registry: TypeRegistry | None = None
+    ) -> None:
+        """Initialise from an ``<EncodedData>`` XML element.
+
+        Args:
+            element: The XML ``<EncodedData>`` element to wrap.
+            type_registry: Shared type registry for resolving data type metadata.
+        """
+        super().__init__(element)
+        self._type_registry = type_registry
+
+    @property
+    def parameters(self) -> AOIParametersCollection:
+        """The visible parameter definitions, keyed by name.
+
+        Returns:
+            The same :class:`AOIParametersCollection` a normal AOI has; empty
+            if the element has no ``Parameters`` child.
+        """
+        return AOIParametersCollection(self._element, self._type_registry)
+
+    @property
+    def dependency_names(self) -> list[str]:
+        """The names listed in ``Dependencies/Dependency``, if any.
+
+        Returns:
+            The ``Name`` of each dependency in document order; empty if there
+            is no ``Dependencies`` child.
+        """
+        return [
+            d.get("Name", "")
+            for d in self._element.findall("Dependencies/Dependency")
+            if d.get("Name")
+        ]
+
+
+class ProtectedAOICollection(BaseCollection[ProtectedAOI]):
+    """A ``Mapping`` over every encoded (source-protected) AOI by name.
+
+    Args:
+        controller_element: The ``<Controller>`` element.
+    """
+
+    def __init__(self, controller_element: ET.Element) -> None:
+        """Index the encoded AOIs by name.
+
+        Args:
+            controller_element: The ``<Controller>`` element.
+        """
+        super().__init__(controller_element, PROTECTED_AOI_XPATH, self._make)
+        #: Set by :class:`~py_l5x.parsers.project.Project`; resolves parameter
+        #: metadata of the wrapped elements.
+        self._registry: TypeRegistry | None = None
+
+    def _make(self, element: ET.Element) -> ProtectedAOI:
+        """Wrap an element with the bound registry.
+
+        Args:
+            element: An ``<EncodedData>`` element.
+
+        Returns:
+            The wrapper.
+        """
+        return ProtectedAOI(element, self._registry)
 
 
 class CallSite(NamedTuple):

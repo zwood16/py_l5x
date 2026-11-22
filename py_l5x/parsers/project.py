@@ -9,6 +9,7 @@ child parsers as typed properties in a hierarchical structure:
     ├── controller       → ControllerInfo
     ├── data_types       → DataTypesCollection
     ├── aois             → AOICollection
+    ├── protected_aois   → ProtectedAOICollection (source-protected AOIs)
     ├── modules          → ModulesCollection
     ├── tags             → ProjectTagsView (merged: controller tags + module I/O tags)
     ├── controller_tags  → TagsCollection (controller-scoped only, keyed by name)
@@ -39,7 +40,12 @@ from collections.abc import Iterator, Mapping
 from typing import TYPE_CHECKING, Any, Union
 from xml.etree import ElementTree as ET
 
-from py_l5x.parsers.aoi import AOICollection, AOIDataTypesCollection, AOIDefinition
+from py_l5x.parsers.aoi import (
+    AOICollection,
+    AOIDataTypesCollection,
+    AOIDefinition,
+    ProtectedAOICollection,
+)
 from py_l5x.parsers.controller import ControllerInfo
 from py_l5x.parsers.datatype import DataTypesCollection
 from py_l5x.parsers.module import Module, ModulesCollection, ModuleTagRef
@@ -203,7 +209,11 @@ class Project:
         self._aoi_types = AOIDataTypesCollection(self._controller_element)
 
         # Build the shared TypeRegistry (glue for tag value parsing).
-        self._type_registry = TypeRegistry(self._data_types, self._aoi_types)
+        self._protected_aois = ProtectedAOICollection(self._controller_element)
+        self._type_registry = TypeRegistry(
+            self._data_types, self._aoi_types, self._protected_aois
+        )
+        self._protected_aois._registry = self._type_registry
         self._data_types._registry = self._type_registry
 
         # Build collections that depend on TypeRegistry.
@@ -446,6 +456,18 @@ class Project:
         """
         return self._aois
 
+    @property
+    def protected_aois(self) -> ProtectedAOICollection:
+        """Source-protected Add-On Instructions (``<EncodedData>``), by name.
+
+        ``aois`` holds definitions only; an AOI saved without its source is
+        listed here instead.
+
+        Returns:
+            A ``ProtectedAOICollection`` mapping names to ``ProtectedAOI``.
+        """
+        return self._protected_aois
+
     # ------------------------------------------------------------------
     # Hardware
     # ------------------------------------------------------------------
@@ -568,4 +590,6 @@ class Project:
             f"  Programs:     {len(self._programs)}",
             f"  Tasks:        {len(self._tasks)}",
         ]
+        if self._protected_aois:
+            lines.insert(7, f"  Protected AOIs: {len(self._protected_aois)}")
         return "\n".join(lines)

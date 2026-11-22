@@ -247,6 +247,10 @@ class TestReplace:
         """replace(to_spec()) leaves each program identical (minus L5K)."""
         reference = _example()
         for name in list(reference.programs):
+            if reference.programs[name].protected_routines:
+                with pytest.raises(ValueError, match="source-protected"):
+                    reference.programs[name].to_spec()
+                continue
             project = _example()
             before = project.programs[name]._element
             expected = re.sub(

@@ -14,6 +14,7 @@ from py_l5x.build import (
     MemberSpec,
     ParameterSpec,
     ProgramSpec,
+    ProtectedContentWarning,
     RoutineSpec,
     RungSpec,
     TagSpec,
@@ -47,13 +48,19 @@ from py_l5x.parsers.aoi import (
     AOIParameterIntegerTag,
     AOIParameterTimeTag,
     CallSite,
+    ProtectedAOI,
+    ProtectedAOICollection,
 )
 from py_l5x.parsers.controller import ControllerInfo
 from py_l5x.parsers.datatype import DataType, DataTypeMember
 from py_l5x.parsers.module import Module, ModuleTagRef, ModuleTagsView
 from py_l5x.parsers.program import Program
 from py_l5x.parsers.project import Project, ProjectTagsView
-from py_l5x.parsers.routine import Routine
+from py_l5x.parsers.routine import (
+    ProtectedRoutine,
+    ProtectedRoutinesCollection,
+    Routine,
+)
 from py_l5x.parsers.tag import (
     AliasTag,
     ArrayNode,
@@ -138,6 +145,11 @@ __all__ = [
     "ProgramSpec",
     "Project",
     "ProjectTagsView",
+    "ProtectedAOI",
+    "ProtectedAOICollection",
+    "ProtectedContentWarning",
+    "ProtectedRoutine",
+    "ProtectedRoutinesCollection",
     "Routine",
     "RoutineSpec",
     "RungSpec",

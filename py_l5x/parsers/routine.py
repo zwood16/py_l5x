@@ -8,6 +8,13 @@ This module parses ``<Routine>`` elements and their logic bodies:
 The same XML shape is used under both ``Programs/Program/Routines`` and
 ``AddOnInstructionDefinitions/AddOnInstructionDefinition/Routines``, so this
 module can be reused directly by both parser surfaces.
+
+A source-protected routine is saved by Studio 5000 as ``<EncodedData
+EncodedType="Routine" Name=.. Type=..>`` among a program's ``<Routine>``
+elements, with an opaque payload as its text. ``ProtectedRoutine`` wraps it and
+``ProtectedRoutinesCollection`` (``program.protected_routines``) lists them.
+``RoutinesCollection`` keeps to ``<Routine>`` definitions only, so logic
+scanners (call sites, export closure) never see the hidden logic.
 """
 
 from __future__ import annotations
@@ -540,6 +547,44 @@ class Routine(BaseElement):
         return f"Routine({self.name!r}, type={self.type_!r})"
 
 
+class ProtectedRoutine(BaseElement):
+    """A source-protected routine: an ``<EncodedData EncodedType="Routine">``.
+
+    The payload is opaque and never interpreted.
+
+    Args:
+        element: The ``<EncodedData>`` XML element to wrap.
+    """
+
+    name = str_attr("Name", doc="Routine name.")
+    encoded_type = str_attr("EncodedType", doc="Encoded component type.")
+    type_ = str_attr("Type", doc='Routine language/type (e.g. "RLL" or "ST").')
+    encryption_config = str_attr(
+        "EncryptionConfig", default=None, doc="Encryption configuration, if given."
+    )
+
+
+class ProtectedRoutinesCollection(BaseCollection[ProtectedRoutine]):
+    """A ``Mapping`` over every encoded routine under a program.
+
+    Args:
+        parent_element: The ``<Program>`` element.
+    """
+
+    def __init__(self, parent_element: ET.Element) -> None:
+        """Index the encoded routines by name.
+
+        Args:
+            parent_element: The ``<Program>`` element whose
+                ``Routines/EncodedData`` children form this collection.
+        """
+        super().__init__(
+            parent_element,
+            "Routines/EncodedData[@EncodedType='Routine']",
+            ProtectedRoutine,
+        )
+
+
 #: The only routine names an AOI may have.
 _AOI_ROUTINE_NAMES = frozenset({"Logic", "Prescan", "Postscan", "EnableInFalse"})
 
@@ -618,7 +663,11 @@ class RoutinesCollection(BaseCollection[Routine]):
         """
         validate_new_name(
             name,
-            (e.get("Name", "") for e in self._routine_elements() if e is not ignore),
+            (
+                e.get("Name", "")
+                for e in self._parent.findall("Routines/*")  # incl. EncodedData
+                if e is not ignore
+            ),
             "routine",
         )
 

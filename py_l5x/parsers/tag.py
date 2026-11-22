@@ -173,6 +173,8 @@ if TYPE_CHECKING:
         AOIDataTypesCollection,
         AOIParameter,
         AOIParametersCollection,
+        ProtectedAOI,
+        ProtectedAOICollection,
     )
 
     #: A member/parameter definition used for metadata cross-reference. Both
@@ -201,37 +203,48 @@ class TypeRegistry:
     module IO/config structures) resolve to ``None`` -- their values still
     parse correctly, they simply have no cross-referenced metadata.
 
+    Source-protected AOIs (``<EncodedData>``) keep their parameter definitions
+    readable, so ``resolve_members`` serves those for metadata; their local
+    tags and logic are encoded, and ``aoi()`` returns ``None`` for them.
+
     Args:
         data_types: The controller's UDT collection.
         aoi_types: The controller's AOI data types collection.
+        protected_aois: The controller's source-protected AOIs, if any.
     """
 
     def __init__(
-        self, data_types: DataTypesCollection, aoi_types: AOIDataTypesCollection
+        self,
+        data_types: DataTypesCollection,
+        aoi_types: AOIDataTypesCollection,
+        protected_aois: ProtectedAOICollection | None = None,
     ) -> None:
         """Initialise from the controller's UDT and AOI collections.
 
         Args:
             data_types: The controller's UDT collection.
             aoi_types: The controller's AOI data types collection.
+            protected_aois: The controller's source-protected AOIs, if any.
         """
         self._data_types = data_types
         self._aoi_types = aoi_types
+        self._protected_aois = protected_aois
 
     def type_names(self) -> list[str]:
         """List every UDT and AOI name known to the project.
 
         Returns:
             The names (UDTs first, including product-defined and I/O types
-            exported with the project, then AOIs).
+            exported with the project, then AOIs, then source-protected AOIs).
         """
-        return [*self._data_types, *self._aoi_types]
+        protected = self._protected_aois if self._protected_aois is not None else ()
+        return [*self._data_types, *self._aoi_types, *protected]
 
     def contains_aoi(self, type_name: str, _seen: set[str] | None = None) -> bool:
         """Report whether data of a type holds AOI instance data.
 
-        True for an AOI, and for a UDT that has (at any depth) a member of an
-        AOI type.
+        True for an AOI (including a source-protected one), and for a UDT that
+        has (at any depth) a member of an AOI type.
 
         Args:
             type_name: The data type name.
@@ -243,7 +256,7 @@ class TypeRegistry:
         if type_name in seen:
             return False
         seen.add(type_name)
-        if self.aoi(type_name) is not None:
+        if self.aoi(type_name) is not None or self.is_protected_aoi(type_name):
             return True
         udt = self.udt(type_name)
         if udt is None:
@@ -274,6 +287,31 @@ class TypeRegistry:
         """
         return self._aoi_types.get(type_name)
 
+    def protected_aoi(self, type_name: str) -> ProtectedAOI | None:
+        """Look up a source-protected Add-On Instruction by name.
+
+        Args:
+            type_name: The AOI name.
+
+        Returns:
+            The :class:`~py_l5x.parsers.aoi.ProtectedAOI`, or ``None`` if there
+            is no such source-protected AOI.
+        """
+        if self._protected_aois is None:
+            return None
+        return self._protected_aois.get(type_name)
+
+    def is_protected_aoi(self, type_name: str) -> bool:
+        """Report whether a type name is a source-protected AOI.
+
+        Args:
+            type_name: The data type name.
+
+        Returns:
+            ``True`` if the project has an encoded AOI of that name.
+        """
+        return self.protected_aoi(type_name) is not None
+
     def resolve_members(self, type_name: str) -> Mapping[str, MemberDef] | None:
         """Look up the member/parameter definitions for a data type name.
 
@@ -283,7 +321,9 @@ class TypeRegistry:
 
         Returns:
             A mapping of member/parameter name to its definition object, or
-            ``None`` if *type_name* is not a known UDT or AOI.
+            ``None`` if *type_name* is not a known UDT or AOI. A
+            source-protected AOI resolves to its visible parameters (empty if
+            the element lists none).
         """
         dt = self._data_types.get(type_name)
         if dt is not None:
@@ -291,6 +331,9 @@ class TypeRegistry:
         aoi = self._aoi_types.get(type_name)
         if aoi is not None:
             return aoi.datatype_members
+        protected = self.protected_aoi(type_name)
+        if protected is not None:
+            return protected.parameters.datatype_members
         return None
 
     def is_string_type(self, type_name: str) -> bool:
@@ -2639,7 +2682,8 @@ class Tag(_RootMetadataMixin, BaseElement):
         Raises:
             ValueError: For produced and consumed tags, specialty tags
                 (MESSAGE, AXIS, MOTION_GROUP, ...), tags with unknown data,
-                and tags with child elements the spec cannot hold.
+                tags of a source-protected AOI type (no layout to rebuild
+                them from) and tags with child elements the spec cannot hold.
         """
         from py_l5x.build.specs import TagSpec
         from py_l5x.parsers.migrate import _raw_cdata
@@ -2652,6 +2696,12 @@ class Tag(_RootMetadataMixin, BaseElement):
             raise ValueError(
                 f"tag {self.name!r}: {self.data_type} tags have no spec "
                 "(specialty or unrecognised data)"
+            )
+        registry = self._type_registry
+        if registry is not None and registry.is_protected_aoi(self.data_type):
+            raise ValueError(
+                f"tag {self.name!r}: {self.data_type} is a source-protected AOI; "
+                "its tags have no spec"
             )
         for child in element:
             if child.tag not in self._SPEC_CHILDREN:

@@ -290,6 +290,16 @@ class TestExampleProgram:
     def test_descriptions_and_st(self) -> None:
         """Descriptions and ST lines change with the tag names."""
         project = load(str(FIXTURES / "example.L5X"))
+        # The protected routine and the tag of the protected AOI type have no
+        # spec; drop them so the program's ST routine can still be templated.
+        element = project.programs["AnotherProgram"]._element
+        routines = element.find("Routines")
+        for encoded in routines.findall("EncodedData"):
+            routines.remove(encoded)
+        tags = element.find("Tags")
+        for tag in tags.findall("Tag"):
+            if tag.get("DataType") == "SeqCtrl_Protected":
+                tags.remove(tag)
         spec = project.programs["AnotherProgram"].to_spec()
         st = next(r for r in spec.routines if r.type_ == "ST")
         source = next(line for line in st.lines if "i" in line)

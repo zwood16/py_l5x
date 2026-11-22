@@ -20,6 +20,19 @@ shaped like Studio 5000's own component exports (``ContainsContext="true"``):
 - Order: UDT targets first, then context UDTs in project order; AOIs
   (targets and context) in project order, which puts dependencies first (new
   spec targets go last); tags and modules in project order.
+- A source-protected AOI (``<EncodedData EncodedType=
+  "AddOnInstructionDefinition">``) reached through a tag type or an AOI call
+  is copied verbatim (no ``Use``, no ``<Dependencies>`` added), in project
+  order among the AOIs, which is what Studio writes when exporting with
+  "Encode protected content". Its visible ``Dependencies`` and ``Parameters``
+  data types, if any, extend the closure. A :class:`ProtectedContentWarning` is
+  issued per copied element. Studio accepts this context on import without the
+  source key, also into a project that lacks the AOI (SDK exp35).
+  Neither a protected AOI nor a protected routine can be a target.
+- A Program target keeps its source-protected routines
+  (``<EncodedData EncodedType="Routine">``) verbatim, as part of the copied
+  program. Their logic cannot be scanned, so the tags and AOIs they use are
+  not found; a :class:`ProtectedContentWarning` names each such routine.
 - Every UDT and AOI in the file has ``<Dependencies>`` (Studio fails without):
   loaded types are copied and get them if missing, spec types are built by the
   builders. Product-defined types (``TIMER``, ...) are not written.
@@ -51,6 +64,7 @@ from __future__ import annotations
 
 import copy
 import re
+import warnings
 from collections.abc import Iterable
 from typing import Any
 from xml.etree import ElementTree as ET
@@ -60,15 +74,25 @@ from py_l5x.build.datatype import _dependency_type, _fill, build_datatype
 from py_l5x.build.program import build_program
 from py_l5x.build.specs import AOISpec, DataTypeSpec, ProgramSpec, TagSpec
 from py_l5x.build.tag import build_tag
-from py_l5x.parsers.aoi import AOIDefinition, _call_pattern, _mask
+from py_l5x.parsers.aoi import AOIDefinition, ProtectedAOI, _call_pattern, _mask
 from py_l5x.parsers.atomic_types import ATOMIC_TYPES
 from py_l5x.parsers.datatype import DataType
 from py_l5x.parsers.layout import builtin_table
 from py_l5x.parsers.migrate import _raw_cdata
 from py_l5x.parsers.program import Program
 from py_l5x.parsers.project import Project
-from py_l5x.parsers.routine import Routine, Rung
+from py_l5x.parsers.routine import ProtectedRoutine, Routine, Rung
 from py_l5x.parsers.tag import Tag
+
+
+class ProtectedContentWarning(UserWarning):
+    """Source-protected (encoded) content was copied or could not be scanned.
+
+    Issued when an export copies a source-protected AOI unchanged, or when a
+    Program target holds a source-protected routine whose logic cannot be
+    searched for the tags and AOIs it uses.
+    """
+
 
 _TOKEN = re.compile(
     r"(?<![A-Za-z0-9_.#$\\])"
@@ -203,12 +227,31 @@ class _Resolver:
             self.udt_order = [
                 e.get("Name", "") for e in controller.findall("DataTypes/DataType")
             ]
-            self.aoi_order = [
-                e.get("Name", "")
-                for e in controller.findall(
-                    "AddOnInstructionDefinitions/AddOnInstructionDefinition"
-                )
-            ]
+            self.aoi_order = [e.get("Name", "") for e in self._aoi_elements(controller)]
+
+    @staticmethod
+    def _aoi_elements(controller: ET.Element) -> list[ET.Element]:
+        """List the AOI elements, definitions and protected ones, in order.
+
+        Args:
+            controller: The ``<Controller>`` element.
+
+        Returns:
+            Every ``AddOnInstructionDefinition`` and encoded AOI
+            ``EncodedData`` child of ``AddOnInstructionDefinitions``.
+        """
+        container = controller.find("AddOnInstructionDefinitions")
+        if container is None:
+            return []
+        return [
+            e
+            for e in container
+            if e.tag == "AddOnInstructionDefinition"
+            or (
+                e.tag == "EncodedData"
+                and e.get("EncodedType") == "AddOnInstructionDefinition"
+            )
+        ]
 
     def module_chain(self, base: str) -> set[str]:
         """Find the modules a module I/O tag name refers to.
@@ -249,7 +292,7 @@ class _Resolver:
         raise KeyError(name)
 
     def aoi_element(self, name: str) -> ET.Element:
-        """Return a project AOI element.
+        """Return a project AOI element (definition or protected).
 
         Args:
             name: The AOI name.
@@ -258,9 +301,7 @@ class _Resolver:
             The element.
         """
         assert self.controller is not None
-        for element in self.controller.findall(
-            "AddOnInstructionDefinitions/AddOnInstructionDefinition"
-        ):
+        for element in self._aoi_elements(self.controller):
             if element.get("Name") == name:
                 return element
         raise KeyError(name)
@@ -272,7 +313,8 @@ class _Resolver:
             name: The type name.
 
         Returns:
-            ``"udt"``, ``"aoi"``, or ``None`` for atomic and built-in types.
+            ``"udt"``, ``"aoi"``, ``"protected_aoi"``, or ``None`` for atomic
+            and built-in types.
 
         Raises:
             ValueError: If the type cannot be resolved.
@@ -286,6 +328,8 @@ class _Resolver:
             return None
         if self.registry.aoi(name) is not None:
             return "aoi"
+        if self.registry.is_protected_aoi(name):
+            return "protected_aoi"
         udt = self.registry.udt(name)
         if udt is not None:
             return None if udt.class_ == "ProductDefined" else "udt"
@@ -310,12 +354,18 @@ class _Resolver:
         aois: set[str] = set(called)
         pending = list(types) + list(called)
         seen: set[str] = set()
+        soft: set[str] = set()
         while pending:
             name = pending.pop()
             if name in seen:
                 continue
             seen.add(name)
-            kind = self.classify(name)
+            try:
+                kind = self.classify(name)
+            except ValueError:
+                if name in soft:
+                    continue  # a name listed by a protected AOI that we can't use
+                raise
             if kind == "udt":
                 udts.add(name)
                 pending.extend(
@@ -333,6 +383,21 @@ class _Resolver:
                         *element.findall("LocalTags/LocalTag"),
                     ]
                 )
+            elif kind == "protected_aoi":
+                aois.add(name)
+                element = self.aoi_element(name)
+                found = [
+                    *(
+                        d.get("Name", "")
+                        for d in element.findall("Dependencies/Dependency")
+                    ),
+                    *(
+                        p.get("DataType", "")
+                        for p in element.findall("Parameters/Parameter")
+                    ),
+                ]
+                soft.update(found)
+                pending.extend(found)
         return udts, aois
 
     def called_aois(self, logic: list[tuple[str, bool]]) -> set[str]:
@@ -546,13 +611,30 @@ def export_component(
 
     Raises:
         ValueError: If there are no targets, the kinds are mixed, an object is
-            not in *project*, loaded objects are given without a project, or a
-            type cannot be resolved.
+            not in *project*, loaded objects are given without a project, a
+            target is a source-protected AOI or routine, or a type cannot be
+            resolved.
         TypeError: If an object cannot be exported.
+
+    Warns:
+        ProtectedContentWarning: For each source-protected AOI copied in as
+            context, and for each source-protected routine of a Program
+            target (its logic is not scanned).
     """
     items = list(targets) if isinstance(targets, list | tuple) else [targets]
     if not items:
         raise ValueError("no targets to export")
+    for item in items:
+        if isinstance(item, ProtectedAOI):
+            raise ValueError(
+                f"AOI {item.name!r} is source-protected; a protected AOI "
+                "cannot be exported as a target"
+            )
+        if isinstance(item, ProtectedRoutine):
+            raise ValueError(
+                f"routine {item.name!r} is source-protected; a protected "
+                "routine cannot be exported as a target"
+            )
     kinds = {_kind(item) for item in items}
     if len(kinds) > 1:
         raise ValueError(f"targets must be of one kind, not {sorted(kinds)}")
@@ -652,6 +734,16 @@ def _collect(
             out.first_name = item.name
             for routine in element.findall("Routines/Routine"):
                 out.logic.extend(_logic_of(routine))
+            for encoded in element.findall("Routines/EncodedData"):
+                if encoded.get("EncodedType") == "Routine":
+                    warnings.warn(
+                        ProtectedContentWarning(
+                            f"routine {encoded.get('Name', '')!r} is "
+                            "source-protected; tags and AOIs it uses could not "
+                            "be determined and are not included as context"
+                        ),
+                        stacklevel=4,
+                    )
         element.tail = "\n"
         out.elements.append(element)
         out.scope = out.first_name
@@ -887,7 +979,19 @@ def _assemble(
                 element = copy.deepcopy(resolver.aoi_element(name))
                 element.tail = "\n"
                 element.attrib.pop("Use", None)
-                _dependencies(element, resolver, aoi=True)
+                if element.tag == "EncodedData":
+                    # Copied unchanged: Studio writes it so; no Dependencies.
+                    warnings.warn(
+                        ProtectedContentWarning(
+                            f"AOI {name!r} is source-protected; its encoded "
+                            "definition was copied unchanged (as Studio exports "
+                            "it). On import it is used as is, without its "
+                            "source."
+                        ),
+                        stacklevel=4,
+                    )
+                else:
+                    _dependencies(element, resolver, aoi=True)
                 ordered.append(element)
         ordered.extend(target_aois.values())
         return ordered

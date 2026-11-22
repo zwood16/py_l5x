@@ -72,14 +72,16 @@ Project
 ├── controller          → ControllerInfo
 ├── data_types          → DataTypesCollection   (keyed by name)
 ├── aois                → AOICollection         (keyed by name)
+├── protected_aois      → ProtectedAOICollection (source-protected AOIs, keyed by name)
 ├── modules             → ModulesCollection     (keyed by name)
 ├── tags                → ProjectTagsView       (merged: controller + module I/O tags, keyed by name)
 ├── controller_tags     → TagsCollection        (controller-scoped only, keyed by name)
 ├── programs            → ProgramsCollection    (keyed by name)
 │   ├── tags            → TagsCollection        (program-local, keyed by name)
-│   └── routines        → RoutinesCollection    (keyed by name)
-│       ├── rungs       → list[Rung]            (RLL routines)
-│       └── st_lines    → list[StLine]          (ST routines)
+│   ├── routines        → RoutinesCollection    (keyed by name)
+│   │   ├── rungs       → list[Rung]            (RLL routines)
+│   │   └── st_lines    → list[StLine]          (ST routines)
+│   └── protected_routines → ProtectedRoutinesCollection (source-protected routines)
 └── tasks               → TasksCollection       (keyed by name)
 ```
 
@@ -1025,6 +1027,34 @@ Logic
 [TON(debounceOnTimer,?,?) ,XIC(debounceOnTimer.DN) OTL(state) ];
 
 ...
+```
+
+### Source-protected AOIs and routines
+
+A source-protected AOI is saved by Studio 5000 as an `<EncodedData EncodedType="AddOnInstructionDefinition">` element instead of an `<AddOnInstructionDefinition>`, and a protected routine as `<EncodedData EncodedType="Routine">` among the program's routines. They are listed in `project.protected_aois` (`ProtectedAOI`) and `program.protected_routines` (`ProtectedRoutine`); `project.aois` and `program.routines` hold readable definitions only. The encoded payload is never interpreted, and the elements are written back unchanged.
+
+`ProtectedAOI` has `name`, `encoded_type`, `class_`, `revision`, `signature_id`, `signature_timestamp`, `edited_date`, `software_revision`, `encryption_config`, `revision_note`, and (when present) `vendor` and `description`; missing attributes are `None`. Studio keeps the parameter definitions readable, so `parameters` is the same `AOIParametersCollection` a normal AOI has. `ProtectedRoutine` has `name`, `encoded_type`, `type_` and `encryption_config`.
+
+```python
+aoi = project.protected_aois["SeqCtrl_Protected"]
+print(aoi.revision, len(aoi.parameters), aoi.parameters["mode"].description)
+tag = project.programs["AnotherProgram"].tags["seqCtrl_Protected_Instance"]
+print(tag.members["mode"].description)  # metadata from the visible parameters
+print(list(project.programs["AnotherProgram"].protected_routines))
+```
+
+Tags of a protected AOI type read like any AOI-typed tag. They have no spec, though: `Tag.to_spec()` raises `ValueError`, and so does `Program.to_spec()` for a program with a protected routine.
+
+Component exports copy a protected AOI's `EncodedData` unchanged as context (where a tag type or a call of the instruction needs it), and a Program export keeps its protected routines. Each such copy issues a `ProtectedContentWarning` (a `UserWarning`). A Program export also warns, naming each protected routine, that the tags and AOIs it uses could not be determined and are not included. Neither a protected AOI nor a protected routine can be an export target (`ValueError`). Studio 5000 v37 accepts these exports on import without the source key (verified through the SDK), including into a project that does not have the AOI yet.
+
+```python
+import warnings
+from py_l5x import ProtectedContentWarning
+
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    doc = project.export(project.programs["AnotherProgram"])
+protected = [w for w in caught if issubclass(w.category, ProtectedContentWarning)]
 ```
 
 ## Modules

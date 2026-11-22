@@ -350,7 +350,7 @@ class TestAggregateWritesOnDataless:
 _FIXTURE_CLASSES = {
     "IntegerTag": 173,
     "FloatTag": 50,
-    "StructTag": 48,
+    "StructTag": 50,
     "StringTag": 23,
     "BoolTag": 14,
     "TimeTag": 9,

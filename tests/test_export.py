@@ -622,6 +622,7 @@ class TestReferencedNames:
 class TestRoundTripAndWrite:
     """Exports re-read cleanly and write to files."""
 
+    @pytest.mark.filterwarnings("ignore::py_l5x.ProtectedContentWarning")
     @pytest.mark.parametrize(
         "name", ["MainProgram", "AnotherProgram", "Robot", "SafetyProgram"]
     )

@@ -393,7 +393,9 @@ def find_type_users(controller: ET.Element, name: str) -> list[str]:
     Returns:
         Descriptions such as ``"controller tag X"``,
         ``"program P tag X"``, ``"data type U member m"``,
-        ``"AOI A parameter p"`` and ``"AOI A local tag l"``. The type's own
+        ``"AOI A parameter p"`` and ``"AOI A local tag l"``; source-protected AOIs
+        (``<EncodedData>``) are listed by their visible parameters and
+        dependencies when those are present. The type's own
         definition is not searched.
     """
     found: list[str] = []
@@ -424,6 +426,16 @@ def find_type_users(controller: ET.Element, name: str) -> list[str]:
             for item in aoi.findall(path):
                 if item.get("DataType") == name:
                     found.append(f"AOI {aoi.get('Name')} {kind} {item.get('Name')}")
+    for protected in controller.findall("AddOnInstructionDefinitions/EncodedData"):
+        if protected.get("Name") == name:
+            continue
+        for item in protected.findall("Parameters/Parameter"):
+            if item.get("DataType") == name:
+                owner = protected.get("Name")
+                found.append(f"protected AOI {owner} parameter {item.get('Name')}")
+        deps = protected.findall("Dependencies/Dependency")
+        if any(d.get("Name") == name for d in deps):
+            found.append(f"protected AOI {protected.get('Name')} dependency")
     return found
 
 

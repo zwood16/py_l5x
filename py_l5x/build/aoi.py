@@ -93,6 +93,17 @@ class _NoTypes:
         """
         return None
 
+    def is_protected_aoi(self, name: str) -> bool:
+        """Return ``False``: no source-protected AOIs are known.
+
+        Args:
+            name: Ignored.
+
+        Returns:
+            Always ``False``.
+        """
+        return False
+
     def is_string_type(self, name: str) -> bool:
         """Return ``False``: no user string types are known.
 

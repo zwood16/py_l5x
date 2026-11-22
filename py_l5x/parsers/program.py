@@ -21,7 +21,7 @@ from py_l5x.parsers.base import (
     str_attr,
 )
 from py_l5x.parsers.names import validate_new_name
-from py_l5x.parsers.routine import RoutinesCollection
+from py_l5x.parsers.routine import ProtectedRoutinesCollection, RoutinesCollection
 from py_l5x.parsers.schema import insert_child, insert_child_at, remove_child
 from py_l5x.parsers.tag import TagsCollection, TypeRegistry
 
@@ -104,6 +104,17 @@ class Program(BaseElement):
         """
         return RoutinesCollection(self._element)
 
+    @property
+    def protected_routines(self) -> ProtectedRoutinesCollection:
+        """This program's source-protected routines, keyed by name.
+
+        ``routines`` holds readable routines only.
+
+        Returns:
+            A ProtectedRoutinesCollection of the ``<EncodedData>`` routines.
+        """
+        return ProtectedRoutinesCollection(self._element)
+
     def to_spec(self) -> ProgramSpec:
         """Convert this program to a spec that rebuilds it.
 
@@ -117,12 +128,18 @@ class Program(BaseElement):
             A :class:`~py_l5x.build.specs.ProgramSpec`.
 
         Raises:
-            ValueError: If a tag or routine cannot be converted.
+            ValueError: If a tag or routine cannot be converted, or the program
+                has a source-protected routine (its logic cannot be rebuilt).
         """
         from py_l5x.build.specs import ProgramSpec
         from py_l5x.parsers.migrate import _raw_cdata
 
         element = self._element
+        for protected in self.protected_routines:
+            raise ValueError(
+                f"program {self.name!r}: routine {protected!r} is source-protected; "
+                "it cannot be converted to a spec"
+            )
         description = element.find("Description")
         modelled = {
             "Name",

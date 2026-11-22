@@ -61,9 +61,17 @@ class TestGoldenPrograms:
 
     @pytest.mark.parametrize("name", _program_names("example.L5X"))
     def test_example(self, name: str) -> None:
-        """Every program of example.L5X rebuilds identically (minus L5K)."""
+        """Every program of example.L5X rebuilds identically (minus L5K).
+
+        A program with a source-protected routine has no spec (its logic
+        cannot be rebuilt), so ``to_spec`` refuses it instead.
+        """
         project = load(str(FIXTURES / "example.L5X"))
         program = project.programs[name]
+        if program.protected_routines:
+            with pytest.raises(ValueError, match="source-protected"):
+                program.to_spec()
+            return
         built = build_program(program.to_spec(), project._type_registry)
         assert first_difference(built, _comparable(program._element)) is None
 

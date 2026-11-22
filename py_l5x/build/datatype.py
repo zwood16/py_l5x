@@ -204,7 +204,7 @@ def _dependency_type(data_type: str, registry: TypeRegistry | None) -> str | Non
     if data_type in ATOMIC_TYPES or data_type in builtin_table():
         return None
     if registry is not None:
-        if registry.aoi(data_type) is not None:
+        if registry.aoi(data_type) is not None or registry.is_protected_aoi(data_type):
             return "AddOnInstructionDefinition"
         udt = registry.udt(data_type)
         if udt is not None and udt.class_ == "ProductDefined":
