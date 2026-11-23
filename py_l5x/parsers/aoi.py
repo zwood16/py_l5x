@@ -970,6 +970,11 @@ class AOICollection(BaseCollection[AOIDefinition]):
             kind = item.data_type
             if kind == spec.name:
                 raise ValueError(f"{item.name!r} cannot be of its own type")
+            if self._registry.is_protected_aoi(kind):
+                raise ValueError(
+                    f"{item.name!r}: data type {kind!r} is a source-protected AOI, "
+                    "which is not supported here"
+                )
             if (
                 kind in ATOMIC_TYPES
                 or kind in builtin_table()

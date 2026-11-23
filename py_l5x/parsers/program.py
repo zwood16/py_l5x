@@ -328,7 +328,8 @@ class ProgramsCollection(BaseCollection[Program]):
 
         Raises:
             ValueError: If a base tag's type is not atomic, built-in, a project
-                UDT or an AOI.
+                UDT, an AOI or a source-protected AOI (tags of those can be
+                created, with Decorated data only; exp36).
         """
         from py_l5x.parsers.layout import builtin_table
 
@@ -341,6 +342,7 @@ class ProgramsCollection(BaseCollection[Program]):
                 or kind in builtin_table()
                 or self._registry.udt(kind) is not None
                 or self._registry.aoi(kind) is not None
+                or self._registry.is_protected_aoi(kind)
             ):
                 continue
             raise ValueError(f"tag {tag.name!r}: unknown data type {kind!r}")

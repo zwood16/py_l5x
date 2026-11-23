@@ -117,6 +117,7 @@ Value-tree nodes (members, array elements, bits) are organized in a typed hierar
 
 from __future__ import annotations
 
+import copy
 import math
 import re
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -990,7 +991,9 @@ class TagNode:
         The exception is data that contains AOI instances
         (:meth:`_owner_has_aoi_data`): there Studio takes the written
         parameter values from the decorated data and still needs the L5K
-        block for the AOI local tags' values, so L5K is kept.
+        block for the AOI local tags' values, so L5K is kept. This holds for
+        source-protected AOI types too (exp36: Studio keeps the Decorated
+        values and regenerates L5K from them, keeping the locals).
         """
         if self._owner_has_aoi_data():
             return
@@ -2701,7 +2704,8 @@ class Tag(_RootMetadataMixin, BaseElement):
         if registry is not None and registry.is_protected_aoi(self.data_type):
             raise ValueError(
                 f"tag {self.name!r}: {self.data_type} is a source-protected AOI; "
-                "its tags have no spec"
+                "its tags have no spec (a rebuilt tag would reset the values of "
+                "the encoded local tags; use copy_data_from to clone one)"
             )
         for child in element:
             if child.tag not in self._SPEC_CHILDREN:
@@ -2756,6 +2760,49 @@ class Tag(_RootMetadataMixin, BaseElement):
             metadata={k: v for k, v in element.attrib.items() if k not in modelled}
             or None,
         )
+
+    def copy_data_from(self, source: Tag) -> None:
+        """Replace this tag's ``<Data>`` with deep copies of another tag's.
+
+        Every format is copied (``L5K`` and ``Decorated`` / ``String``) and
+        placed in schema order, so an AOI instance keeps its local tags'
+        values, which exist only in the L5K block (exp22, exp36). Works for
+        any tag type. Comments, overrides and other attributes of this tag
+        are left alone.
+
+        Args:
+            source: The tag to copy from. It is not modified.
+
+        Raises:
+            ValueError: If either tag is not a ``Base`` tag, *source* has no
+                ``<Data>``, or the ``DataType`` or ``Dimensions`` differ.
+        """
+        element = self._element
+        other = source._element
+        for tag in (self, source):
+            if tag._element.get("TagType", "Base") != "Base":
+                raise ValueError(f"tag {tag.name!r}: only Base tags hold data")
+        if element.get("DataType") != other.get("DataType"):
+            raise ValueError(
+                f"tag {self.name!r} is {element.get('DataType')!r} but "
+                f"{source.name!r} is {other.get('DataType')!r}"
+            )
+        if element.get("Dimensions", "") != other.get("Dimensions", ""):
+            raise ValueError(
+                f"tag {self.name!r}: dimensions "
+                f"{element.get('Dimensions', '')!r} differ from "
+                f"{source.name!r} ({other.get('Dimensions', '')!r})"
+            )
+        data = other.findall("Data")
+        if not data:
+            raise ValueError(f"tag {source.name!r} has no data to copy")
+        for child in element.findall("Data"):
+            remove_child(element, child)
+        for child in data:
+            insert_child(element, copy.deepcopy(child))
+        if isinstance(self, _ValueTag):
+            found = _find_value_root(element, "Data", self._type_registry)
+            self._value_element = found[1] if found is not None else None
 
 
 class _ValueTag(Tag):

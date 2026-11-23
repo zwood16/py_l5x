@@ -16,7 +16,9 @@ Layout rules, taken from Studio's own exports:
 - **AOIs** list their parameters in definition order except ``InOut`` ones
   (local tags are not part of the data). A parameter's default comes from its
   ``DefaultData[@Format="Decorated"]``; ``EnableIn`` defaults to ``1`` when it
-  has none.
+  has none. A source-protected AOI is laid out the same way from its readable
+  ``<Parameters>`` (its encoded local tags and logic are never read, and no
+  L5K is built; Studio regenerates it with the locals at defaults, exp36).
 - **StringFamily** types (``STRING``, ``STRING_16``, user string UDTs) are
   ``<Data Format="String" Length="0">`` with ``''`` at a tag root, and a
   ``Structure`` with ``LEN`` and ``DATA`` anywhere else.
@@ -269,7 +271,7 @@ def _resolve_kind(data_type: str, registry: TypeRegistry) -> str:
                 f"{data_type} has no decorated default layout (special data format)"
             )
         return "string" if udt.is_string else "udt"
-    if registry.aoi(data_type) is not None:
+    if registry.aoi(data_type) is not None or registry.is_protected_aoi(data_type):
         return "aoi"
     raise LayoutError(f"unknown data type {data_type!r}")
 
@@ -341,7 +343,11 @@ def members(data_type: str, registry: TypeRegistry) -> list[MemberInfo]:
         return out
     if kind == "aoi":
         aoi = registry.aoi(data_type)
-        assert aoi is not None
+        if aoi is None:
+            # Source-protected: only the readable <Parameters> are used.
+            protected = registry.protected_aoi(data_type)
+            assert protected is not None
+            aoi = protected.parameters
         out = []
         for param in aoi.datatype_members.values():
             element = param.element

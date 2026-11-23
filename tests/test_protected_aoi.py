@@ -17,6 +17,11 @@ from xml.etree import ElementTree as ET
 import pytest
 
 from py_l5x import (
+    AOISpec,
+    DataTypeSpec,
+    MemberSpec,
+    ParameterSpec,
+    ProgramSpec,
     Project,
     ProtectedAOI,
     ProtectedContentWarning,
@@ -264,6 +269,203 @@ class TestRegistry:
         """A tag of a protected type has no spec (no layout to rebuild it)."""
         with pytest.raises(ValueError, match="source-protected"):
             project.programs["AnotherProgram"].tags[INSTANCE].to_spec()
+
+
+def _decorated_values(tag) -> dict[str, str]:
+    """Collect ``Name -> Value`` of the top-level Decorated members.
+
+    Args:
+        tag: A tag wrapper.
+
+    Returns:
+        The member values as written.
+    """
+    data = [d for d in tag.element.findall("Data") if d.get("Format") == "Decorated"]
+    assert len(data) == 1
+    return {
+        m.get("Name"): m.get("Value")
+        for m in data[0].find("Structure")
+        if m.get("Name")
+    }
+
+
+def _formats(tag) -> list[str]:
+    """List the ``Format`` of each ``<Data>`` child.
+
+    Args:
+        tag: A tag wrapper.
+
+    Returns:
+        The formats in document order.
+    """
+    return [d.get("Format") for d in tag.element.findall("Data")]
+
+
+class TestTagValues:
+    """Tags of a protected type: layout, creation, values (exp36)."""
+
+    def test_default_layout(self, project: Project) -> None:
+        """Defaults follow the parameter order; EnableIn is 1; no L5K."""
+        from py_l5x.parsers.layout import default_data_element, members
+
+        registry = project._type_registry
+        infos = members(AOI, registry)
+        expected = [
+            p.name
+            for p in registry.protected_aoi(AOI).parameters.datatype_members.values()
+        ]
+        assert [m.name for m in infos] == expected
+        assert infos[0].name == "EnableIn"
+        assert infos[0].default == "1"
+        data = default_data_element(AOI, registry)
+        assert data.get("Format") == "Decorated"
+        names = [m.get("Name") for m in data.find("Structure")]
+        assert names == expected
+
+    def test_add_without_value(self, project: Project) -> None:
+        """A tag of the protected type can be added with no data."""
+        program = project.programs["AnotherProgram"]
+        tag = program.tags.add("newProt", AOI)
+        assert tag.data_type == AOI
+        assert tag.element.find("Data") is None
+
+    @pytest.mark.parametrize("scope", ["program", "controller"])
+    def test_add_with_value(self, project: Project, scope: str) -> None:
+        """A value writes Decorated data only, and survives a reload."""
+        tags = (
+            project.programs["AnotherProgram"].tags
+            if scope == "program"
+            else project.controller_tags
+        )
+        tag = tags.add("newProt", AOI, value={"startupStep": 4321, "mode": True})
+        assert _formats(tag) == ["Decorated"]
+        values = _decorated_values(tag)
+        assert values["EnableIn"] == "1"
+        assert values["startupStep"] == "4321"
+        assert values["mode"] == "1"
+        order = list(values)
+        assert order == [
+            p
+            for p in project._type_registry.protected_aoi(
+                AOI
+            ).parameters.datatype_members
+        ]
+        reloaded = loads(to_bytes(project.root).decode("utf-8"))
+        tags2 = (
+            reloaded.programs["AnotherProgram"].tags
+            if scope == "program"
+            else reloaded.controller_tags
+        )
+        assert tags2["newProt"].members["startupStep"].value == 4321
+        assert _formats(tags2["newProt"]) == ["Decorated"]
+
+    def test_program_spec_allows_protected_tag(self, project: Project) -> None:
+        """A program spec may hold tags of the protected type."""
+        from py_l5x import TagSpec
+
+        spec = ProgramSpec("P2", tags=[TagSpec("t", AOI, value={"startupStep": 5})])
+        program = project.programs.add(spec)
+        assert program.tags["t"].members["startupStep"].value == 5
+
+    def test_set_value_keeps_l5k(self, project: Project) -> None:
+        """Changing a parameter changes Decorated and keeps the L5K block (exp36)."""
+        tag = project.programs["AnotherProgram"].tags[INSTANCE]
+        assert "L5K" in _formats(tag)
+        tag.members["startupStep"].value = 1234
+        assert "L5K" in _formats(tag)
+        assert _decorated_values(tag)["startupStep"] == "1234"
+
+    def test_udt_member_message(self, project: Project) -> None:
+        """A UDT member of a protected type is refused with a clear message."""
+        spec = DataTypeSpec("U1", [MemberSpec("m", AOI)])
+        with pytest.raises(ValueError, match="source-protected AOI, which is not"):
+            project.data_types.add(spec)
+        with pytest.raises(ValueError, match="member 'm': data type 'SeqCtrl_Prot"):
+            project.data_types.add(spec)
+
+    def test_aoi_parameter_message(self, project: Project) -> None:
+        """An AOI parameter of a protected type is refused with a clear message."""
+        spec = AOISpec("A1", [ParameterSpec("p", AOI)])
+        with pytest.raises(ValueError, match="'p': data type .* source-protected AOI"):
+            project.aois.add(spec)
+
+
+class TestCopyData:
+    """``Tag.copy_data_from``."""
+
+    def test_copies_all_formats(self, project: Project) -> None:
+        """Both Data blocks are copied with equal values, in schema order."""
+        program = project.programs["AnotherProgram"]
+        source = program.tags[INSTANCE]
+        source.members["startupStep"].value = 777
+        new = program.tags.add("clone", AOI)
+        new.copy_data_from(source)
+        assert _formats(new) == _formats(source) == ["L5K", "Decorated"]
+        assert _decorated_values(new) == _decorated_values(source)
+        assert new.members["startupStep"].value == 777
+        old = source.element.find("Data")
+        copy = new.element.find("Data")
+        assert copy is not old
+        assert ET.tostring(copy) == ET.tostring(old)
+
+    def test_replaces_existing(self, project: Project) -> None:
+        """Existing Data is replaced, not appended to."""
+        program = project.programs["AnotherProgram"]
+        target = program.tags.add("clone", AOI, value={"startupStep": 1})
+        target.copy_data_from(program.tags[INSTANCE])
+        assert _formats(target) == ["L5K", "Decorated"]
+
+    def test_any_tag_type(self, project: Project) -> None:
+        """Works for a plain DINT tag."""
+        tags = project.controller_tags
+        a = tags.add("cdA", "DINT", value=5)
+        b = tags.add("cdB", "DINT", value=0)
+        b.copy_data_from(a)
+        assert b.value == 5
+
+    def test_type_mismatch(self, project: Project) -> None:
+        """Different DataType or Dimensions raise ValueError."""
+        tags = project.controller_tags
+        a = tags.add("cdA", "DINT", value=5)
+        with pytest.raises(ValueError, match="DINT"):
+            tags.add("cdB", "INT").copy_data_from(a)
+        with pytest.raises(ValueError, match="dimensions"):
+            tags.add("cdC", "DINT", dimensions=2, value=[1, 2]).copy_data_from(a)
+
+    def test_no_data_source(self, project: Project) -> None:
+        """A source with no Data raises ValueError."""
+        tags = project.controller_tags
+        empty = tags.add("cdA", "DINT")
+        with pytest.raises(ValueError, match="no data"):
+            tags.add("cdB", "DINT").copy_data_from(empty)
+
+    def test_alias_refused(self, project: Project) -> None:
+        """Alias tags hold no data."""
+        tags = project.controller_tags
+        a = tags.add("cdA", "DINT", value=5)
+        alias = tags.add_alias("cdAlias", "cdA")
+        with pytest.raises(ValueError, match="Base"):
+            alias.copy_data_from(a)
+        with pytest.raises(ValueError, match="Base"):
+            a.copy_data_from(alias)
+
+    def test_round_trip(self, project: Project) -> None:
+        """The copied L5K CDATA serialises and reloads."""
+        program = project.programs["AnotherProgram"]
+        source = program.tags[INSTANCE]
+        new = program.tags.add("clone", AOI)
+        new.copy_data_from(source)
+        text = to_bytes(project.root).decode("utf-8")
+        reloaded = loads(text)
+        clone = reloaded.programs["AnotherProgram"].tags["clone"]
+        assert _formats(clone) == ["L5K", "Decorated"]
+        l5k = clone.element.find("Data")
+        original = (
+            reloaded.programs["AnotherProgram"].tags[INSTANCE].element.find("Data")
+        )
+        assert l5k.find("CDataContent") is not None or "<![CDATA[" in text
+        assert ET.tostring(l5k) == ET.tostring(original)
+        assert to_bytes(reloaded.root) == to_bytes(project.root)
 
 
 class TestUsers:

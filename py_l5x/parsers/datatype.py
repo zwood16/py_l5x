@@ -521,6 +521,12 @@ class DataTypesCollection(BaseCollection[DataType]):
 
         for member in spec.members:
             kind = member.data_type
+            if registry.is_protected_aoi(kind):
+                raise ValueError(
+                    f"member {member.name!r}: data type {kind!r} is a "
+                    "source-protected AOI, "
+                    "which is not supported here"
+                )
             if (
                 kind in ATOMIC_TYPES
                 or kind in builtin_table()
